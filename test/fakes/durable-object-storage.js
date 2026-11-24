@@ -40,6 +40,9 @@
  *   empty statement from such a query and then mishandles it: Node.js 24 can
  *   crash at a later garbage collection, and Deno 2.8 crashes at once. So the
  *   fake rejects the query before preparing it.
+ * - A query holding a NUL character throws. `node:sqlite` stops reading at
+ *   the NUL and silently drops the rest, which leaves an empty statement when
+ *   the NUL comes first. The documentation doesn't say what the platform does.
  * - `transactionSync` rolls back and throws `TypeError` when its callback
  *   returns a thenable. The platform commits. The fake fails so that an async
  *   callback is caught.
@@ -134,7 +137,7 @@ export function createFakeDurableObjectStorage(options) {
 
     const sql = {
         exec(query, ...bindings) {
-            assertIsString(query);
+            assertIsText(query);
 
             const withoutComments = query.replace(COMMENT_PATTERN, '');
 
@@ -192,9 +195,16 @@ export function createFakeDurableObjectStorage(options) {
 }
 
 
-function assertIsString(query) {
+function assertIsText(query) {
     if (typeof query !== 'string') {
         throw new TypeError('the query must be a string');
+    }
+
+    // node:sqlite stops reading a query at a NUL character. The checks below
+    // read the whole string, so they would see a statement where node:sqlite
+    // sees none.
+    if (query.includes('\0')) {
+        throw new Error('the query must not contain a NUL character');
     }
 }
 

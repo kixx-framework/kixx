@@ -291,6 +291,29 @@ describe('createFakeDurableObjectStorage', ({ describe }) => {
             }
         });
 
+        // node:sqlite stops reading at a NUL, so a NUL before the first token
+        // leaves it an empty statement. Closed first, for the reason above.
+        it('rejects a query holding a NUL character, before preparing it', () => {
+            const storage = makeStorage();
+            storage.close();
+
+            const queries = [
+                '\0',
+                '\0SELECT 1 AS n',
+                '  \0;',
+                '-- a\0b\nSELECT 1 AS n',
+                '/* \0 */ SELECT 1 AS n',
+                'SELECT 1 AS n\0',
+            ];
+
+            for (const query of queries) {
+                const caught = catchError(() => storage.sql.exec(query));
+
+                assert(caught, `expected ${ JSON.stringify(query) } to throw`);
+                assertEqual('the query must not contain a NUL character', caught.message);
+            }
+        });
+
         it('rejects a transaction statement behind a leading comment', () => {
             const storage = makeStorage();
 
