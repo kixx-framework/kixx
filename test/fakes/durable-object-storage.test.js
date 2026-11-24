@@ -261,17 +261,68 @@ describe('createFakeDurableObjectStorage', ({ describe }) => {
             assertEqual('世界; 😀', storage.sql.exec("SELECT '世界; 😀' AS v").one().v);
         });
 
-        // A query of only a comment or a semicolon is not tried here: preparing
-        // one can crash the process (see the fake's module comment).
-        it('rejects an empty query and one of only whitespace', () => {
+        // Preparing one of these queries on an open database can crash the
+        // process (see the fake's module comment), so never pass one to
+        // node:sqlite. The storage is closed first: a closed database refuses
+        // to prepare anything, so if exec() ever let a query through, this
+        // test would fail on the wrong message and the process would survive.
+        it('rejects a query whose first statement is empty, before preparing it', () => {
             const storage = makeStorage();
+            storage.close();
 
-            for (const query of [ '', '  \n\t ' ]) {
+            const queries = [
+                '',
+                '  \n\t ',
+                '-- only a comment',
+                '-- one\n-- two\n',
+                '/* block */',
+                '/* unterminated',
+                ';',
+                '; SELECT 1',
+                '/* c */ ; SELECT 1',
+                '-- c\n; SELECT 1',
+            ];
+
+            for (const query of queries) {
                 const caught = catchError(() => storage.sql.exec(query));
 
                 assert(caught, `expected ${ JSON.stringify(query) } to throw`);
                 assertEqual('the query does not contain a statement', caught.message);
             }
+        });
+
+        it('rejects a transaction statement behind a leading comment', () => {
+            const storage = makeStorage();
+
+            for (const query of [ '/* tx */ BEGIN', '-- tx\nCOMMIT', '/* a */ -- b\n  savepoint s' ]) {
+                const caught = catchError(() => storage.sql.exec(query));
+
+                assert(caught, `expected ${ JSON.stringify(query) } to throw`);
+                assertMatches('cannot run the transaction statement', caught.message);
+            }
+
+            // Nothing began a transaction, so one can still start.
+            storage.transactionSync(() => storage.sql.exec('INSERT INTO t (k) VALUES (?)', 'a'));
+            assertEqual(1, countRows(storage));
+        });
+
+        it('accepts a statement after a leading comment', () => {
+            const storage = makeStorage();
+
+            assertEqual(1, storage.sql.exec('-- note\nSELECT 1 AS n').one().n);
+            assertEqual(2, storage.sql.exec('/* note */ SELECT 2 AS n').one().n);
+            assertEqual(3, storage.sql.exec('/* a */ -- b\n  SELECT 3 AS n;').one().n);
+        });
+
+        it('accepts comment markers inside a string literal', () => {
+            const storage = makeStorage();
+
+            const line = storage.sql.exec("SELECT '--' AS s").one();
+            const block = storage.sql.exec("SELECT '/*' AS a, '*/' AS b").one();
+
+            assertEqual('--', line.s);
+            assertEqual('/*', block.a);
+            assertEqual('*/', block.b);
         });
 
         it('rejects a query that is not a string with TypeError', () => {

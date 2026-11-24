@@ -17,7 +17,8 @@
  * - An `ArrayBuffer` or a view binds as a BLOB (an empty view as an empty
  *   BLOB, not `NULL`), and `undefined` binds as `NULL`.
  * - `exec` can't run transaction statements: `BEGIN`, `COMMIT`, `END`,
- *   `ROLLBACK`, `SAVEPOINT`, or `RELEASE`.
+ *   `ROLLBACK`, `SAVEPOINT`, or `RELEASE`. A leading SQL comment doesn't hide
+ *   one.
  * - `transactionSync(callback)` commits when the callback returns and rolls
  *   back when it throws. A nested call rolls back only itself.
  * - Limits: 100 bindings per query, a 100 KB statement, and a 2 MB row,
@@ -34,7 +35,11 @@
  * - A query holding more than one statement throws. The platform runs every
  *   statement, but `node:sqlite` silently drops all but the first. Anything
  *   after the first statement's semicolon counts, a trailing comment included.
- * - An empty query, or one of only whitespace, throws.
+ * - A query whose first statement is empty throws: one of only whitespace and
+ *   comments, or one that starts with a semicolon. `node:sqlite` prepares an
+ *   empty statement from such a query and then mishandles it: Node.js 24 can
+ *   crash at a later garbage collection, and Deno 2.8 crashes at once. So the
+ *   fake rejects the query before preparing it.
  * - `transactionSync` rolls back and throws `TypeError` when its callback
  *   returns a thenable. The platform commits. The fake fails so that an async
  *   callback is caught.
@@ -50,11 +55,6 @@
  * - The key-value storage API, the async `storage.transaction()`, and alarms.
  * - The 10 GB limit per object and the limit of 100 columns per table.
  * - Lazy cursors. Rows are read eagerly when `exec` runs.
- * - A transaction statement behind a leading SQL comment. `exec` runs it.
- * - A query that holds a comment or a semicolon but no statement. Never pass
- *   one. `node:sqlite` prepares an empty statement from it and then mishandles
- *   that statement: Node.js 24 can crash at a later garbage collection, and
- *   Deno 2.8 crashes at once.
  * - A binding count that doesn't match the statement's placeholders.
  *   `node:sqlite` binds a missing one as `NULL`. The documentation doesn't say
  *   what the platform does.
@@ -81,6 +81,16 @@ const MAX_BINDINGS = 100;
 // The documented 100 KB, read as decimal kilobytes because that is stricter.
 const MAX_STATEMENT_BYTES = 100000;
 
+// A line comment, or a block comment that ends at its first close or at the
+// end of the query. Used only to see what a query starts with. It also matches
+// comment-like text inside a string literal, which is harmless there: no
+// literal can come before a statement's first token.
+const COMMENT_PATTERN = /--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g;
+
+// Both are tested against a query with its comments already removed. Removing
+// the comments first, as its own step, keeps a block comment from stretching
+// over a real statement to reach a later semicolon.
+const EMPTY_FIRST_STATEMENT_PATTERN = /^\s*(?:;|$)/;
 const TRANSACTION_STATEMENT_PATTERN = /^\s*(BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
 
 const textEncoder = new TextEncoder();
@@ -124,9 +134,13 @@ export function createFakeDurableObjectStorage(options) {
 
     const sql = {
         exec(query, ...bindings) {
-            assertHoldsText(query);
+            assertIsString(query);
+
+            const withoutComments = query.replace(COMMENT_PATTERN, '');
+
+            assertFirstStatementHoldsText(withoutComments);
             assertStatementLength(query);
-            assertNotTransactionStatement(query);
+            assertNotTransactionStatement(withoutComments);
             assertBindingCount(bindings);
 
             const values = bindings.map(toBindingValue);
@@ -178,14 +192,17 @@ export function createFakeDurableObjectStorage(options) {
 }
 
 
-// Checked before prepare(), because node:sqlite mishandles the empty
-// statement it prepares from a query with no SQL in it (see the module
-// comment).
-function assertHoldsText(query) {
+function assertIsString(query) {
     if (typeof query !== 'string') {
         throw new TypeError('the query must be a string');
     }
-    if (query.trim() === '') {
+}
+
+// Checked before prepare(), because node:sqlite mishandles the empty
+// statement it prepares from a query whose first statement is empty (see the
+// module comment).
+function assertFirstStatementHoldsText(withoutComments) {
+    if (EMPTY_FIRST_STATEMENT_PATTERN.test(withoutComments)) {
         throw new Error('the query does not contain a statement');
     }
 }
@@ -198,8 +215,8 @@ function assertStatementLength(query) {
     }
 }
 
-function assertNotTransactionStatement(query) {
-    const match = TRANSACTION_STATEMENT_PATTERN.exec(query);
+function assertNotTransactionStatement(withoutComments) {
+    const match = TRANSACTION_STATEMENT_PATTERN.exec(withoutComments);
 
     if (match) {
         throw new Error(`sql.exec() cannot run the transaction statement ${ match[1].toUpperCase() }; use transactionSync()`);
