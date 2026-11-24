@@ -182,7 +182,8 @@ function formatValue(options, date) {
         return result.reason ? renderInvalidDate(result.reason, date) : renderNotADate(date);
     }
 
-    if (!isWallTimeInDateRange(resolvedZone, result.instant)) {
+    // UTC prints the instant itself, so the zone's wall time doesn't matter.
+    if (formatter !== formatUTC && !isWallTimeInDateRange(resolvedZone, result.instant)) {
         return renderInvalidDate('invalid input', date);
     }
 

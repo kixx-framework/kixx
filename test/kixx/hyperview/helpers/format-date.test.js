@@ -492,6 +492,12 @@ describe('formatDate helper', ({ describe }) => {
                 assertEqual(new Date(input).toUTCString(), render(input, { format: 'UTC', zone: 'UTC' }));
             }
         });
+
+        it('formats an instant whose wall time in the zone is outside the Date range', () => {
+            const input = 8.64e15 - 3600000;
+
+            assertEqual(new Date(input).toUTCString(), render(input, { format: 'UTC', zone: 'Asia/Tokyo' }));
+        });
     });
 
     describe('fixed-shape formats', ({ it }) => {
