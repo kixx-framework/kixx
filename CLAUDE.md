@@ -17,12 +17,22 @@ deno run -A run-tests.js           # full suite on Deno
 node run-tests.js test/kixx/logger # a subtree (must be inside test/)
 node run-linter.js                 # lint everything the root config covers
 node run-linter.js kixx test       # lint a subset (pass only paths that exist)
+node run-linter.js test-app        # lint the integration suite
 ```
+
+**Read the Testing Guide before you write a test:** `test/README.md`. It says which suite a test belongs in, how a module gets its platform services, how to keep a Durable Object thin, how to write a fake, and how to write a conformance suite.
+
+- `run-tests.js` runs the unit suite only: Kixx code against fakes, with no network and no credentials.
+- The integration suite lives in `test-app/` and runs against a real target. Agents write its tests and the operator runs them. Never run it against a target, and never deploy. See `test-app/README.md`.
 
 **Keep the layers apart.**
 
 - Core under `kixx/` never imports outside `kixx/`.
-- Platform modules (`node:*`, `cloudflare:*`) appear only in `kixx/adapters/`. `test/kixx/import-hygiene.test.js` enforces both rules. The v6 ports-and-adapters guide is `reference-app/plugins/README.md` until S07 replaces it.
+- `node:*` modules appear only in `kixx/adapters/`.
+- `cloudflare:*` modules appear only in the Durable Object shells listed in `test/kixx/import-hygiene.test.js`. A shell passes `ctx` and `env` to a plain class that holds all the behavior, delegates each RPC method in one line, and does nothing else. List a new shell there.
+- A module takes every platform service it uses from its caller: bindings, storage handles, `fetch`, clocks, and output sinks. A unit test hands it a fake from `test/fakes/`.
+- Unit tests never import a Durable Object shell, an entry point, or a `cloudflare:*` module.
+- `test/kixx/import-hygiene.test.js` enforces the import rules above. The v6 ports-and-adapters guide is `reference-app/plugins/README.md` until S07 replaces it.
 - Every change must work on Node.js, Deno, and Cloudflare.
 - Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 
@@ -32,7 +42,8 @@ node run-linter.js kixx test       # lint a subset (pass only paths that exist)
 - When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass. Tests must not read files by cwd-relative path or from `reference-app/`.
 - When a `test-v6/` file mixes cases for the current work with cases for code a later section reworks, split it. `git mv` the file into the active suite in a commit that holds only renames. Then trim the moved copy to the cases that cover the current work, and restore the rest at the old path unchanged. Delete cases that cover removed code. The parked rest waits for its own section.
 - The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Most of the devkit's conformance tests are still parked in `test-v6/devkit/conformance/` and don't run; `devkit/test/conformance/content-contract.test.js` runs. The devkit's contract pin (`devkit/lib/publishing/negotiate-capabilities.js`) and the manifest shape it composes must stay in step with core. The four ported modules needn't be kept in step until the devkit sections decide their fate.
-- `test-v6/test-app/` and `tools/build-test-app.js` are v6 and knowingly broken.
+- The v6 integration suites wait in `test-v6/test-app/` until they are rewritten for v7. Their runner moved to `test-app/`.
+- `tools/build-test-app.js` is v6 and knowingly broken. Never run it: it would wipe `test-app/`.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 
 Kixx Devkit

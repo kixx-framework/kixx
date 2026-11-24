@@ -7,11 +7,9 @@ import { assert, assertArray, assertNonEmptyString, isNonEmptyString, isPlainObj
  * flat column set persisted in the Durable Object's SQL storage, and the
  * compact tuples {@link ContentAddressableIndex} requires.
  *
- * These translations live outside ContentAddressableIndexStore because that
- * class imports `cloudflare:workers`, which neither the Node nor the Deno
- * loader can resolve, putting it out of reach of the unit test suite. The rules
- * encoded here are the ones most worth testing, so they are kept in a module
- * with no runtime imports.
+ * These translations live outside ContentAddressableIndexStoreCore because
+ * the rules encoded here are the ones most worth testing in isolation, so
+ * they are kept in a module of pure functions with no storage behind them.
  */
 
 /**

@@ -21,6 +21,23 @@ import {
  */
 export default class LoggerWriter {
 
+    #stdout = null;
+    #stderr = null;
+
+    /**
+     * @param {Object} [options]
+     * @param {Object} [options.stdout] - Receives DEBUG and INFO lines through
+     *   its `write` method. Defaults to `process.stdout`.
+     * @param {Object} [options.stderr] - Receives WARN and ERROR lines through
+     *   its `write` method. Defaults to `process.stderr`.
+     */
+    constructor(options) {
+        const { stdout, stderr } = options ?? {};
+
+        this.#stdout = stdout ?? null;
+        this.#stderr = stderr ?? null;
+    }
+
     /**
      * Serializes a log entry to JSON and writes it to the Node output stream.
      * @param {string} name - Logger name
@@ -42,18 +59,21 @@ export default class LoggerWriter {
             error,
         });
 
-        const stream = getOutputStream(level);
+        const stream = this.#getOutputStream(level);
 
         // The LoggerWriterInterface is synchronous; Node may still buffer the
         // physical write after this stream handoff returns.
         stream.write(`${ stringifyJSONLogEntry(entry) }\n`);
     }
-}
 
-function getOutputStream(level) {
-    if (level === 'WARN' || level === 'ERROR') {
-        return process.stderr;
+    #getOutputStream(level) {
+        // Without an injected stream, read the process stream on every write.
+        // Node.js creates each one the first time it is read, so reading them
+        // in the constructor would open both before anything is logged.
+        if (level === 'WARN' || level === 'ERROR') {
+            return this.#stderr ?? process.stderr;
+        }
+
+        return this.#stdout ?? process.stdout;
     }
-
-    return process.stdout;
 }

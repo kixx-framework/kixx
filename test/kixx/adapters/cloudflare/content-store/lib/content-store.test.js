@@ -1,7 +1,10 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-assert';
 
+import { createFakeDurableObjectNamespace } from '../../../../../fakes/durable-object.js';
+import { createFakeKVNamespace } from '../../../../../fakes/workers-kv.js';
 import ContentStore from '../../../../../../kixx/adapters/cloudflare/content-store/lib/content-store.js';
+import ContentAddressableIndexStoreCore from '../../../../../../kixx/adapters/cloudflare/content-store/lib/content-addressable-index-store-core.js';
 import ContentAddressableIndex from '../../../../../../kixx/content-addressable-store/content-addressable-index.js';
 import contentStoreConformance from '../../../../content-addressable-store/content-store-conformance.js';
 
@@ -21,23 +24,6 @@ function makeEntries(blobHash) {
     return {
         '/': [ 'tree', 'root-hash' ],
         '/a.txt': [ 'blob', blobHash ?? 'hash-a', 5, null ],
-    };
-}
-
-function makeKvStore(values) {
-    const calls = [];
-    return {
-        calls,
-        async get(key, options) {
-            calls.push({ key, options });
-            if (Array.isArray(key)) {
-                return new Map(key.map((k) => [ k, values?.get(k) ?? null ]));
-            }
-            return values?.get(key) ?? null;
-        },
-        async put(key, value, options) {
-            calls.push({ key, value, options });
-        },
     };
 }
 
@@ -73,116 +59,27 @@ function makeStore(options) {
     });
 }
 
+// The conformance suite runs against the real index: the class the Durable
+// Object shell binds, reached through RPC-like stubs over fake storage.
 function makeConformanceStore() {
-    const blobs = new Map();
-    const closures = new Map();
-    const builds = new Map();
-    const files = new Map();
-    let assignmentSequence = 0;
-    const kvStore = {
-        async get(key, { type }) {
-            if (Array.isArray(key)) {
-                return new Map(key.map((item) => [ item, decodeBlob(blobs.get(item), type) ]));
-            }
-            return decodeBlob(blobs.get(key), type);
-        },
-        async put(key, blob) {
-            blobs.set(key, blob);
-        },
-    };
-    const durableObject = {
-        async registerFile(hash, size) {
-            files.set(hash, { size });
-            return { success: true };
-        },
-        async statFiles(hashes) {
-            return { success: true, files: hashes.map((hash) => files.get(hash) ?? null) };
-        },
-        async getBuild(buildId) {
-            const rootHash = builds.get(buildId)?.rootHash ?? null;
-            return {
-                success: true,
-                rootHash,
-                entries: rootHash ? cloneJson(closures.get(rootHash)) : null,
-            };
-        },
-        async getIndex(rootHash) {
-            return {
-                success: true,
-                entries: closures.has(rootHash) ? cloneJson(closures.get(rootHash)) : null,
-            };
-        },
-        async getBuildPointer(buildId) {
-            const build = builds.get(buildId) ?? null;
-            return {
-                success: true,
-                pointer: build ? { rootHash: build.rootHash, assignedAt: build.assignedAt, assignmentId: build.assignmentId } : null,
-            };
-        },
-        async listBuilds() {
-            const listed = Array.from(builds, ([ buildId, pointer ]) => ({ buildId, ...pointer }));
-            listed.sort((a, b) => b.assignedAt.localeCompare(a.assignedAt) || a.buildId.localeCompare(b.buildId));
-            return { success: true, builds: listed };
-        },
-        async saveIndex(rootHash, entries) {
-            if (!closures.has(rootHash)) {
-                closures.set(rootHash, cloneJson(entries));
-            }
-            return { success: true };
-        },
-        async assignBuild(buildId, assignment) {
-            const { rootHash, expectedAssignmentId } = assignment;
-            if (!closures.has(rootHash)) {
-                return { success: true, outcome: 'missingClosure' };
-            }
-            const current = builds.get(buildId) ?? null;
-            const currentRootHash = current?.rootHash ?? null;
-            if (expectedAssignmentId !== undefined && (current?.assignmentId ?? null) !== expectedAssignmentId) {
-                return { success: true, outcome: 'conflict' };
-            }
-            if (currentRootHash === rootHash) {
-                return {
-                    success: true,
-                    outcome: 'unchanged',
-                    pointer: current,
-                    previousRootHash: current.rootHash,
-                };
-            }
-            assignmentSequence += 1;
-            const pointer = {
-                rootHash,
-                assignedAt: String(assignmentSequence).padStart(10, '0'),
-                assignmentId: crypto.randomUUID(),
-            };
-            builds.set(buildId, pointer);
-            return { success: true, outcome: 'assigned', pointer, previousRootHash: currentRootHash };
-        },
-    };
+    const kvStore = createFakeKVNamespace();
+    const durableObjectNamespace = createFakeDurableObjectNamespace((state) => {
+        return new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
+    });
 
     return {
         store: makeStore({ indexCacheTtlSeconds: 0 }),
-        context: makeContext({ durableObject, kvStore }),
+        context: {
+            logger: SILENT_LOGGER,
+            env: {
+                CA_STORE_KV_STORE: kvStore,
+                CA_STORE_DURABLE_OBJECT: durableObjectNamespace,
+            },
+        },
         createStoreWithoutLogger() {
             return new ContentStore({});
         },
     };
-}
-
-function decodeBlob(blob, type) {
-    if (typeof blob === 'undefined') {
-        return null;
-    }
-    if (type === 'text') {
-        return typeof blob === 'string' ? blob : new TextDecoder().decode(blob);
-    }
-    if (type === 'arrayBuffer') {
-        return typeof blob === 'string' ? new TextEncoder().encode(blob).buffer : blob;
-    }
-    return new Blob([ blob ]).stream();
-}
-
-function cloneJson(value) {
-    return JSON.parse(JSON.stringify(value));
 }
 
 function makeDeferredPromise() {
@@ -964,7 +861,7 @@ describe('CloudflareContentStore', ({ describe }) => {
 
     describe('blob reads and writes', ({ it }) => {
         it('rejects an empty hash before KV access', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const caught = await catchAsyncError(
@@ -976,7 +873,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('reads a blob by content hash', async () => {
-            const kvStore = makeKvStore(new Map([ [ 'hash-a#1', 'the bytes' ] ]));
+            const kvStore = createFakeKVNamespace({ initial: { 'hash-a#1': 'the bytes' } });
             const store = makeStore();
 
             const result = await store.getFile(makeContext({ kvStore }), 'text', '/a.txt', 'hash-a');
@@ -1000,18 +897,20 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('reads a blob as an ArrayBuffer, passing the type through to KV', async () => {
-            const blob = new ArrayBuffer(4);
-            const kvStore = makeKvStore(new Map([ [ 'hash-a#1', blob ] ]));
+            const blob = new Uint8Array([ 1, 2, 3, 4 ]).buffer;
+            const kvStore = createFakeKVNamespace({ initial: { 'hash-a#1': blob } });
             const store = makeStore();
 
             const result = await store.getFile(makeContext({ kvStore }), 'arrayBuffer', '/a.bin', 'hash-a');
 
             assertEqual('arrayBuffer', kvStore.calls[0].options.type);
-            assertEqual(blob, result);
+            // KV returns a copy of the stored bytes, never the buffer it was given.
+            assert(result instanceof ArrayBuffer, 'expected an ArrayBuffer');
+            assertEqual('1,2,3,4', Array.from(new Uint8Array(result)).join(','));
         });
 
         it('never passes KV a cacheTtl below the adapter minimum', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore({ blobReadCacheTtlSeconds: 0 });
 
             await store.getFile(makeContext({ kvStore }), 'text', '/a.txt', 'hash-a');
@@ -1020,7 +919,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('preserves a configured cacheTtl above the platform minimum', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore({ blobReadCacheTtlSeconds: 86400 });
 
             await store.getFile(makeContext({ kvStore }), 'text', '/a.txt', 'hash-a');
@@ -1029,11 +928,13 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('returns bulk reads in the order of the requested files', async () => {
-            const kvStore = makeKvStore(new Map([
-                [ 'hash-a#1', 'A' ],
-                [ 'hash-b#1', 'B' ],
-                [ 'hash-c#1', 'C' ],
-            ]));
+            const kvStore = createFakeKVNamespace({
+                initial: {
+                    'hash-a#1': 'A',
+                    'hash-b#1': 'B',
+                    'hash-c#1': 'C',
+                },
+            });
             const store = makeStore();
             const files = [ { hash: 'hash-c' }, { hash: 'hash-a' }, { hash: 'hash-b' } ];
 
@@ -1049,7 +950,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             for (let i = 0; i < 101; i += 1) {
                 files.push({ hash: `hash-${ i }` });
             }
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             // KV rejects a bulk get() of more than 100 keys. Deciding how many
@@ -1067,7 +968,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('rejects malformed bulk file descriptors before KV access', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const caught = await catchAsyncError(
@@ -1085,7 +986,7 @@ describe('CloudflareContentStore', ({ describe }) => {
                 files.push({ hash: `hash-${ i }` });
                 values.set(`hash-${ i }#1`, `value-${ i }`);
             }
-            const kvStore = makeKvStore(values);
+            const kvStore = createFakeKVNamespace({ initial: values });
             const store = makeStore();
 
             const results = await store.getFiles(makeContext({ kvStore }), 'text', files);
@@ -1097,7 +998,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('returns null for a key missing from a bulk read', async () => {
-            const kvStore = makeKvStore(new Map([ [ 'hash-b#1', 'the bytes' ] ]));
+            const kvStore = createFakeKVNamespace({ initial: { 'hash-b#1': 'the bytes' } });
             const store = makeStore();
 
             const results = await store.getFiles(
@@ -1111,7 +1012,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('reports file metadata from the registry without reading KV payloads', async () => {
-            const kvStore = makeKvStore(new Map([ [ 'large-hash#1', new ArrayBuffer(1024) ] ]));
+            const kvStore = createFakeKVNamespace({ initial: { 'large-hash#1': new ArrayBuffer(1024) } });
             const durableObject = {
                 async statFiles(hashes) {
                     return {
@@ -1132,7 +1033,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('rejects a bulk arrayBuffer read, which KV cannot decode in bulk', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             // getFile() accepts arrayBuffer; KV's bulk get() decodes text and
@@ -1147,7 +1048,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('writes a blob under its content hash', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const size = await store.putFile(makeContext({ kvStore }), '/a.txt', 'hash-a', 'the bytes');
@@ -1162,7 +1063,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('writes an ArrayBuffer blob', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
             const blob = new ArrayBuffer(4);
 
@@ -1174,7 +1075,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('reports a string blob size in UTF-8 encoded bytes', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const size = await store.putFile(makeContext({ kvStore }), '/wave.txt', 'hash-wave', '👋');
@@ -1183,7 +1084,8 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('leaves a blob unregistered after registry failure and repairs it on repeat upload', async () => {
-            const kvStore = makeKvStore(new Map());
+            let nowMilliseconds = 1_800_000_000_000;
+            const kvStore = createFakeKVNamespace({ now: () => nowMilliseconds });
             const files = new Map();
             let registerCalls = 0;
             const durableObject = {
@@ -1206,6 +1108,9 @@ describe('CloudflareContentStore', ({ describe }) => {
                 () => store.putFile(context, '/a.txt', 'hash-a', 'bytes'),
             );
             const missing = await store.statFiles(context, [ 'hash-a' ]);
+            // KV accepts one write per second to a key, so the repeat upload
+            // comes a second later.
+            nowMilliseconds += 1000;
             const size = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
             const repaired = await store.statFiles(context, [ 'hash-a' ]);
 
@@ -1217,7 +1122,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const caught = await catchAsyncError(
@@ -1230,17 +1135,18 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('reads a blob as a stream, passing the type through to KV', async () => {
-            const kvStore = makeKvStore(new Map([ [ 'hash-a#1', 'a stream' ] ]));
+            const kvStore = createFakeKVNamespace({ initial: { 'hash-a#1': 'a stream' } });
             const store = makeStore();
 
             const result = await store.getFile(makeContext({ kvStore }), 'stream', '/a.txt', 'hash-a');
 
             assertEqual('stream', kvStore.calls[0].options.type);
-            assertEqual('a stream', result);
+            assert(result instanceof ReadableStream, 'expected a ReadableStream');
+            assertEqual('a stream', await new Response(result).text());
         });
 
         it('rejects a stream write, which KV has no way to accept', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
             const stream = new ReadableStream();
 
@@ -1258,7 +1164,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('rejects a bulk stream read, which KV does not support', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const caught = await catchAsyncError(
@@ -1271,7 +1177,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('rejects an unsupported representation type', async () => {
-            const kvStore = makeKvStore(new Map());
+            const kvStore = createFakeKVNamespace();
             const store = makeStore();
 
             const caught = await catchAsyncError(

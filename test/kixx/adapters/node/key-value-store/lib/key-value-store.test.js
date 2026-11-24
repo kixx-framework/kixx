@@ -8,9 +8,11 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import KeyValueStore from '../../../../../../kixx/adapters/node/key-value-store/lib/key-value-store.js';
 import Logger from '../../../../../../kixx/logger/logger.js';
+import keyValueStoreConformance from '../../../../key-value-store/key-value-store-conformance.js';
 
 
 const tempDirs = [];
+const conformanceStores = [];
 
 async function makeTempDir() {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-kv-'));
@@ -35,10 +37,17 @@ function makeContext() {
     return { logger: makeLogger() };
 }
 
-// arrayBuffer values come back as fresh ArrayBuffer instances, so identity
-// comparison would fail; compare the bytes instead.
-function bytesOf(arrayBuffer) {
-    return Array.from(new Uint8Array(arrayBuffer));
+function makeConformanceStore() {
+    const store = makeStore();
+    conformanceStores.push(store);
+
+    return {
+        store,
+        context: makeContext(),
+        async afterWrite() {
+            // SQLite has no write rate limit and reads its own writes at once.
+        },
+    };
 }
 
 function catchError(fn) {
@@ -73,10 +82,16 @@ async function withFixedNow(nowMilliseconds, callback) {
 describe('Node KeyValueStore', ({ after, describe }) => {
 
     after(async () => {
+        for (const store of conformanceStores) {
+            store.close();
+        }
+
         for (const dir of tempDirs) {
             await fsp.rm(dir, { recursive: true, force: true });
         }
     });
+
+    keyValueStoreConformance(describe, makeConformanceStore);
 
     describe('constructor', ({ it }) => {
         it('throws when logger is not provided', () => {
@@ -141,50 +156,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
     });
 
     describe('get', ({ it }) => {
-        it('returns null when the key does not exist', async () => {
-            const store = makeStore();
-
-            const result = await store.get(makeContext(), 'missing');
-
-            assertEqual(null, result);
-            store.close();
-        });
-
-        it('returns the string for the default text type', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'greeting', 'hello');
-            const result = await store.get(context, 'greeting');
-
-            assertEqual('hello', result);
-            store.close();
-        });
-
-        it('returns a parsed value for the json type', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'profile', { name: 'Kris' }, { type: 'json' });
-            const result = await store.get(context, 'profile', { type: 'json' });
-
-            assertEqual('Kris', result.name);
-            store.close();
-        });
-
-        it('returns an ArrayBuffer for the arrayBuffer type', async () => {
-            const store = makeStore();
-            const context = makeContext();
-            const view = new Uint8Array([ 1, 2, 3 ]);
-
-            await store.put(context, 'blob', view, { type: 'arrayBuffer' });
-            const result = await store.get(context, 'blob', { type: 'arrayBuffer' });
-
-            assert(result instanceof ArrayBuffer, 'expected an ArrayBuffer');
-            assertEqual(JSON.stringify([ 1, 2, 3 ]), JSON.stringify(bytesOf(result)));
-            store.close();
-        });
-
         it('throws when the type is not supported', async () => {
             const store = makeStore();
 
@@ -193,17 +164,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('type must be one of', caught.message);
-            store.close();
-        });
-
-        it('accepts a valid cacheTtl as a no-op', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'greeting', 'hello');
-            const result = await store.get(context, 'greeting', { cacheTtl: 60 });
-
-            assertEqual('hello', result);
             store.close();
         });
 
@@ -231,53 +191,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
     });
 
     describe('put', ({ it }) => {
-        it('overwrites an existing key', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'greeting', 'hello');
-            await store.put(context, 'greeting', 'goodbye');
-            const result = await store.get(context, 'greeting');
-
-            assertEqual('goodbye', result);
-            store.close();
-        });
-
-        it('round-trips a json value through get', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'profile', { name: 'Kris', count: 7 }, { type: 'json' });
-            const result = await store.get(context, 'profile', { type: 'json' });
-
-            assertEqual('Kris', result.name);
-            assertEqual(7, result.count);
-            store.close();
-        });
-
-        it('round-trips a primitive json value through get', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'flag', true, { type: 'json' });
-            const result = await store.get(context, 'flag', { type: 'json' });
-
-            assertEqual(true, result);
-            store.close();
-        });
-
-        it('round-trips an arrayBuffer value byte-for-byte', async () => {
-            const store = makeStore();
-            const context = makeContext();
-            const buffer = new Uint8Array([ 9, 8, 7, 6 ]).buffer;
-
-            await store.put(context, 'blob', buffer, { type: 'arrayBuffer' });
-            const result = await store.get(context, 'blob', { type: 'arrayBuffer' });
-
-            assertEqual(JSON.stringify([ 9, 8, 7, 6 ]), JSON.stringify(bytesOf(result)));
-            store.close();
-        });
-
         it('throws when ttlSeconds is below the 60 second minimum', async () => {
             const store = makeStore();
 
@@ -453,17 +366,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             database.close();
         });
 
-        it('keeps an entry with a null expiry visible', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'permanent', 'value');
-            const result = await store.get(context, 'permanent');
-
-            assertEqual('value', result);
-            store.close();
-        });
-
         it('opportunistically sweeps expired rows on sampled writes', async () => {
             const tracker = new MockTracker();
             const database = new DatabaseSync(':memory:');
@@ -487,39 +389,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
 
             assertEqual(undefined, expired);
             database.close();
-        });
-    });
-
-    describe('delete', ({ it }) => {
-        it('resolves with no value', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'greeting', 'hello');
-            const result = await store.delete(context, 'greeting');
-
-            assertEqual(undefined, result);
-            store.close();
-        });
-
-        it('removes the key from the store', async () => {
-            const store = makeStore();
-            const context = makeContext();
-
-            await store.put(context, 'greeting', 'hello');
-            await store.delete(context, 'greeting');
-
-            assertEqual(null, await store.get(context, 'greeting'));
-            store.close();
-        });
-
-        it('resolves even when the key does not exist', async () => {
-            const store = makeStore();
-
-            const result = await store.delete(makeContext(), 'missing');
-
-            assertEqual(undefined, result);
-            store.close();
         });
     });
 
@@ -565,16 +434,6 @@ describe('Node KeyValueStore', ({ after, describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertMatches('must not exceed 512 bytes', caught.message);
-            store.close();
-        });
-
-        it('rejects an invalid key on delete', async () => {
-            const store = makeStore();
-
-            const caught = await catchAsyncError(() => store.delete(makeContext(), ''));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
             store.close();
         });
     });

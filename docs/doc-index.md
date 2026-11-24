@@ -30,11 +30,17 @@ kixx/assertions/README.md, kixx/errors/README.md, kixx/errors/docs/README.md, ki
 
 API references for framework code under `kixx/`: the `is*` tests and `assert*` helpers with `AssertionError`; the operational-versus-unexpected error distinction, with a per-class reference for every error class (name, code, HTTP status, options) in `kixx/errors/docs/`; and the generic template engine and its API (`tokenize`, `buildSyntaxTree`, `createRenderFunction`). Prefer the Templating Guide for project template work.
 
-### Unit Testing Guide
+### Testing Guide
 
 test/README.md
 
-Testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, shared conformance suites, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
+The unit suite and the integration suite, and which one a test belongs in. Dependency injection of platform services, thin Durable Object shells, the shared fakes in `test/fakes/` and how to write one, shared conformance suites and the rules for running one on a real platform, and the import hygiene rules. Also testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
+
+### Integration Suite
+
+test-app/README.md
+
+Running the integration suite against a real target: the runner's target options, its environment variables and the deploy key, timeouts and path selection, and who runs it. Covers the probe, which runs shared conformance suites inside a running server: its protocol, mounting it, and using `createProbeClient` and `describeProbeSuite` in an integration test.
 
 ### Cross-Site Request Forgery Protection
 

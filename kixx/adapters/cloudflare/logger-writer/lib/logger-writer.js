@@ -18,6 +18,20 @@ import {
  */
 export default class LoggerWriter {
 
+    #console = null;
+
+    /**
+     * @param {Object} [options]
+     * @param {Object} [options.console] - Receives each line through its
+     *   `debug`, `info`, `warn`, or `error` method. Defaults to the global
+     *   console.
+     */
+    constructor(options) {
+        const { console: sink } = options ?? {};
+
+        this.#console = sink ?? null;
+    }
+
     /**
      * Serializes a log entry to JSON and writes it to the console.
      * @param {string} name - Logger name
@@ -42,8 +56,11 @@ export default class LoggerWriter {
             error,
         });
 
+        // Without an injected sink, look up the global on every write. A
+        // console replaced after this writer was built still gets the logs.
+        const sink = this.#console ?? console;
         const consoleLevelKey = level.toLowerCase();
-        // eslint-disable-next-line no-console
-        console[consoleLevelKey](stringifyJSONLogEntry(entry));
+
+        sink[consoleLevelKey](stringifyJSONLogEntry(entry));
     }
 }
