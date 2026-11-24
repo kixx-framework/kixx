@@ -4,6 +4,7 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 import { createFakeKVNamespace } from '../../../../../fakes/workers-kv.js';
 import KeyValueStore from '../../../../../../kixx/adapters/cloudflare/key-value-store/lib/key-value-store.js';
 import Logger from '../../../../../../kixx/logger/logger.js';
+import keyValueStoreConformance from '../../../../key-value-store/key-value-store-conformance.js';
 
 
 function makeLogger() {
@@ -16,6 +17,21 @@ function makeContext(kvStore) {
 
 function makeStore() {
     return new KeyValueStore();
+}
+
+function makeConformanceStore() {
+    // KV allows one write per second to a key. The fake keeps that rule by
+    // this clock, so afterWrite() moves it on a second instead of waiting.
+    let now = Date.now();
+    const kvStore = createFakeKVNamespace({ now: () => now });
+
+    return {
+        store: makeStore(),
+        context: makeContext(kvStore),
+        async afterWrite() {
+            now += 1000;
+        },
+    };
 }
 
 async function catchAsyncError(fn) {
@@ -40,15 +56,9 @@ async function withFixedNow(nowMilliseconds, callback) {
 
 describe('KeyValueStore', ({ describe }) => {
 
+    keyValueStoreConformance(describe, makeConformanceStore);
+
     describe('get', ({ it }) => {
-        it('returns null when the key does not exist', async () => {
-            const store = makeStore();
-
-            const result = await store.get(makeContext(), 'missing');
-
-            assertEqual(null, result);
-        });
-
         it('returns the raw string for the default text type', async () => {
             const kvStore = createFakeKVNamespace({ initial: { greeting: 'hello' } });
             const store = makeStore();
@@ -277,47 +287,6 @@ describe('KeyValueStore', ({ describe }) => {
             assertEqual('AssertionError', caught.name);
             assertMatches('"arrayBuffer" value must be an ArrayBuffer', caught.message);
         });
-
-        it('round-trips a json value through get', async () => {
-            const kvStore = createFakeKVNamespace();
-            const context = makeContext(kvStore);
-            const store = makeStore();
-
-            await store.put(context, 'profile', { name: 'Kris' }, { type: 'json' });
-            const result = await store.get(context, 'profile', { type: 'json' });
-
-            assertEqual('Kris', result.name);
-        });
-    });
-
-    describe('delete', ({ it }) => {
-        it('resolves with no value', async () => {
-            const kvStore = createFakeKVNamespace({ initial: { greeting: 'hello' } });
-            const store = makeStore();
-
-            const result = await store.delete(makeContext(kvStore), 'greeting');
-
-            assertEqual(undefined, result);
-        });
-
-        it('removes the key from the store', async () => {
-            const kvStore = createFakeKVNamespace({ initial: { greeting: 'hello' } });
-            const context = makeContext(kvStore);
-            const store = makeStore();
-
-            await store.delete(context, 'greeting');
-
-            assertEqual(null, await kvStore.get('greeting'));
-            assertEqual(null, await store.get(context, 'greeting'));
-        });
-
-        it('resolves even when the key does not exist', async () => {
-            const store = makeStore();
-
-            const result = await store.delete(makeContext(), 'missing');
-
-            assertEqual(undefined, result);
-        });
     });
 
     describe('key validation', ({ it }) => {
@@ -370,15 +339,6 @@ describe('KeyValueStore', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
             assertEqual(0, kvStore.calls.length);
-        });
-
-        it('rejects an invalid key on delete', async () => {
-            const store = makeStore();
-
-            const caught = await catchAsyncError(() => store.delete(makeContext(), ''));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('AssertionError', caught.name);
         });
     });
 });
