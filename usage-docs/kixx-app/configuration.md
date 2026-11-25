@@ -151,7 +151,7 @@ regenerate.
 - **The app** declares its secrets in `app/app.json`.
 - **A plugin** declares its secrets in its manifest,
   `plugins/<name>/plugin.json`. Core does the same in `kixx/plugin.json`;
-  it declares none today.
+  it declares `DEPLOY_KEY_HASH`, the SHA-256 of the deploy key.
 
 ```json
 {
@@ -162,12 +162,20 @@ regenerate.
 }
 ```
 
-A secret is required unless it says `"required": false`. The generated file
-names each secret's owner and repeats its description. The value is a
-placeholder and is ignored, and a comment line reading exactly `# @optional`
-marks the next entry optional:
+A secret is required unless it says `"required": false`, or
+`"required": "outsideDevelopment"`, which means every environment except
+`development` must provide it. The generated file names each secret's owner
+and repeats its description. The value is a placeholder and is ignored. A
+comment line reading exactly `# @optional` marks the next entry optional, and
+one reading exactly `# @required-outside-development` marks it required
+outside development:
 
 ```
+# @required-outside-development
+# Declared by Kixx core.
+# SHA-256 of the deploy key, as 64 lowercase hex characters. Only the hash is stored on the server.
+DEPLOY_KEY_HASH=replace-me
+
 # Declared by the app.
 # Signs API tokens.
 API_SIGNING_SECRET=replace-me
@@ -179,9 +187,10 @@ SUPPORT_TOKEN=replace-me
 ```
 
 On every platform, startup checks the environment against the declared
-secrets: every required name must resolve to a non-empty string, or startup
-fails before any store is opened, naming every missing secret at once and
-never a value. Optional names are not checked. Two secrets with one name fail
+secrets: every required name, and outside `development` every name required
+outside development, must resolve to a non-empty string, or startup fails
+before any store is opened, naming every missing secret at once and never a
+value. Optional names are not checked. Two secrets with one name fail
 when the file is generated.
 
 Keep code and manifest in sync in this order:

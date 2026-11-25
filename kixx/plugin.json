@@ -48,6 +48,13 @@
             }
         }
     },
+    "secrets": [
+        {
+            "name": "DEPLOY_KEY_HASH",
+            "required": "outsideDevelopment",
+            "description": "SHA-256 of the deploy key, as 64 lowercase hex characters. Only the hash is stored on the server."
+        }
+    ],
     "cloudflare": {
         "kvNamespaces": [
             { "config": "KEY_VALUE_STORE" },

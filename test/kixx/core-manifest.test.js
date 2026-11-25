@@ -48,8 +48,13 @@ describe('core manifest', ({ it }) => {
         const installation = resolveInstallation({ core: manifest, plugins: [] });
 
         assertEqual('kixx', installation.entries.map((entry) => entry.name).join(','));
-        assertEqual(0, installation.secrets.length);
         assertEqual(0, installation.routes.length);
+    });
+
+    it('declares exactly one secret, the deploy key hash, required outside development', () => {
+        assertEqual(1, manifest.secrets.length);
+        assertEqual('DEPLOY_KEY_HASH', manifest.secrets[0].name);
+        assertEqual('outsideDevelopment', manifest.secrets[0].required);
     });
 
     it('names only modules that exist', () => {

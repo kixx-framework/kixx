@@ -11,6 +11,7 @@ import { renderProjectFiles } from '../../kixx/tooling/mod.js';
 import { createProjectFileSystem } from '../../kixx/adapters/node/tooling/lib/project-file-system.js';
 import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
+import { sha256Hex } from '../../kixx/utils/crypto.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
 import { startNodeServer } from '../../kixx/adapters/node/server/lib/node-server.js';
 import { createWorker } from '../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js';
@@ -43,16 +44,24 @@ const GENERATED_FILE_NAMES = [
 ];
 
 
+// A made-up deploy key for the fixture, and its SHA-256. The environments
+// hold only the hash, and nothing may ever print either.
+const FIXTURE_DEPLOY_KEY = 'kxdk_d68ff9b752db2b16fc4e4288bff58662244de0ffa0b58e154ec19c1d7256e39d';
+const FIXTURE_DEPLOY_KEY_HASH = '7a2831d3dd4bd497809c5122a4bf21af5ce186648aaeed0e941e3a59a5d06e1b';
+
 // The values the fake environments give the declared secrets. No error and
 // no response may ever repeat one.
 const SECRET_VALUES = {
+    DEPLOY_KEY_HASH: FIXTURE_DEPLOY_KEY_HASH,
     FIXTURE_APP_SECRET: 'the-app-secret-nothing-may-print',
     PANEL_SIGNING_SECRET: 'the-panel-secret-nothing-may-print',
     VISITS_OPTIONAL_TOKEN: 'the-optional-token-nothing-may-print',
 };
 
-// What boot says on every target when both required secrets are absent.
-const MISSING_SECRETS_MESSAGE = 'Missing required environment secrets: FIXTURE_APP_SECRET, PANEL_SIGNING_SECRET. '
+// What boot says on every target when the required secrets are absent. The
+// fixture runs as `test`, so the deploy key hash is required too.
+const MISSING_SECRETS_MESSAGE = 'Missing required environment secrets: '
+    + 'DEPLOY_KEY_HASH, FIXTURE_APP_SECRET, PANEL_SIGNING_SECRET. '
     + 'Every declared secret is listed in example.env.secrets.';
 
 const CATCH_ALL_BODY = 'fixture catch-all: not found\n';
@@ -114,6 +123,7 @@ async function bootOnNode() {
 
     const fakeProcess = makeProcess({
         DATA_DIRECTORY: dataDirectory,
+        DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
         FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
         PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
     });
@@ -222,6 +232,8 @@ function assertNoSecretValue(value) {
     for (const [ name, secretValue ] of Object.entries(SECRET_VALUES)) {
         assertFalsy(text.includes(secretValue), `the value of ${ name } was printed`);
     }
+
+    assertFalsy(text.includes(FIXTURE_DEPLOY_KEY), 'the deploy key was printed');
 }
 
 function catchError(fn) {
@@ -295,11 +307,15 @@ describe('fixture project', ({ describe }) => {
 
             assertEqual('FIXTURE_APP_SECRET,PANEL_SIGNING_SECRET', declared.required.join(','));
             assertEqual('VISITS_OPTIONAL_TOKEN', declared.optional.join(','));
+            assertEqual('DEPLOY_KEY_HASH', declared.requiredOutsideDevelopment.join(','));
 
             for (const registry of [ nodeRegistry, cloudflareRegistry ]) {
-                assertEqual(declared.required.join(','), registry.secrets.required.join(','));
-                assertEqual(declared.optional.join(','), registry.secrets.optional.join(','));
+                assertEqual(JSON.stringify(declared), JSON.stringify(registry.secrets));
             }
+        });
+
+        it('holds the hash of its made-up deploy key', async () => {
+            assertEqual(FIXTURE_DEPLOY_KEY_HASH, await sha256Hex(FIXTURE_DEPLOY_KEY));
         });
     });
 
@@ -578,7 +594,7 @@ describe('fixture project', ({ describe }) => {
         before(async () => {
             dataDirectory = await makeDataDirectory();
 
-            // The optional secret is present; both required ones are absent.
+            // The optional secret is present; every required one is absent.
             fakeProcess = makeProcess({
                 DATA_DIRECTORY: dataDirectory,
                 VISITS_OPTIONAL_TOKEN: SECRET_VALUES.VISITS_OPTIONAL_TOKEN,
@@ -598,7 +614,7 @@ describe('fixture project', ({ describe }) => {
             await removeDataDirectory(dataDirectory);
         });
 
-        it('rejects with one error naming both', () => {
+        it('rejects with one error naming every one', () => {
             assertEqual('OperationalError', error.name);
             assertEqual(MISSING_SECRETS_MESSAGE, error.message);
         });
@@ -625,6 +641,7 @@ describe('fixture project', ({ describe }) => {
 
         before(async () => {
             booted = bootOnCloudflare({
+                DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
                 FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
                 PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
             });
@@ -698,7 +715,7 @@ describe('fixture project', ({ describe }) => {
 
     describe('booted on the Cloudflare adapters without its required secrets', ({ it }) => {
         it('throws the error the Node.js boot rejects with', () => {
-            // The optional secret is present; both required ones are absent.
+            // The optional secret is present; every required one is absent.
             const error = catchError(() => {
                 bootOnCloudflare({ VISITS_OPTIONAL_TOKEN: SECRET_VALUES.VISITS_OPTIONAL_TOKEN });
             });
