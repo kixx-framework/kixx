@@ -284,6 +284,29 @@ Core declares one secret: `DEPLOY_KEY_HASH`, the SHA-256 of the deploy key, requ
 
 `example.env.secrets` is generated from the declarations. It is the template for `.env.<environment>.secrets`, and the list of secret names every deployment must provide. A comment line reading exactly `# @optional` marks the next entry optional, and one reading exactly `# @required-outside-development` marks it required outside development. Only comment lines may come between a directive and its entry, so a description may not be exactly either directive.
 
+## Deploy Key
+
+The deploy key authorizes operations: publishing, and any endpoint a plugin adds for migrations, jobs, or recovery. It is `kxdk_` and 64 lowercase hex characters. The server holds only its SHA-256, as `DEPLOY_KEY_HASH`, and a client sends the key as `Authorization: Bearer <key>`. A valid key grants everything behind the check: there are no scopes.
+
+Core exports the check from `kixx/deploy-key/mod.js` (from a plugin, `../../kixx/deploy-key/mod.js`). Put `requireDeployKey` on an operations mount, where it throws 401 (`UnauthenticatedError`, code `DeployKeyRequired`) unless the request carries the key:
+
+```js
+import { requireDeployKey } from '../../kixx/deploy-key/mod.js';
+
+export default {
+    inboundMiddleware: [ requireDeployKey ],
+    routes: [
+        { pattern: '/migrations', name: 'migrations', targets: [ { name: 'run', methods: [ 'POST' ], requestHandlers: [ runMigrations ] } ] },
+    ],
+};
+```
+
+- `verifyDeployKey(context, request)` resolves `true` or `false` and never throws for a wrong key. Use it in code that answers its own 401.
+- `deployKeyActor(context)` returns `{ type: 'deploy-key', id, name: 'Deploy key' }` for recording who acted. `id` is the first 12 characters of the hash, so rotated keys can be told apart. The middleware doesn't set `context.user`: the deploy key is not a user.
+- `generateDeployKey()` resolves a new `{ key, hash }`.
+
+In `development` with no `DEPLOY_KEY_HASH` set, the check is open: every request passes, and the actor's `id` is `'development'`. Set a hash in development to enforce it there too. Outside development, boot fails without the hash, and in any environment it fails when the hash isn't 64 lowercase hex characters. The error names the secret, never the value.
+
 ## Cloudflare Resources
 
 A manifest declares each Cloudflare resource as a pointer to the config block that describes it:

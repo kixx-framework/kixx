@@ -66,7 +66,7 @@ describe('core manifest', ({ it }) => {
             ...manifest.cloudflare.durableObjects.map((durableObject) => durableObject.module),
         ];
 
-        assertEqual(11, modules.length);
+        assertEqual(12, modules.length);
 
         const missing = modules.filter((modulePath) => {
             const filepath = fileURLToPath(new URL(modulePath, CORE_URL));

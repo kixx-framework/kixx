@@ -64,6 +64,12 @@ const MISSING_SECRETS_MESSAGE = 'Missing required environment secrets: '
     + 'DEPLOY_KEY_HASH, FIXTURE_APP_SECRET, PANEL_SIGNING_SECRET. '
     + 'Every declared secret is listed in example.env.secrets.';
 
+// A hash that isn't 64 lowercase hex characters fails boot on every target,
+// with a message that names the secret and never the value.
+const MALFORMED_DEPLOY_KEY_HASH = 'not-a-hash';
+const MALFORMED_DEPLOY_KEY_HASH_MESSAGE = 'DEPLOY_KEY_HASH must be the SHA-256 of the deploy key, '
+    + 'as 64 lowercase hex characters.';
+
 const CATCH_ALL_BODY = 'fixture catch-all: not found\n';
 
 // Asks the server to close the connection after the response, so a drain that
@@ -336,6 +342,7 @@ describe('fixture project', ({ describe }) => {
                 [
                     'kixx:./content-addressable-store/plugin.js',
                     'kixx:./hyperview/plugin.js',
+                    'kixx:./deploy-key/plugin.js',
                     'kixx:./adapters/node/key-value-store/plugin.js',
                     'kixx:./adapters/node/content-store/plugin.js',
                     'visits:./plugin.js',
@@ -348,6 +355,7 @@ describe('fixture project', ({ describe }) => {
                 [
                     'kixx:./content-addressable-store/plugin.js',
                     'kixx:./hyperview/plugin.js',
+                    'kixx:./deploy-key/plugin.js',
                     'kixx:./adapters/cloudflare/key-value-store/plugin.js',
                     'kixx:./adapters/cloudflare/content-store/plugin.js',
                     'visits:./plugin.js',
@@ -631,6 +639,51 @@ describe('fixture project', ({ describe }) => {
         });
     });
 
+    describe('booted on the Node.js adapters with a malformed deploy key hash', ({ before, after, it }) => {
+        let dataDirectory;
+        let fakeProcess;
+        let error;
+
+        before(async () => {
+            dataDirectory = await makeDataDirectory();
+
+            fakeProcess = makeProcess({
+                DATA_DIRECTORY: dataDirectory,
+                DEPLOY_KEY_HASH: MALFORMED_DEPLOY_KEY_HASH,
+                FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+            });
+
+            error = await catchRejection(startNodeServer({
+                registry: nodeRegistry,
+                virtualHosts,
+                app,
+                baseDirectory: PROJECT_DIRECTORY,
+                process: fakeProcess,
+                hostname: '127.0.0.1',
+            }));
+        });
+
+        after(async () => {
+            await removeDataDirectory(dataDirectory);
+        });
+
+        it('rejects with the boot check\'s error, naming the secret', () => {
+            assertEqual('OperationalError', error.name);
+            assertEqual(MALFORMED_DEPLOY_KEY_HASH_MESSAGE, error.message);
+        });
+
+        it('repeats no value from the environment', () => {
+            assertNoSecretValue(error);
+            assertFalsy(util.inspect(error, { depth: 8 }).includes(MALFORMED_DEPLOY_KEY_HASH));
+        });
+
+        it('registers no signal handler and doesn\'t exit', () => {
+            assertEqual(0, fakeProcess.handlers.size);
+            assertEqual(0, fakeProcess.exitCodes.length);
+        });
+    });
+
     // Unit coverage of the Cloudflare registry and adapters on fakes. It is
     // not the real boot: only Cloudflare can load the entry point and the
     // Durable Object classes.
@@ -710,6 +763,23 @@ describe('fixture project', ({ describe }) => {
 
         it('puts no secret value in a response', () => {
             assertNoSecretValue([ firstVisit.body, secondVisit.body ]);
+        });
+    });
+
+    describe('booted on the Cloudflare adapters with a malformed deploy key hash', ({ it }) => {
+        it('throws the error the Node.js boot rejects with', () => {
+            const error = catchError(() => {
+                bootOnCloudflare({
+                    DEPLOY_KEY_HASH: MALFORMED_DEPLOY_KEY_HASH,
+                    FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                    PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+                });
+            });
+
+            assertEqual('OperationalError', error.name);
+            assertEqual(MALFORMED_DEPLOY_KEY_HASH_MESSAGE, error.message);
+            assertNoSecretValue(error);
+            assertFalsy(util.inspect(error, { depth: 8 }).includes(MALFORMED_DEPLOY_KEY_HASH));
         });
     });
 

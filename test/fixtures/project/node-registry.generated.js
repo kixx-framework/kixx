@@ -6,6 +6,7 @@ import LoggerWriter from "../../../kixx/adapters/node/logger-writer/lib/logger-w
 import ServerRequest from "../../../kixx/adapters/node/server-request/lib/server-request.js";
 import * as kixxContentAddressableStorePlugin from "../../../kixx/content-addressable-store/plugin.js";
 import * as kixxHyperviewPlugin from "../../../kixx/hyperview/plugin.js";
+import * as kixxDeployKeyPlugin from "../../../kixx/deploy-key/plugin.js";
 import * as kixxAdaptersNodeKeyValueStorePlugin from "../../../kixx/adapters/node/key-value-store/plugin.js";
 import * as kixxAdaptersNodeContentStorePlugin from "../../../kixx/adapters/node/content-store/plugin.js";
 import * as visitsPlugin from "./plugins/visits/plugin.js";
@@ -18,6 +19,7 @@ export { LoggerWriter, ServerRequest };
 export const plugins = new Map([
     [ "kixx:./content-addressable-store/plugin.js", kixxContentAddressableStorePlugin ],
     [ "kixx:./hyperview/plugin.js", kixxHyperviewPlugin ],
+    [ "kixx:./deploy-key/plugin.js", kixxDeployKeyPlugin ],
     [ "kixx:./adapters/node/key-value-store/plugin.js", kixxAdaptersNodeKeyValueStorePlugin ],
     [ "kixx:./adapters/node/content-store/plugin.js", kixxAdaptersNodeContentStorePlugin ],
     [ "visits:./plugin.js", visitsPlugin ],

@@ -5,7 +5,8 @@
     "services": [ "ContentAddressableStore", "ContentStore", "HyperviewService", "KeyValueStore" ],
     "lifecycle": [
         "./content-addressable-store/plugin.js",
-        "./hyperview/plugin.js"
+        "./hyperview/plugin.js",
+        "./deploy-key/plugin.js"
     ],
     "adapters": {
         "node": {
