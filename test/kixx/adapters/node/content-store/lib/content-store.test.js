@@ -258,16 +258,19 @@ describe('Node ContentStore', ({ after, describe }) => {
             database.close();
         });
 
-        it('initializes schema version three with required SQLite pragmas', async () => {
+        it('initializes schema version four with required SQLite pragmas', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
             await store.getFile(makeContext(), 'text', '/', 'missing');
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
-            assertEqual(3, database.prepare('PRAGMA user_version').get().user_version);
+            const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
+            assertEqual(4, database.prepare('PRAGMA user_version').get().user_version);
             assertEqual(1, database.prepare('PRAGMA foreign_keys').get().foreign_keys);
             assertEqual('wal', database.prepare('PRAGMA journal_mode').get().journal_mode);
+            assertEqual('activations,builds,closures,releases', tables.map(({ name }) => name).join(','));
+            assertEqual(1, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'activations_build'").get().count);
             database.close();
             store.close();
         });
@@ -313,27 +316,34 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
 
             const newerDatabase = new DatabaseSync(':memory:');
-            newerDatabase.exec('PRAGMA user_version = 4');
+            newerDatabase.exec('PRAGMA user_version = 5');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
             const newer = await catchAsyncError(() => newerStore.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', newer.name);
-            assertMatches('newer than supported', newer.message);
+            assertMatches('schema version 5 is newer than supported version 4', newer.message);
+            assertEqual(5, newerDatabase.prepare('PRAGMA user_version').get().user_version);
+            assertEqual(0, newerDatabase.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
             newerStore.close();
             newerDatabase.close();
         });
 
-        it('rejects an older schema instead of using columns it does not have', async () => {
+        it('rejects every older schema instead of upgrading it', async () => {
             const rootDirectory = await makeTemporaryDirectory();
-            const database = new DatabaseSync(':memory:');
-            database.exec('PRAGMA user_version = 1');
-            const store = makeStore(rootDirectory, { database });
 
-            const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
+            for (const version of [ 1, 2, 3 ]) {
+                const database = new DatabaseSync(':memory:');
+                database.exec(`PRAGMA user_version = ${ version }`);
+                const store = makeStore(rootDirectory, { database });
 
-            assertEqual('AssertionError', caught.name);
-            assertMatches('does not migrate schema version 1 to 3', caught.message);
-            store.close();
-            database.close();
+                const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
+
+                assertEqual('AssertionError', caught.name);
+                assertMatches(`does not migrate schema version ${ version } to 4`, caught.message);
+                assertEqual(version, database.prepare('PRAGMA user_version').get().user_version);
+                assertEqual(0, database.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
+                store.close();
+                database.close();
+            }
         });
 
         it('translates thrown index serialization failures to assertion errors', async () => {

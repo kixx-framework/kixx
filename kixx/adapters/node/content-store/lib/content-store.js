@@ -19,7 +19,7 @@ import { isValidAssignmentId } from '../../../../content-addressable-store/build
 import TraceLogger from '../../../../logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const GET_FILE_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_TYPES = [ 'text' ];
 const BULK_FILE_LIMIT = 100;
@@ -35,13 +35,15 @@ const textDecoder = new TextDecoder();
  * Node.js filesystem and SQLite-backed content store.
  *
  * Blob bytes are immutable files under `format-<format>/blobs`, while SQLite
- * stores immutable index closures and mutable build pointers. Publication uses
+ * stores immutable index closures, mutable build pointers, and the append-only
+ * publishing history. The index schema is created fresh at its current version;
+ * a store at any other version is refused, not upgraded. Publication uses
  * an atomic hard-link and directory synchronization, so this adapter requires
  * local storage that supports both operations. Network filesystems are not
  * supported. The process umask controls filesystem permissions.
  *
  * @implements {import('../../../../content-addressable-store/content-store-interface.js').ContentStoreInterface}
- * @see ContentStore in ../../cloudflare-content-store/lib/content-store.js for the Cloudflare implementation
+ * @see ContentStore in ../../../cloudflare/content-store/lib/content-store.js for the Cloudflare implementation
  */
 export default class ContentStore {
 
@@ -637,8 +639,38 @@ export default class ContentStore {
                         build_id   TEXT PRIMARY KEY,
                         root_hash  TEXT NOT NULL REFERENCES closures(root_hash),
                         assigned_at TEXT NOT NULL,
-                        assignment_id TEXT NOT NULL UNIQUE
+                        assignment_id TEXT NOT NULL UNIQUE,
+                        code_revision TEXT,
+                        code_fingerprint TEXT
                     );
+                    CREATE TABLE releases (
+                        sequence         INTEGER PRIMARY KEY,
+                        release_id       TEXT    NOT NULL UNIQUE REFERENCES closures(root_hash),
+                        created_at       TEXT    NOT NULL,
+                        created_by_type  TEXT    NOT NULL,
+                        created_by_id    TEXT    NOT NULL,
+                        created_by_name  TEXT,
+                        object_count     INTEGER NOT NULL,
+                        total_bytes      INTEGER NOT NULL,
+                        contract_version INTEGER NOT NULL,
+                        provenance_json  TEXT    NOT NULL
+                    );
+                    CREATE TABLE activations (
+                        sequence        INTEGER PRIMARY KEY,
+                        build_id        TEXT NOT NULL,
+                        assignment_id   TEXT NOT NULL UNIQUE,
+                        from_release_id TEXT,
+                        to_release_id   TEXT NOT NULL,
+                        activated_at    TEXT NOT NULL,
+                        reason          TEXT NOT NULL,
+                        actor_type      TEXT NOT NULL,
+                        actor_id        TEXT NOT NULL,
+                        actor_name      TEXT,
+                        source_revision TEXT,
+                        summary         TEXT,
+                        force_reason    TEXT
+                    );
+                    CREATE INDEX activations_build ON activations (build_id, sequence);
                     PRAGMA user_version = ${ SCHEMA_VERSION };
                 `);
                 this.#logger.info('migrated content store database', { version: SCHEMA_VERSION });
