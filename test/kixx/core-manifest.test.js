@@ -48,7 +48,17 @@ describe('core manifest', ({ it }) => {
         const installation = resolveInstallation({ core: manifest, plugins: [] });
 
         assertEqual('kixx', installation.entries.map((entry) => entry.name).join(','));
-        assertEqual(0, installation.routes.length);
+        assertEqual(1, installation.routes.length);
+    });
+
+    it('mounts the Publishing API at /publishing-api/v1', () => {
+        assertEqual(1, manifest.routes.length);
+
+        const [ route ] = manifest.routes;
+
+        assertEqual('./publishing-api/routes.js', route.module);
+        assertEqual('/publishing-api/v1', route.mount);
+        assertEqual('publishing-api', route.name);
     });
 
     it('declares exactly one secret, the deploy key hash, required outside development', () => {
@@ -64,9 +74,10 @@ describe('core manifest', ({ it }) => {
             ...listLifecycleModules(manifest),
             ...listClassModules(manifest),
             ...manifest.cloudflare.durableObjects.map((durableObject) => durableObject.module),
+            ...manifest.routes.map((route) => route.module),
         ];
 
-        assertEqual(12, modules.length);
+        assertEqual(13, modules.length);
 
         const missing = modules.filter((modulePath) => {
             const filepath = fileURLToPath(new URL(modulePath, CORE_URL));

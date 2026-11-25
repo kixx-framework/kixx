@@ -3,6 +3,7 @@
 /* eslint-disable */
 
 import { mountRoutes } from "../../../kixx/http-router/mount-routes.js";
+import kixxPublishingApiRoutes from "../../../kixx/publishing-api/routes.js";
 import visitsRoutes from "./plugins/visits/routes.js";
 import visitsPanelRoutes from "./plugins/visits/panel-routes.js";
 import panelRoutes from "./plugins/panel/routes.js";
@@ -10,6 +11,7 @@ import panelRoutes from "./plugins/panel/routes.js";
 // Every route the installed plugins contribute, in order. Spread it into a
 // virtual host's routes, before the catch-all.
 export const pluginRoutes = [
+    ...mountRoutes({ plugin: "kixx", module: "./publishing-api/routes.js", mount: "/publishing-api/v1", name: "publishing-api", routes: kixxPublishingApiRoutes }),
     ...mountRoutes({ plugin: "visits", module: "./routes.js", mount: "/visits", name: "visits", routes: visitsRoutes }),
     ...mountRoutes({ plugin: "visits", module: "./panel-routes.js", mount: "/panel/visits", name: "panel-visits", routes: visitsPanelRoutes }),
     ...mountRoutes({ plugin: "panel", module: "./routes.js", mount: "/panel", name: "panel", routes: panelRoutes }),

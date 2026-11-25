@@ -219,10 +219,49 @@ function bootOnCloudflare(secrets) {
         waitUntilPromises,
 
         // Cloudflare hands fetch() the environment again on every request.
-        fetch(pathname) {
-            return worker.fetch(new Request(`https://localhost${ pathname }`), env, executionContext);
+        fetch(pathname, headers = {}) {
+            return worker.fetch(new Request(`https://localhost${ pathname }`, { headers }), env, executionContext);
         },
     };
+}
+
+// The Publishing API cases each boot shares: no key, a wrong key, and the
+// fixture's key, all on discovery. `request(pathname, headers)` sends one
+// request to the booted fixture and resolves with a Response.
+async function requestPublishingApi(request) {
+    const read = async (headers) => {
+        const response = await request('/publishing-api/v1', headers);
+        const text = await response.text();
+
+        return {
+            status: response.status,
+            mediaType: response.headers.get('content-type').split(';')[0],
+            headers: Object.fromEntries(response.headers.entries()),
+            text,
+            body: JSON.parse(text),
+        };
+    };
+
+    return {
+        missing: await read({}),
+        wrong: await read({ authorization: `Bearer kxdk_${ '0'.repeat(64) }` }),
+        valid: await read({ authorization: `Bearer ${ FIXTURE_DEPLOY_KEY }` }),
+    };
+}
+
+function assertPublishingApiResponses({ missing, wrong, valid }) {
+    for (const refused of [ missing, wrong ]) {
+        assertEqual(401, refused.status);
+        assertEqual('application/vnd.api+json', refused.mediaType);
+        assertEqual('DeployKeyRequired', refused.body.errors[0].code);
+    }
+
+    assertEqual(200, valid.status);
+    assertEqual('application/vnd.api+json', valid.mediaType);
+    assertEqual('PublishingApi', valid.body.data.type);
+    assertEqual(3, valid.body.data.attributes.buildAssignmentProtocolVersion);
+
+    assertNoSecretValue([ missing, wrong, valid ]);
 }
 
 async function fetchJSON(url) {
@@ -390,9 +429,12 @@ describe('fixture project', ({ describe }) => {
     // Nothing is booted here. These checks only show that the hand-written
     // files and the generated ones fit each other.
     describe('hand-written files', ({ it }) => {
-        it('mount the plugin routes in entry order, a plugin\'s conditional routes after its own', () => {
-            assertEqual('visits,panel-visits,panel', pluginRoutes.map(({ name }) => name).join(','));
-            assertEqual('/visits,/panel/visits,/panel', pluginRoutes.map(({ pattern }) => pattern).join(','));
+        it('mount core\'s routes first, then the plugin routes in entry order, a plugin\'s conditional routes after its own', () => {
+            assertEqual('publishing-api,visits,panel-visits,panel', pluginRoutes.map(({ name }) => name).join(','));
+            assertEqual(
+                '/publishing-api/v1,/visits,/panel/visits,/panel',
+                pluginRoutes.map(({ pattern }) => pattern).join(','),
+            );
         });
 
         it('put middleware on the panel mount', () => {
@@ -436,6 +478,7 @@ describe('fixture project', ({ describe }) => {
         let booted;
         let firstVisit;
         let secondVisit;
+        let publishingApi;
 
         before(async () => {
             booted = await bootOnNode();
@@ -443,6 +486,10 @@ describe('fixture project', ({ describe }) => {
             // The mount path answers with and without a trailing slash.
             firstVisit = await fetchJSON(`${ booted.origin }/visits`);
             secondVisit = await fetchJSON(`${ booted.origin }/visits/`);
+
+            publishingApi = await requestPublishingApi((pathname, headers) => {
+                return fetch(`${ booted.origin }${ pathname }`, { headers });
+            });
         });
 
         after(async () => {
@@ -541,6 +588,10 @@ describe('fixture project', ({ describe }) => {
             assert(fs.existsSync(path.join(booted.dataDirectory, 'key-value-store.sqlite')));
             assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'key-value-store.sqlite')));
             assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'content-store')));
+        });
+
+        it('serves the Publishing API behind the deploy key', () => {
+            assertPublishingApiResponses(publishingApi);
         });
 
         it('puts no secret value in a response', () => {
@@ -691,6 +742,7 @@ describe('fixture project', ({ describe }) => {
         let booted;
         let firstVisit;
         let secondVisit;
+        let publishingApi;
 
         before(async () => {
             booted = bootOnCloudflare({
@@ -706,6 +758,8 @@ describe('fixture project', ({ describe }) => {
 
             const secondResponse = await booted.fetch('/visits/');
             secondVisit = { response: secondResponse, body: await secondResponse.json() };
+
+            publishingApi = await requestPublishingApi(booted.fetch);
         });
 
         it('counts visits through the key/value store', () => {
@@ -754,6 +808,10 @@ describe('fixture project', ({ describe }) => {
 
             assertEqual(404, reports.status);
             assertEqual(CATCH_ALL_BODY, await reports.text());
+        });
+
+        it('serves the Publishing API behind the deploy key', () => {
+            assertPublishingApiResponses(publishingApi);
         });
 
         it('never reaches the Worker\'s own error path', () => {

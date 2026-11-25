@@ -49,6 +49,9 @@
             }
         }
     },
+    "routes": [
+        { "module": "./publishing-api/routes.js", "mount": "/publishing-api/v1", "name": "publishing-api" }
+    ],
     "secrets": [
         {
             "name": "DEPLOY_KEY_HASH",
