@@ -23,6 +23,41 @@ describe('cloudflare/secrets-manifest', ({ describe }) => {
             assert(!JSON.stringify(manifest).includes('placeholder'), 'expected no values');
         });
 
+        it('returns @required-outside-development names in required', () => {
+            const manifest = parseSecretsManifest([
+                'ZETA=x',
+                '# @required-outside-development',
+                '# Declared by kixx',
+                'DEPLOY_KEY_HASH=replace-me',
+                '# @optional',
+                'OPTIONAL_ONE=x',
+            ].join('\n'));
+
+            assertEqual('DEPLOY_KEY_HASH,ZETA', manifest.required.join(','));
+            assertEqual('OPTIONAL_ONE', manifest.optional.join(','));
+            assertEqual('optional,required', Object.keys(manifest).sort().join(','));
+        });
+
+        it('rejects a @required-outside-development directive with no entry to mark', () => {
+            const cases = [
+                [ '# @required-outside-development\n\nA=1', 1, '@required-outside-development directive must be followed by an entry' ],
+                [ 'A=1\n# @required-outside-development', 2, '@required-outside-development directive must be followed by an entry' ],
+                [ '# @required-outside-development\n# @required-outside-development\nA=1', 2, 'a second directive, @required-outside-development,' ],
+                [ '# @required-outside-development\n# @optional\nA=1', 2, 'a second directive, @optional,' ],
+                [ '# @optional\n# @required-outside-development\nA=1', 2, 'a second directive, @required-outside-development,' ],
+                [ '# @required-outside-development\nBUILD_ID=x', 2, '"BUILD_ID" is reserved' ],
+            ];
+
+            for (const [ text, lineNumber, detail ] of cases) {
+                const caught = catchError(() => parseSecretsManifest(text));
+
+                assert(caught, `expected ${ JSON.stringify(text) } to be rejected`);
+                assertEqual('UsageError', caught.name);
+                assert(caught.message.includes(`example.env.secrets on line ${ lineNumber }`), caught.message);
+                assert(caught.message.includes(detail), caught.message);
+            }
+        });
+
         it('returns empty lists for an empty file', () => {
             const manifest = parseSecretsManifest('');
 
@@ -37,7 +72,7 @@ describe('cloudflare/secrets-manifest', ({ describe }) => {
                 [ 'A=1\nA=2', 2, 'duplicate secret name "A"' ],
                 [ '# @optional\n\nA=1', 1, '@optional directive must be followed by an entry' ],
                 [ 'A=1\n# @optional', 2, '@optional directive must be followed by an entry' ],
-                [ '# @optional\n# @optional\nA=1', 2, 'a second @optional directive' ],
+                [ '# @optional\n# @optional\nA=1', 2, 'a second directive, @optional,' ],
                 [ 'BUILD_ID=x', 1, '"BUILD_ID" is reserved' ],
                 [ '# @optional\nENVIRONMENT=x', 2, '"ENVIRONMENT" is reserved' ],
             ];

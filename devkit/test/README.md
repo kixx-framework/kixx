@@ -1,6 +1,6 @@
 # Unit Testing Guide
 
-> **Status:** Some devkit tests are back in `devkit/test/`; the rest are parked in `test-v6/devkit/` until their sections bring them back. `node devkit/run-tests.js` runs what is here. The helpers and fixtures named below are still parked in `test-v6/devkit/helpers/` and `test-v6/devkit/fixtures/`.
+> **Status:** Some devkit tests are back in `devkit/test/`; the rest are parked in `test-v6/devkit/` until their sections bring them back. `node devkit/run-tests.js` runs what is here. `devkit/test/helpers/memory-file-system.js` is back; the other helpers and fixtures named below are still parked in `test-v6/devkit/helpers/` and `test-v6/devkit/fixtures/`.
 
 This project uses two ES module libraries:
 
