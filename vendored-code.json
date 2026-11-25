@@ -28,10 +28,10 @@
         {
             "path": "kixx/errors",
             "name": "kixx-server-errors",
-            "version": "7.0.0",
-            "source": "npm:kixx-server-errors@7.0.0",
+            "version": "7.1.0",
+            "source": "npm:kixx-server-errors@7.1.0",
             "files": "docs/, lib/, mod.js, README.md, LICENSE",
-            "sha256": "15eca6d2949a884ca3184c7792c5fd898f77dbf9cac8520317503d95f39f4a0a"
+            "sha256": "2d674c244b17b5a1b8ebceb927e90faa0b706a2d1f8de63e8b4363310da1ab7a"
         },
         {
             "path": "kixx/vendor/marked",

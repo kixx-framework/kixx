@@ -28,6 +28,7 @@ Error classes that extend the native `Error` with stable metadata for HTTP handl
 | [`PayloadTooLargeError`](./payload-too-large-error.md) | 413 | Request payload exceeds the size the server accepts. |
 | [`UnsupportedMediaTypeError`](./unsupported-media-type-error.md) | 415 | Request payload is in an unsupported format. Carries negotiation values. |
 | [`ValidationError`](./validation-error.md) | 422 | Aggregates one or more validation failures. |
+| [`TooManyRequestsError`](./too-many-requests-error.md) | 429 | The client has sent too many requests and is rate limited. Carries `retryAfterSeconds`. |
 | [`NotImplementedError`](./not-implemented-error.md) | 501 | Requested feature or method is not implemented. |
 | [`ServiceUnavailableError`](./service-unavailable-error.md) | 503 | A backing service is temporarily unavailable. Carries `retryAfterSeconds`. |
 
