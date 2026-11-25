@@ -12,7 +12,7 @@ import {
 } from '../assertions/mod.js';
 
 
-const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
+export const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
 
 // Directives which decide whether and how long a cache may store a response.
 // Enforcing a restrictive policy replaces these and keeps the rest, such as

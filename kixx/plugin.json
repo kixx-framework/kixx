@@ -5,7 +5,8 @@
     "services": [ "ContentAddressableStore", "ContentStore", "HyperviewService", "KeyValueStore" ],
     "lifecycle": [
         "./content-addressable-store/plugin.js",
-        "./hyperview/plugin.js"
+        "./hyperview/plugin.js",
+        "./deploy-key/plugin.js"
     ],
     "adapters": {
         "node": {
@@ -48,6 +49,16 @@
             }
         }
     },
+    "routes": [
+        { "module": "./publishing-api/routes.js", "mount": "/publishing-api/v1", "name": "publishing-api" }
+    ],
+    "secrets": [
+        {
+            "name": "DEPLOY_KEY_HASH",
+            "required": "outsideDevelopment",
+            "description": "SHA-256 of the deploy key, as 64 lowercase hex characters. Only the hash is stored on the server."
+        }
+    ],
     "cloudflare": {
         "kvNamespaces": [
             { "config": "KEY_VALUE_STORE" },

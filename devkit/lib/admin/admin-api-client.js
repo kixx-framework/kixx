@@ -150,40 +150,6 @@ export default class AdminAPIClient {
         };
     }
 
-    /**
-     * Mints a bearer token for the separate Publishing API.
-     * @param {Object} [options] - Token attributes
-     * @param {string[]} [options.roles] - Publishing role ids, defaults to `["editor"]`
-     * @param {number} [options.ttl] - Time to live in seconds, defaults to 2592000
-     * @param {string} [options.description] - Operator-facing description
-     * @returns {Promise<Object>} The one-time plaintext token with its metadata
-     */
-    async createPublishingApiToken(options) {
-        const { roles, ttl, description } = options ?? {};
-        const attributes = {};
-
-        if (!isUndefined(roles)) {
-            attributes.roles = roles;
-        }
-        if (!isUndefined(ttl)) {
-            attributes.timeToLiveSeconds = ttl;
-        }
-        if (!isUndefined(description)) {
-            attributes.description = description;
-        }
-
-        const response = await this.#postJsonApi(
-            'publishing-api-tokens',
-            'PublishingApiToken',
-            attributes,
-        );
-
-        return {
-            tokenId: response.data.id,
-            ...response.data.attributes,
-        };
-    }
-
     async #postJsonApi(endpoint, type, attributes) {
         return await this.#request(endpoint, {
             method: 'POST',

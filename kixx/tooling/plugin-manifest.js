@@ -38,6 +38,12 @@ const RESERVED_PLUGIN_NAMES = [ CORE_NAME, 'app' ];
 // The platform sets these two variables itself, so no secret may take one.
 const RESERVED_SECRET_NAMES = [ 'BUILD_ID', 'ENVIRONMENT' ];
 
+// The `required` value for a secret every environment but development needs.
+const REQUIRED_OUTSIDE_DEVELOPMENT = 'outsideDevelopment';
+
+// The secrets template's directives, without the leading `# `.
+const RESERVED_SECRET_DESCRIPTIONS = [ '@optional', '@required-outside-development' ];
+
 const TARGETS = [ 'node', 'cloudflare' ];
 
 const MANIFEST_KEYS = [
@@ -68,7 +74,7 @@ const WHEN_INSTALLED_KEYS = [ 'lifecycle', 'routes', 'content' ];
 /**
  * @typedef {Object} ManifestSecret
  * @property {string} name - Environment variable name
- * @property {boolean} required - False when a deployment may omit the secret
+ * @property {(boolean|'outsideDevelopment')} required - False when a deployment may omit the secret; `'outsideDevelopment'` when only development may omit it
  * @property {string} description - One line saying what the secret is for
  */
 
@@ -392,18 +398,22 @@ function readSecrets(problems, value) {
         let required = true;
 
         if (!isUndefined(item.required)) {
-            if (isBoolean(item.required)) {
+            if (isBoolean(item.required) || item.required === REQUIRED_OUTSIDE_DEVELOPMENT) {
                 required = item.required;
             } else {
-                report(problems, `${ path }.required`, `${ describe(item.required) } must be true or false`);
+                report(
+                    problems,
+                    `${ path }.required`,
+                    `${ describe(item.required) } must be true, false, or "${ REQUIRED_OUTSIDE_DEVELOPMENT }"`,
+                );
             }
         }
 
         const description = readDescription(problems, item.description, `${ path }.description`);
 
         // The secrets template writes each description as a comment line, where
-        // this text would mark the next entry optional.
-        if (description !== null && description.trim() === '@optional') {
+        // a directive's text would mark the next entry.
+        if (description !== null && RESERVED_SECRET_DESCRIPTIONS.includes(description.trim())) {
             report(problems, `${ path }.description`, `${ describe(description) } is reserved`);
         }
 

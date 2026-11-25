@@ -14,6 +14,7 @@ function makeLoggerWriter() {
 function makeConfig() {
     return {
         name: 'test-app',
+        environment: 'test',
         env: {
             LOGGER: { level: 'error' },
         },
@@ -143,6 +144,7 @@ describe('bootApplication', ({ it, describe }) => {
         const secrets = {
             required: [ 'ZEBRA_SECRET', 'ALPHA_SECRET' ],
             optional: [ 'OPTIONAL_SECRET' ],
+            requiredOutsideDevelopment: [],
         };
 
         it('boots when every required secret is in the environment', () => {
@@ -197,6 +199,44 @@ describe('bootApplication', ({ it, describe }) => {
                 'Missing required environment secrets: ALPHA_SECRET, ZEBRA_SECRET. Every declared secret is listed in example.env.secrets.',
                 caught.message,
             );
+        });
+    });
+
+    describe('with a secret required outside development', ({ it }) => {
+        const secrets = {
+            required: [],
+            optional: [],
+            requiredOutsideDevelopment: [ 'OUTSIDE_SECRET' ],
+        };
+
+        function configFor(environment) {
+            return Object.assign(makeConfig(), { environment });
+        }
+
+        it('boots in development without it', () => {
+            const { appContext } = boot({ config: configFor('development'), secrets });
+
+            assert(appContext instanceof ApplicationContext);
+        });
+
+        it('fails in production without it, naming it and holding no value', () => {
+            const env = Object.assign(makeEnv(), { OTHER_SECRET: 'o-value-3a9d' });
+            const caught = catchError(() => boot({ env, config: configFor('production'), secrets }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertEqual(
+                'Missing required environment secrets: OUTSIDE_SECRET. Every declared secret is listed in example.env.secrets.',
+                caught.message,
+            );
+            assertNotMatches('o-value-3a9d', caught.message);
+        });
+
+        it('boots in production with it', () => {
+            const env = Object.assign(makeEnv(), { OUTSIDE_SECRET: 'present' });
+            const { appContext } = boot({ env, config: configFor('production'), secrets });
+
+            assert(appContext instanceof ApplicationContext);
         });
     });
 

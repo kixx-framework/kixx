@@ -21,7 +21,7 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
 
     it('pins the versions this client speaks', () => {
         assertEqual(2, CONTENT_CONTRACT_VERSION);
-        assertEqual(2, BUILD_ASSIGNMENT_PROTOCOL_VERSION);
+        assertEqual(3, BUILD_ASSIGNMENT_PROTOCOL_VERSION);
         assertEqual(4, FORMAT);
     });
 
@@ -58,16 +58,16 @@ describe('publishing/negotiate-capabilities', ({ it }) => {
 
         assertEqual('UnsupportedServerError', caught.name);
         assertMatches('server reports none, identifying the legacy protocol', caught.message);
-        assertMatches('this client writes 2 only.', caught.message);
+        assertMatches('this client writes 3 only.', caught.message);
     });
 
     it('rejects an assignment protocol version this client does not speak', async () => {
-        const client = makeClient({ buildAssignmentProtocolVersion: 3 });
+        const client = makeClient({ buildAssignmentProtocolVersion: 2 });
 
         const caught = await catchAsyncError(() => negotiateCapabilities(client));
 
         assertEqual('UnsupportedServerError', caught.name);
-        assertMatches('Build assignment protocol: server reports 3;', caught.message);
+        assertMatches('Build assignment protocol: server reports 2;', caught.message);
     });
 
     it('reports every mismatch at once', async () => {
@@ -116,7 +116,7 @@ function makeClient(overrides) {
         runningBuildId: 'production',
         contentContractVersion: 2,
         addressingFormat: 4,
-        buildAssignmentProtocolVersion: 2,
+        buildAssignmentProtocolVersion: 3,
         limits: {
             maxObjectBytes: 26_214_400,
             maxObjectStatusIds: 100,

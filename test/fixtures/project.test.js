@@ -11,6 +11,7 @@ import { renderProjectFiles } from '../../kixx/tooling/mod.js';
 import { createProjectFileSystem } from '../../kixx/adapters/node/tooling/lib/project-file-system.js';
 import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
+import { sha256Hex } from '../../kixx/utils/crypto.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
 import { startNodeServer } from '../../kixx/adapters/node/server/lib/node-server.js';
 import { createWorker } from '../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js';
@@ -43,17 +44,31 @@ const GENERATED_FILE_NAMES = [
 ];
 
 
+// A made-up deploy key for the fixture, and its SHA-256. The environments
+// hold only the hash, and nothing may ever print either.
+const FIXTURE_DEPLOY_KEY = 'kxdk_d68ff9b752db2b16fc4e4288bff58662244de0ffa0b58e154ec19c1d7256e39d';
+const FIXTURE_DEPLOY_KEY_HASH = '7a2831d3dd4bd497809c5122a4bf21af5ce186648aaeed0e941e3a59a5d06e1b';
+
 // The values the fake environments give the declared secrets. No error and
 // no response may ever repeat one.
 const SECRET_VALUES = {
+    DEPLOY_KEY_HASH: FIXTURE_DEPLOY_KEY_HASH,
     FIXTURE_APP_SECRET: 'the-app-secret-nothing-may-print',
     PANEL_SIGNING_SECRET: 'the-panel-secret-nothing-may-print',
     VISITS_OPTIONAL_TOKEN: 'the-optional-token-nothing-may-print',
 };
 
-// What boot says on every target when both required secrets are absent.
-const MISSING_SECRETS_MESSAGE = 'Missing required environment secrets: FIXTURE_APP_SECRET, PANEL_SIGNING_SECRET. '
+// What boot says on every target when the required secrets are absent. The
+// fixture runs as `test`, so the deploy key hash is required too.
+const MISSING_SECRETS_MESSAGE = 'Missing required environment secrets: '
+    + 'DEPLOY_KEY_HASH, FIXTURE_APP_SECRET, PANEL_SIGNING_SECRET. '
     + 'Every declared secret is listed in example.env.secrets.';
+
+// A hash that isn't 64 lowercase hex characters fails boot on every target,
+// with a message that names the secret and never the value.
+const MALFORMED_DEPLOY_KEY_HASH = 'not-a-hash';
+const MALFORMED_DEPLOY_KEY_HASH_MESSAGE = 'DEPLOY_KEY_HASH must be the SHA-256 of the deploy key, '
+    + 'as 64 lowercase hex characters.';
 
 const CATCH_ALL_BODY = 'fixture catch-all: not found\n';
 
@@ -114,6 +129,7 @@ async function bootOnNode() {
 
     const fakeProcess = makeProcess({
         DATA_DIRECTORY: dataDirectory,
+        DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
         FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
         PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
     });
@@ -203,10 +219,49 @@ function bootOnCloudflare(secrets) {
         waitUntilPromises,
 
         // Cloudflare hands fetch() the environment again on every request.
-        fetch(pathname) {
-            return worker.fetch(new Request(`https://localhost${ pathname }`), env, executionContext);
+        fetch(pathname, headers = {}) {
+            return worker.fetch(new Request(`https://localhost${ pathname }`, { headers }), env, executionContext);
         },
     };
+}
+
+// The Publishing API cases each boot shares: no key, a wrong key, and the
+// fixture's key, all on discovery. `request(pathname, headers)` sends one
+// request to the booted fixture and resolves with a Response.
+async function requestPublishingApi(request) {
+    const read = async (headers) => {
+        const response = await request('/publishing-api/v1', headers);
+        const text = await response.text();
+
+        return {
+            status: response.status,
+            mediaType: response.headers.get('content-type').split(';')[0],
+            headers: Object.fromEntries(response.headers.entries()),
+            text,
+            body: JSON.parse(text),
+        };
+    };
+
+    return {
+        missing: await read({}),
+        wrong: await read({ authorization: `Bearer kxdk_${ '0'.repeat(64) }` }),
+        valid: await read({ authorization: `Bearer ${ FIXTURE_DEPLOY_KEY }` }),
+    };
+}
+
+function assertPublishingApiResponses({ missing, wrong, valid }) {
+    for (const refused of [ missing, wrong ]) {
+        assertEqual(401, refused.status);
+        assertEqual('application/vnd.api+json', refused.mediaType);
+        assertEqual('DeployKeyRequired', refused.body.errors[0].code);
+    }
+
+    assertEqual(200, valid.status);
+    assertEqual('application/vnd.api+json', valid.mediaType);
+    assertEqual('PublishingApi', valid.body.data.type);
+    assertEqual(3, valid.body.data.attributes.buildAssignmentProtocolVersion);
+
+    assertNoSecretValue([ missing, wrong, valid ]);
 }
 
 async function fetchJSON(url) {
@@ -222,6 +277,8 @@ function assertNoSecretValue(value) {
     for (const [ name, secretValue ] of Object.entries(SECRET_VALUES)) {
         assertFalsy(text.includes(secretValue), `the value of ${ name } was printed`);
     }
+
+    assertFalsy(text.includes(FIXTURE_DEPLOY_KEY), 'the deploy key was printed');
 }
 
 function catchError(fn) {
@@ -295,11 +352,15 @@ describe('fixture project', ({ describe }) => {
 
             assertEqual('FIXTURE_APP_SECRET,PANEL_SIGNING_SECRET', declared.required.join(','));
             assertEqual('VISITS_OPTIONAL_TOKEN', declared.optional.join(','));
+            assertEqual('DEPLOY_KEY_HASH', declared.requiredOutsideDevelopment.join(','));
 
             for (const registry of [ nodeRegistry, cloudflareRegistry ]) {
-                assertEqual(declared.required.join(','), registry.secrets.required.join(','));
-                assertEqual(declared.optional.join(','), registry.secrets.optional.join(','));
+                assertEqual(JSON.stringify(declared), JSON.stringify(registry.secrets));
             }
+        });
+
+        it('holds the hash of its made-up deploy key', async () => {
+            assertEqual(FIXTURE_DEPLOY_KEY_HASH, await sha256Hex(FIXTURE_DEPLOY_KEY));
         });
     });
 
@@ -320,6 +381,7 @@ describe('fixture project', ({ describe }) => {
                 [
                     'kixx:./content-addressable-store/plugin.js',
                     'kixx:./hyperview/plugin.js',
+                    'kixx:./deploy-key/plugin.js',
                     'kixx:./adapters/node/key-value-store/plugin.js',
                     'kixx:./adapters/node/content-store/plugin.js',
                     'visits:./plugin.js',
@@ -332,6 +394,7 @@ describe('fixture project', ({ describe }) => {
                 [
                     'kixx:./content-addressable-store/plugin.js',
                     'kixx:./hyperview/plugin.js',
+                    'kixx:./deploy-key/plugin.js',
                     'kixx:./adapters/cloudflare/key-value-store/plugin.js',
                     'kixx:./adapters/cloudflare/content-store/plugin.js',
                     'visits:./plugin.js',
@@ -366,9 +429,12 @@ describe('fixture project', ({ describe }) => {
     // Nothing is booted here. These checks only show that the hand-written
     // files and the generated ones fit each other.
     describe('hand-written files', ({ it }) => {
-        it('mount the plugin routes in entry order, a plugin\'s conditional routes after its own', () => {
-            assertEqual('visits,panel-visits,panel', pluginRoutes.map(({ name }) => name).join(','));
-            assertEqual('/visits,/panel/visits,/panel', pluginRoutes.map(({ pattern }) => pattern).join(','));
+        it('mount core\'s routes first, then the plugin routes in entry order, a plugin\'s conditional routes after its own', () => {
+            assertEqual('publishing-api,visits,panel-visits,panel', pluginRoutes.map(({ name }) => name).join(','));
+            assertEqual(
+                '/publishing-api/v1,/visits,/panel/visits,/panel',
+                pluginRoutes.map(({ pattern }) => pattern).join(','),
+            );
         });
 
         it('put middleware on the panel mount', () => {
@@ -412,6 +478,7 @@ describe('fixture project', ({ describe }) => {
         let booted;
         let firstVisit;
         let secondVisit;
+        let publishingApi;
 
         before(async () => {
             booted = await bootOnNode();
@@ -419,6 +486,10 @@ describe('fixture project', ({ describe }) => {
             // The mount path answers with and without a trailing slash.
             firstVisit = await fetchJSON(`${ booted.origin }/visits`);
             secondVisit = await fetchJSON(`${ booted.origin }/visits/`);
+
+            publishingApi = await requestPublishingApi((pathname, headers) => {
+                return fetch(`${ booted.origin }${ pathname }`, { headers });
+            });
         });
 
         after(async () => {
@@ -519,6 +590,10 @@ describe('fixture project', ({ describe }) => {
             assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'content-store')));
         });
 
+        it('serves the Publishing API behind the deploy key', () => {
+            assertPublishingApiResponses(publishingApi);
+        });
+
         it('puts no secret value in a response', () => {
             assertNoSecretValue([ firstVisit.body, secondVisit.body ]);
         });
@@ -578,7 +653,7 @@ describe('fixture project', ({ describe }) => {
         before(async () => {
             dataDirectory = await makeDataDirectory();
 
-            // The optional secret is present; both required ones are absent.
+            // The optional secret is present; every required one is absent.
             fakeProcess = makeProcess({
                 DATA_DIRECTORY: dataDirectory,
                 VISITS_OPTIONAL_TOKEN: SECRET_VALUES.VISITS_OPTIONAL_TOKEN,
@@ -598,7 +673,7 @@ describe('fixture project', ({ describe }) => {
             await removeDataDirectory(dataDirectory);
         });
 
-        it('rejects with one error naming both', () => {
+        it('rejects with one error naming every one', () => {
             assertEqual('OperationalError', error.name);
             assertEqual(MISSING_SECRETS_MESSAGE, error.message);
         });
@@ -615,6 +690,51 @@ describe('fixture project', ({ describe }) => {
         });
     });
 
+    describe('booted on the Node.js adapters with a malformed deploy key hash', ({ before, after, it }) => {
+        let dataDirectory;
+        let fakeProcess;
+        let error;
+
+        before(async () => {
+            dataDirectory = await makeDataDirectory();
+
+            fakeProcess = makeProcess({
+                DATA_DIRECTORY: dataDirectory,
+                DEPLOY_KEY_HASH: MALFORMED_DEPLOY_KEY_HASH,
+                FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+            });
+
+            error = await catchRejection(startNodeServer({
+                registry: nodeRegistry,
+                virtualHosts,
+                app,
+                baseDirectory: PROJECT_DIRECTORY,
+                process: fakeProcess,
+                hostname: '127.0.0.1',
+            }));
+        });
+
+        after(async () => {
+            await removeDataDirectory(dataDirectory);
+        });
+
+        it('rejects with the boot check\'s error, naming the secret', () => {
+            assertEqual('OperationalError', error.name);
+            assertEqual(MALFORMED_DEPLOY_KEY_HASH_MESSAGE, error.message);
+        });
+
+        it('repeats no value from the environment', () => {
+            assertNoSecretValue(error);
+            assertFalsy(util.inspect(error, { depth: 8 }).includes(MALFORMED_DEPLOY_KEY_HASH));
+        });
+
+        it('registers no signal handler and doesn\'t exit', () => {
+            assertEqual(0, fakeProcess.handlers.size);
+            assertEqual(0, fakeProcess.exitCodes.length);
+        });
+    });
+
     // Unit coverage of the Cloudflare registry and adapters on fakes. It is
     // not the real boot: only Cloudflare can load the entry point and the
     // Durable Object classes.
@@ -622,9 +742,11 @@ describe('fixture project', ({ describe }) => {
         let booted;
         let firstVisit;
         let secondVisit;
+        let publishingApi;
 
         before(async () => {
             booted = bootOnCloudflare({
+                DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
                 FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
                 PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
             });
@@ -636,6 +758,8 @@ describe('fixture project', ({ describe }) => {
 
             const secondResponse = await booted.fetch('/visits/');
             secondVisit = { response: secondResponse, body: await secondResponse.json() };
+
+            publishingApi = await requestPublishingApi(booted.fetch);
         });
 
         it('counts visits through the key/value store', () => {
@@ -647,8 +771,13 @@ describe('fixture project', ({ describe }) => {
 
         it('keeps the count in the namespace bound as KEY_VALUE_STORE', () => {
             const puts = booted.env.KEY_VALUE_STORE.calls.filter(({ method }) => method === 'put');
+            const isFailureCount = ({ key }) => key.startsWith('kixx:deploy-key-failures:');
 
-            assertEqual(2, puts.length);
+            assertEqual(2, puts.filter((call) => !isFailureCount(call)).length);
+
+            // One write per refused Publishing API request. The second may
+            // hit KV's one-write-per-second 429; the request still got 401.
+            assertEqual(2, puts.filter(isFailureCount).length);
             assertEqual(0, booted.env.CA_STORE_KV_STORE.calls.length);
         });
 
@@ -686,6 +815,10 @@ describe('fixture project', ({ describe }) => {
             assertEqual(CATCH_ALL_BODY, await reports.text());
         });
 
+        it('serves the Publishing API behind the deploy key', () => {
+            assertPublishingApiResponses(publishingApi);
+        });
+
         it('never reaches the Worker\'s own error path', () => {
             assertEqual(0, booted.waits.length);
             assertEqual(0, booted.waitUntilPromises.length);
@@ -696,9 +829,26 @@ describe('fixture project', ({ describe }) => {
         });
     });
 
+    describe('booted on the Cloudflare adapters with a malformed deploy key hash', ({ it }) => {
+        it('throws the error the Node.js boot rejects with', () => {
+            const error = catchError(() => {
+                bootOnCloudflare({
+                    DEPLOY_KEY_HASH: MALFORMED_DEPLOY_KEY_HASH,
+                    FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                    PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+                });
+            });
+
+            assertEqual('OperationalError', error.name);
+            assertEqual(MALFORMED_DEPLOY_KEY_HASH_MESSAGE, error.message);
+            assertNoSecretValue(error);
+            assertFalsy(util.inspect(error, { depth: 8 }).includes(MALFORMED_DEPLOY_KEY_HASH));
+        });
+    });
+
     describe('booted on the Cloudflare adapters without its required secrets', ({ it }) => {
         it('throws the error the Node.js boot rejects with', () => {
-            // The optional secret is present; both required ones are absent.
+            // The optional secret is present; every required one is absent.
             const error = catchError(() => {
                 bootOnCloudflare({ VISITS_OPTIONAL_TOKEN: SECRET_VALUES.VISITS_OPTIONAL_TOKEN });
             });

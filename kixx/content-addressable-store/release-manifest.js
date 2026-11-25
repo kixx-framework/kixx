@@ -57,7 +57,9 @@ export function validateReleaseManifest(manifest) {
     rejectUnknownFields(error, manifest, MANIFEST_FIELDS, '');
 
     const files = [];
-    const paths = new Map();
+    // Storage pathnames seen so far, and every directory above them, each with
+    // the source of the first file that claimed it.
+    const paths = { files: new Map(), directories: new Map() };
     validateReferenceDictionary(error, files, paths, manifest.staticAssets, {
         source: '/staticAssets',
         kind: 'static asset',
@@ -242,20 +244,40 @@ function validateReference(error, reference, source, allowMediaType) {
     return file;
 }
 
+// Looks up ancestors and descendants by key, not by scanning every earlier
+// path, so a manifest at the entry limit validates in linear time.
 function addFile(error, files, paths, pathname, reference, source) {
-    const priorSource = paths.get(pathname);
+    const priorSource = paths.files.get(pathname);
     if (priorSource) {
         error.push(`Storage pathname collides with ${ priorSource }`, source);
         return;
     }
-    for (const [ existingPathname, existingSource ] of paths) {
-        if (pathname.startsWith(existingPathname + '/') || existingPathname.startsWith(pathname + '/')) {
-            error.push(`Storage pathname has a file/directory collision with ${ existingSource }`, source);
-            return;
+
+    const ancestors = ancestorDirectories(pathname);
+    const fileBelow = paths.directories.get(pathname);
+    const fileAbove = ancestors.find((ancestor) => paths.files.has(ancestor));
+    if (fileBelow || fileAbove) {
+        const existingSource = fileBelow ?? paths.files.get(fileAbove);
+        error.push(`Storage pathname has a file/directory collision with ${ existingSource }`, source);
+        return;
+    }
+
+    paths.files.set(pathname, source);
+    for (const ancestor of ancestors) {
+        if (!paths.directories.has(ancestor)) {
+            paths.directories.set(ancestor, source);
         }
     }
-    paths.set(pathname, source);
     files.push({ pathname, ...reference });
+}
+
+// Every proper prefix of the pathname that ends just before a "/".
+function ancestorDirectories(pathname) {
+    const ancestors = [];
+    for (let index = pathname.indexOf('/', 1); index !== -1; index = pathname.indexOf('/', index + 1)) {
+        ancestors.push(pathname.slice(0, index));
+    }
+    return ancestors;
 }
 
 function validateTemplateBundle(error, bundle, source, label) {

@@ -227,10 +227,17 @@ function renderRoutesRegistry(model) {
 }
 
 // Keeps the grammar parseSecretsManifest() reads: a comment line that is
-// exactly `# @optional` marks the next entry, with only comment lines between.
+// exactly `# @optional` or `# @required-outside-development` marks the next
+// entry, with only comment lines between.
 function renderSecretsManifest(installation) {
     const blocks = installation.secrets.map((secret) => {
-        const lines = secret.required ? [] : [ '# @optional' ];
+        const lines = [];
+
+        if (secret.required === false) {
+            lines.push('# @optional');
+        } else if (secret.required === 'outsideDevelopment') {
+            lines.push('# @required-outside-development');
+        }
 
         lines.push(
             `# Declared by ${ describeOwner(secret.owner) }.`,
@@ -256,11 +263,15 @@ function describeOwner(owner) {
 // The shape parseSecretsManifest() returns, so boot checks the same lists a
 // deployment tool reads from the secrets manifest.
 function listSecretNames(secrets) {
-    const namesWhere = (isRequired) => {
-        return secrets.filter((secret) => secret.required === isRequired).map((secret) => secret.name).sort();
+    const namesWhere = (required) => {
+        return secrets.filter((secret) => secret.required === required).map((secret) => secret.name).sort();
     };
 
-    return { required: namesWhere(true), optional: namesWhere(false) };
+    return {
+        required: namesWhere(true),
+        optional: namesWhere(false),
+        requiredOutsideDevelopment: namesWhere('outsideDevelopment'),
+    };
 }
 
 // Gives every distinct module one import identifier, in the order of first

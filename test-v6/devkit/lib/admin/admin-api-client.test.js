@@ -152,55 +152,6 @@ describe('admin/admin-api-client', ({ it }) => {
         assertEqual('twelve-chars', resource.attributes.password);
     });
 
-    it('creates a publishing API token and returns the one-time plaintext value', async () => {
-        const fetchMock = makeRecordingFetch(() => makeResponse(201, {
-            data: {
-                type: 'PublishingApiToken',
-                id: 'token-digest',
-                attributes: {
-                    token: 'kxpat_secret',
-                    roles: [ 'editor' ],
-                    description: 'CMS production deploy',
-                    tokenCreationDate: '2026-08-27T12:00:00.000Z',
-                    tokenExpirationDate: '2026-09-26T12:00:00.000Z',
-                },
-            },
-        }));
-        const client = makeClient(fetchMock);
-
-        const token = await client.createPublishingApiToken({
-            roles: [ 'editor' ],
-            ttl: 3600,
-            description: 'CMS production deploy',
-        });
-
-        assertEqual('kxpat_secret', token.token);
-        assertEqual('token-digest', token.tokenId);
-
-        const { url, init } = fetchMock.calls[0];
-        assertEqual(`${ ORIGIN }/admin-api/v1/publishing-api-tokens`, url.href);
-        assertEqual('POST', init.method);
-        assertEqual(basicAuthHeader(), init.headers.authorization);
-        assertEqual(JSON_API_CONTENT_TYPE, init.headers['content-type']);
-
-        const resource = JSON.parse(init.body).data;
-        assertEqual('PublishingApiToken', resource.type);
-        assertEqual('editor', resource.attributes.roles[0]);
-        assertEqual(3600, resource.attributes.timeToLiveSeconds);
-        assertEqual('CMS production deploy', resource.attributes.description);
-    });
-
-    it('omits unset publishing token attributes so server defaults apply', async () => {
-        const fetchMock = makeRecordingFetch(() => makeResponse(201, {
-            data: { type: 'PublishingApiToken', id: 'd', attributes: {} },
-        }));
-        const client = makeClient(fetchMock);
-
-        await client.createPublishingApiToken({});
-
-        assertEqual('{}', JSON.stringify(JSON.parse(fetchMock.calls[0].init.body).data.attributes));
-    });
-
     it('maps each protocol error code to its own error class', async () => {
         const cases = [
             [ 409, 'MigrationAlreadyAppliedError', 'MigrationAlreadyAppliedError' ],

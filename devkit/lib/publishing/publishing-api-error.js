@@ -1,5 +1,3 @@
-import UsageError from '../usage-error.js';
-
 /**
  * Publishing API request failure with protocol details for callers.
  */
@@ -75,38 +73,6 @@ export class InvalidBuildAssignmentError extends PublishingApiError {}
 /** Indicates that a build assignment omitted its mandatory precondition. */
 export class PreconditionRequiredError extends PublishingApiError {}
 
-/**
- * Indicates the publishing token is expired or revoked (server code
- * `PublishingApiTokenInactive`). A `UsageError`, because the fix is an
- * operator action: mint and store a new token.
- */
-export class PublishingApiTokenInactiveError extends UsageError {
-
-    /**
-     * @param {Object} [options] - Request failure details
-     * @param {number} [options.status] - HTTP status
-     * @param {string} [options.url] - Request URL
-     */
-    constructor(options) {
-        super(
-            'The publishing token is expired or revoked. Mint a new one with '
-            + '"kixx admin create-publishing-token -e <environment>" and store it at '
-            + 'app.environments.<environment>.publishingToken in .kixx/secrets.json.',
-        );
-
-        Object.defineProperties(this, {
-            status: {
-                enumerable: true,
-                value: options?.status,
-            },
-            url: {
-                enumerable: true,
-                value: options?.url,
-            },
-        });
-    }
-}
-
 const ERROR_CLASSES = {
     BuildNotFound: BuildNotFoundError,
     ReleaseNotFound: ReleaseNotFoundError,
@@ -119,15 +85,10 @@ const ERROR_CLASSES = {
  * Creates the most specific Publishing API error represented by a response.
  * @param {string} message - Operator-facing failure description
  * @param {Object} options - Request failure details
- * @returns {PublishingApiError|PublishingApiTokenInactiveError} Typed failure
+ * @returns {PublishingApiError} Typed failure
  */
 export function createPublishingApiError(message, options) {
     const apiCode = options?.errors?.find(({ code }) => code)?.code;
-
-    if (apiCode === 'PublishingApiTokenInactive') {
-        return new PublishingApiTokenInactiveError(options);
-    }
-
     const ErrorClass = ERROR_CLASSES[apiCode] ?? PublishingApiError;
     return new ErrorClass(message, options);
 }

@@ -134,6 +134,35 @@ describe('ReleaseManifest', ({ describe, it }) => {
         assert(caught, 'expected validation to fail');
         assertEqual(1, caught.errors.length);
         assertEqual('/staticAssets/~1docs~1index.html', caught.errors[0].source);
+        assert(caught.errors[0].message.endsWith('collision with /staticAssets/~1docs'));
+    });
+
+    it('reports a file over an earlier file\'s directory as a collision', () => {
+        const caught = catchError(() => validateReleaseManifest({
+            staticAssets: {
+                '/docs/guide/index.html': reference(OBJECT_A),
+                '/docs/guide/more.html': reference(OBJECT_A),
+                '/docs': reference(OBJECT_B),
+            },
+        }));
+
+        assert(caught, 'expected validation to fail');
+        assertEqual(1, caught.errors.length);
+        assertEqual('/staticAssets/~1docs', caught.errors[0].source);
+        assert(caught.errors[0].message.endsWith('collision with /staticAssets/~1docs~1guide~1index.html'));
+    });
+
+    it('validates a manifest at the entry limit in linear time (PERF-1)', () => {
+        const staticAssets = {};
+        for (let index = 0; index < 10_000; index += 1) {
+            staticAssets[`/assets/${ index % 100 }/file-${ index }.css`] = reference(OBJECT_A);
+        }
+
+        const start = Date.now();
+        const files = validateReleaseManifest({ staticAssets });
+
+        assertEqual(10_000, files.length);
+        assert(Date.now() - start < 500, 'expected 10,000 entries to validate quickly');
     });
 
     it('turns hostile manifest values into ValidationError entries', () => {

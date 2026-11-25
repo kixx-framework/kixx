@@ -59,7 +59,7 @@ const APP_OWNER = 'app';
  * @typedef {Object} Installation
  * @property {InstallationEntry[]} entries - Core first, then the plugins in order
  * @property {{ node: InstallationTarget, cloudflare: InstallationTarget }} targets
- * @property {Array<{ owner: string, name: string, required: boolean, description: string }>} secrets
+ * @property {Array<{ owner: string, name: string, required: (boolean|'outsideDevelopment'), description: string }>} secrets
  * @property {Array<{ owner: string, module: string, mount: (string|undefined), name: (string|undefined) }>} routes - `mount` and `name` are present together or not at all
  * @property {Array<{ owner: string, pagesDirectory: (string|undefined), templatesDirectory: (string|undefined), staticAssetsDirectory: (string|undefined) }>} contentRoots - Only the directories a root declares are present
  * @property {Array<{ owner: string, className: string, module: string, config: string }>} durableObjects - Durable Object classes; `config` is the config path of the block that describes the binding

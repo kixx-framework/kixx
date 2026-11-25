@@ -3,14 +3,12 @@ import adminErrorHandler from './app/presentation/error-handlers/admin-error-han
 import adminAuthErrorHandler from './app/presentation/error-handlers/admin-auth-error-handler.js';
 import authenticateAdminUser from './app/presentation/middleware/authenticate-admin-user.js';
 import provideAdminLogoutForm from './app/presentation/middleware/provide-admin-logout-form.js';
-import authenticatePublishingToken from './app/presentation/middleware/authenticate-publishing-token.js';
 import authenticateAdminDataApiToken from './app/presentation/middleware/authenticate-admin-data-api-token.js';
 import negotiateJsonApi from './app/presentation/middleware/negotiate-json-api.js';
 import adminDataApiErrorHandler from './app/presentation/error-handlers/admin-data-api-error-handler.js';
 import * as AdminPanel from './app/presentation/request-handlers/admin-panel/mod.js';
 import adminPanelRoutes from './routes/admin-panel.js';
 import adminApiRoutes from './routes/admin-api-v1.js';
-import publishingApiRoutes from './routes/publishing-api-v1.js';
 import adminDataApiRoutes from './routes/admin-data-api-v1.js';
 import fileRoutes from './routes/files.js';
 import StaticAssetRequestHandler from './kixx/static-assets/static-asset-request-handler.js';
@@ -117,14 +115,6 @@ export default [
                 pattern: '/admin-api/v1',
                 name: 'admin-api',
                 routes: adminApiRoutes,
-            },
-            {
-                pattern: '/publishing-api/v1',
-                name: 'publishing-api',
-                inboundMiddleware: [
-                    authenticatePublishingToken,
-                ],
-                routes: publishingApiRoutes,
             },
             {
                 pattern: '/admin-data-api/v1',

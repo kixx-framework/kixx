@@ -8,7 +8,7 @@ import { adminDataResources } from '../admin-data-api/mod.js';
 
 /**
  * Literal prefix of every Administrative Data API token. Distinct from the
- * Publishing API's `kxpat_` so the two credential domains are recognizable on
+ * deploy key's `kxdk_` so the two credential domains are recognizable on
  * sight and a token presented to the wrong API is rejected before lookup.
  * @type {string}
  */

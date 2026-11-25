@@ -6,8 +6,11 @@ import { RESERVED_NAMES } from './worker-bindings.js';
 
 /**
  * Reads `example.env.secrets`, the committed manifest of the secret names
- * every deployment must provide. A port of `parseSecretsManifest` from repo
- * `lib/kixx/config/secrets-manifest.js`; the grammar must stay identical.
+ * every deployment must provide. A port of `parseSecretsManifest` from core's
+ * `kixx/config/secrets-manifest.js`; the grammar must stay identical. Only the
+ * result differs: core returns `# @required-outside-development` names in a
+ * third list, and this port returns them in `required`, because every
+ * environment the devkit deploys or runs is outside development.
  * @module secrets-manifest
  */
 
@@ -18,10 +21,12 @@ const SECRET_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // Compared against the trimmed line so the directive can be indented with the
 // comment block it belongs to.
 const OPTIONAL_DIRECTIVE = '# @optional';
+const REQUIRED_OUTSIDE_DEVELOPMENT_DIRECTIVE = '# @required-outside-development';
 
 /**
  * @typedef {Object} SecretsManifest
- * @property {string[]} required - Secret names every deployment must provide, sorted
+ * @property {string[]} required - Secret names every deployment must provide,
+ *     `# @required-outside-development` names included, sorted
  * @property {string[]} optional - Secret names a deployment may omit, sorted
  */
 
@@ -51,8 +56,10 @@ export async function readSecretsManifest(args) {
 
 /**
  * Parses manifest text into required and optional secret names. A comment
- * line reading exactly `# @optional` marks the next entry optional; only
- * comment lines may come between the directive and its entry.
+ * line reading exactly `# @optional` marks the next entry optional, and one
+ * reading exactly `# @required-outside-development` marks it required outside
+ * development, which here means required. Only comment lines may come between
+ * a directive and its entry.
  * @param {string} text - Full text of the manifest
  * @param {Object} [options]
  * @param {string} [options.filepath] - Path named in error messages
@@ -71,8 +78,9 @@ export function parseSecretsManifest(text, options) {
     const optional = [];
     const declaredNames = new Set();
 
-    // Line number of an unresolved `# @optional` directive, or 0.
-    let optionalDirectiveLine = 0;
+    // The unresolved directive, if any: the list it sends the next entry to,
+    // its name for messages, and its line number, which the errors report.
+    let pending = null;
 
     const lines = text.split(/\r?\n/);
 
@@ -81,18 +89,20 @@ export function parseSecretsManifest(text, options) {
         const line = lines[index].trim();
 
         if (line === '') {
-            if (optionalDirectiveLine > 0) {
-                throw unresolvedDirectiveError(label, optionalDirectiveLine);
+            if (pending) {
+                throw unresolvedDirectiveError(label, pending);
             }
             continue;
         }
 
         if (line.startsWith('#')) {
-            if (line === OPTIONAL_DIRECTIVE) {
-                if (optionalDirectiveLine > 0) {
-                    throw manifestError(label, lineNumber, 'a second @optional directive before any entry');
+            const directive = readDirective(line, lineNumber, { required, optional });
+
+            if (directive) {
+                if (pending) {
+                    throw manifestError(label, lineNumber, `a second directive, ${ directive.name }, before any entry`);
                 }
-                optionalDirectiveLine = lineNumber;
+                pending = directive;
             }
             continue;
         }
@@ -122,16 +132,16 @@ export function parseSecretsManifest(text, options) {
 
         declaredNames.add(name);
 
-        if (optionalDirectiveLine > 0) {
-            optional.push(name);
-            optionalDirectiveLine = 0;
+        if (pending) {
+            pending.list.push(name);
+            pending = null;
         } else {
             required.push(name);
         }
     }
 
-    if (optionalDirectiveLine > 0) {
-        throw unresolvedDirectiveError(label, optionalDirectiveLine);
+    if (pending) {
+        throw unresolvedDirectiveError(label, pending);
     }
 
     required.sort();
@@ -140,11 +150,24 @@ export function parseSecretsManifest(text, options) {
     return { required, optional };
 }
 
-function unresolvedDirectiveError(label, lineNumber) {
+// Reads a comment line as a directive, or returns null for a plain comment.
+function readDirective(line, lineNumber, lists) {
+    if (line === OPTIONAL_DIRECTIVE) {
+        return { name: '@optional', list: lists.optional, lineNumber };
+    }
+
+    if (line === REQUIRED_OUTSIDE_DEVELOPMENT_DIRECTIVE) {
+        return { name: '@required-outside-development', list: lists.required, lineNumber };
+    }
+
+    return null;
+}
+
+function unresolvedDirectiveError(label, directive) {
     return manifestError(
         label,
-        lineNumber,
-        'the @optional directive must be followed by an entry, with only comment lines between them',
+        directive.lineNumber,
+        `the ${ directive.name } directive must be followed by an entry, with only comment lines between them`,
     );
 }
 

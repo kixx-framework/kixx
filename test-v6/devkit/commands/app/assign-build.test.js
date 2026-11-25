@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
+import { assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
 
 import AppAssignBuildCommand from '../../../commands/app/assign-build.js';
 import PublishingAPIClient from '../../../lib/publishing/publishing-api-client.js';
@@ -127,23 +127,6 @@ describe('app assign-build', ({ it }) => {
             assertEqual('UsageError', caught?.name);
             assertMatches(`--${ missing }`, caught.message);
         }
-    });
-
-    it('reports an inactive publishing token as a usage error', async () => {
-        const fetchMock = async () => response(403, {
-            errors: [ { status: '403', code: 'PublishingApiTokenInactive', detail: 'inactive' } ],
-        });
-        fetchMock.calls = [];
-
-        const caught = await catchAsyncError(() => makeCommand(fetchMock).run({
-            environment: 'production',
-            'build-id': 'b',
-            'release-id': 'r',
-        }));
-
-        assert(caught, 'expected an error');
-        assertEqual('PublishingApiTokenInactiveError', caught.name);
-        assertMatches('kixx admin create-publishing-token', caught.message);
     });
 });
 

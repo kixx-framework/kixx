@@ -16,7 +16,7 @@ Throw `UsageError` (`lib/usage-error.js`) for anything the operator can fix: a b
 - Name the file and dotted key path the value belongs in (`app.environments.<environment>.publishingToken in .kixx/secrets.json`).
 - Name the next command to run when there is one.
 
-Subclass `UsageError` when callers need to branch on the case. `PublishingApiTokenInactiveError` does this: it is a protocol failure, but the fix is an operator action.
+Subclass `UsageError` when callers need to branch on the case. `UnsupportedServerError` does this: it is a protocol failure, but the fix is an operator action (upgrade the deployment or target another one).
 
 ### Defects: everything else
 

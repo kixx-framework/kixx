@@ -2,22 +2,22 @@
 
 Commands that publish application content and assign it to a build through
 the Publishing API. See [configuration.md](configuration.md) for
-`--environment` (`-e`), the origin, and the publishing token these commands
-share. Both commands accept `--origin` and `--token` overrides; the token is
-never printed.
+`--environment` (`-e`), the origin, and the deploy key these commands
+share. Both commands accept `--origin` and `--token` overrides; `--token`
+takes the deploy key, which is never printed.
 
 ## Server requirement
 
 These commands require a deployment serving content contract version 2,
-addressing format 4, and build assignment protocol 2. Before any write, they
+addressing format 4, and build assignment protocol 3. Before any write, they
 read the server's capabilities and refuse an older deployment, naming each
 mismatch. Upgrade the deployment, or target one that is already upgraded.
 
-## Token errors
+## Deploy key errors
 
-An expired or revoked publishing token (`PublishingApiTokenInactive`) fails
-with a usage message: mint a new one with `kixx admin create-publishing-token`
-and store it in `.kixx/secrets.json`.
+A missing or wrong deploy key fails with `401` and names the setting to
+check, `app.environments.<env>.publishingToken` in `.kixx/secrets.json`. See
+[the Publishing API](../kixx-app/publishing-api.md#authentication-the-deploy-key).
 
 ## `publish`
 

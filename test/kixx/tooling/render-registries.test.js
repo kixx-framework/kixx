@@ -75,7 +75,7 @@ function makeCore(overrides) {
                 },
             },
         },
-        secrets: [ { name: 'DEPLOY_KEY_HASH', description: 'Hash of the deploy key.' } ],
+        secrets: [ { name: 'DEPLOY_KEY_HASH', required: 'outsideDevelopment', description: 'Hash of the deploy key.' } ],
         cloudflare: {
             kvNamespaces: [ { config: 'KEY_VALUE_STORE' } ],
             durableObjects: [
@@ -267,12 +267,14 @@ describe('renderRegistryFiles', ({ describe }) => {
                 '// Every secret the installed code declares.',
                 'export const secrets = {',
                 '    "required": [',
-                '        "DEPLOY_KEY_HASH",',
                 '        "VISITS_SIGNING_SECRET"',
                 '    ],',
                 '    "optional": [',
                 '        "SUPPORT_TOKEN",',
                 '        "VISITS_DEBUG_TOKEN"',
+                '    ],',
+                '    "requiredOutsideDevelopment": [',
+                '        "DEPLOY_KEY_HASH"',
                 '    ]',
                 '};',
                 '',
@@ -334,12 +336,14 @@ describe('renderRegistryFiles', ({ describe }) => {
                 '// Every secret the installed code declares.',
                 'export const secrets = {',
                 '    "required": [',
-                '        "DEPLOY_KEY_HASH",',
                 '        "VISITS_SIGNING_SECRET"',
                 '    ],',
                 '    "optional": [',
                 '        "SUPPORT_TOKEN",',
                 '        "VISITS_DEBUG_TOKEN"',
+                '    ],',
+                '    "requiredOutsideDevelopment": [',
+                '        "DEPLOY_KEY_HASH"',
                 '    ]',
                 '};',
                 '',
@@ -386,6 +390,7 @@ describe('renderRegistryFiles', ({ describe }) => {
             assertEqual(toText([
                 ...SECRETS_HEADER,
                 '',
+                '# @required-outside-development',
                 '# Declared by Kixx core.',
                 '# Hash of the deploy key.',
                 'DEPLOY_KEY_HASH=replace-me',
@@ -716,31 +721,37 @@ describe('renderRegistryFiles', ({ describe }) => {
             const files = render(makeInstallation());
             const parsed = parseSecretsManifest(files.get(SECRETS_MANIFEST_FILE_NAME));
 
-            assertEqual('DEPLOY_KEY_HASH,VISITS_SIGNING_SECRET', parsed.required.join(','));
+            assertEqual('VISITS_SIGNING_SECRET', parsed.required.join(','));
             assertEqual('SUPPORT_TOKEN,VISITS_DEBUG_TOKEN', parsed.optional.join(','));
+            assertEqual('DEPLOY_KEY_HASH', parsed.requiredOutsideDevelopment.join(','));
 
             for (const name of [ NODE_REGISTRY_FILE_NAME, CLOUDFLARE_REGISTRY_FILE_NAME ]) {
                 assertEqual(JSON.stringify(parsed), JSON.stringify(readDataExport(files.get(name), 'secrets')), name);
             }
         });
 
-        it('is the header alone, and parses to two empty lists, when no secret is declared', () => {
+        it('is the header alone, and parses to three empty lists, when no secret is declared', () => {
             const files = render(resolveInstallation({ core: makeBareCore(), plugins: [] }));
             const text = files.get(SECRETS_MANIFEST_FILE_NAME);
 
             assertEqual(toText(SECRETS_HEADER), text);
-            assertEqual('{"required":[],"optional":[]}', JSON.stringify(parseSecretsManifest(text)));
             assertEqual(
-                '{"required":[],"optional":[]}',
+                '{"required":[],"optional":[],"requiredOutsideDevelopment":[]}',
+                JSON.stringify(parseSecretsManifest(text)),
+            );
+            assertEqual(
+                '{"required":[],"optional":[],"requiredOutsideDevelopment":[]}',
                 JSON.stringify(readDataExport(files.get(NODE_REGISTRY_FILE_NAME), 'secrets')),
             );
         });
 
-        it('holds no header line that reads as the optional directive', () => {
+        it('holds no header line that reads as a directive', () => {
             const text = render(resolveInstallation({ core: makeBareCore(), plugins: [] }))
                 .get(SECRETS_MANIFEST_FILE_NAME);
 
-            assertEqual(0, text.split('\n').filter((line) => line.trim() === '# @optional').length);
+            const directives = [ '# @optional', '# @required-outside-development' ];
+
+            assertEqual(0, text.split('\n').filter((line) => directives.includes(line.trim())).length);
         });
     });
 });

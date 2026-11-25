@@ -18,7 +18,7 @@ export const INSTANCE_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const PRIVATE_FILE_MODE = 0o600;
 
-const CREDENTIAL_FIELDS = [ 'baseUrl', 'username', 'password', 'publishingApiToken', 'buildId', 'port' ];
+const CREDENTIAL_FIELDS = [ 'baseUrl', 'username', 'password', 'buildId', 'port' ];
 
 
 /**
@@ -218,7 +218,7 @@ export async function readCredentials(paths) {
 /**
  * Writes `credentials.json`, readable only by its owner.
  * @param {{credentials: string}} paths - Instance paths
- * @param {{baseUrl: string, username: string, password: string, publishingApiToken: string, buildId: string, port: number}} credentials
+ * @param {{baseUrl: string, username: string, password: string, buildId: string, port: number}} credentials
  * @returns {Promise<void>}
  */
 export async function writeCredentials(paths, credentials) {

@@ -66,7 +66,7 @@ import {
  * @param {Function} options.LoggerWriter - Platform logger writer constructor.
  * @param {Map<string, PluginModule>} options.plugins - Lifecycle modules, in the order they run.
  * @param {PluginModule} options.app - The application's own lifecycle hooks.
- * @param {SecretsManifest} [options.secrets] - Declared secret names. When given, every required name must be set in options.env.
+ * @param {SecretsManifest} [options.secrets] - Declared secret names. When given, every name required in config.environment must be set in options.env.
  * @returns {BootedApplication}
  * @throws {OperationalError} When options.secrets is given and a required secret is missing from options.env
  */
@@ -83,7 +83,7 @@ export function bootApplication(options) {
     // Check before anything is built, so a deployment that lacks a secret
     // opens no store and writes no log before it fails.
     if (!isUndefined(secrets)) {
-        assertDeclaredSecrets(env, secrets);
+        assertDeclaredSecrets(env, secrets, { environment: config.environment });
     }
 
     // BUILD_ID identifies a single deploy rather than an environment, so it stays

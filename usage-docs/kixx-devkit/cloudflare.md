@@ -251,11 +251,15 @@ is untouched if Cloudflare fails.
 2. `kixx cloudflare create-worker -e <env>`
 3. Set the required secrets from `example.env.secrets` on the Worker in the
    dashboard or with Wrangler (generate `ADMIN_BOOTSTRAP_TOKEN` with
-   `kixx admin gen-secure-token`).
+   `kixx admin gen-secure-token`). For `DEPLOY_KEY_HASH`, generate a deploy
+   key, 32 random bytes as hex after `kxdk_`, and set the secret to the key's
+   SHA-256 as lowercase hex (see
+   [the Publishing API](../kixx-app/publishing-api.md#authentication-the-deploy-key)).
+   Keep the key; the Worker holds only its hash.
 4. `kixx cloudflare create-worker-version -e <env> --deploy`
 5. `kixx admin accept-invite -e <env>`
-6. `kixx admin create-publishing-token -e <env>`, then store the token in
-   `.kixx/secrets.json`.
+6. Store the deploy key from step 3 at
+   `app.environments.<env>.publishingToken` in `.kixx/secrets.json`.
 7. `kixx app publish -e <env> --build-id <BUILD_ID>`
 
 Content routes return 503 between steps 4 and 7.

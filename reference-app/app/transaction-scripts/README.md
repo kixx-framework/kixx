@@ -6,7 +6,7 @@ Domain logic uses Fowler's Transaction Script pattern: one async function per us
 
 A script must add something: cross-field validation, business rules, orchestration across Collections or services, or a decision about what an error means to the application. A script that only calls one service method and returns its result is an extra hop.
 
-Presentation code may call a framework service directly via `context.getService(name)` when the service owns the complete operation and no business policy applies. Example: the handlers in `app/presentation/request-handlers/publishing-api/` (`objects.js`, `releases.js`, and `builds.js`) call `ContentAddressableStore` directly, because the service owns each complete operation: creating a Release with its record, and assigning one with its history entry.
+Presentation code may call a framework service directly via `context.getService(name)` when the service owns the complete operation and no business policy applies. Example: core's Publishing API handlers (`kixx/publishing-api/objects.js`, `releases.js`, and `builds.js`) call `ContentAddressableStore` directly, because the service owns each complete operation: creating a Release with its record, and assigning one with its history entry.
 
 This exception is narrow. Anything that touches a Collection, enforces a business rule, or must classify errors belongs in a script.
 
@@ -16,10 +16,10 @@ One script per file, named for the action in kebab-case, grouped by domain conce
 
 ```
 app/transaction-scripts/
-└── publishing-api-tokens/
-    ├── create-publishing-api-token.js   → createPublishingApiToken(context, form, grantingUserId)
-    ├── list-publishing-api-tokens.js    → listPublishingApiTokens(context, params)
-    └── revoke-publishing-api-token.js   → revokePublishingApiToken(context, tokenId)
+└── admin-data-api-tokens/
+    ├── create-admin-data-api-token.js   → createAdminDataApiToken(context, form, grantingUserId)
+    ├── list-admin-data-api-tokens.js    → listAdminDataApiTokens(context, params)
+    └── revoke-admin-data-api-token.js   → revokeAdminDataApiToken(context, tokenId)
 ```
 
 The first argument is always the `RequestContext`. Scripts never receive HTTP request or response objects, so they stay testable and callable from jobs and CLI tools.

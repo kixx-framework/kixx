@@ -1,8 +1,9 @@
 # Admin API v1
 
-The Admin API provides operator-only JSON endpoints for data migrations, job
-queue inspection, and publishing-token creation, plus a token-authenticated endpoint for redeeming a
-one-time admin invite.
+The Admin API provides operator-only JSON endpoints for data migrations and job
+queue inspection, plus a token-authenticated endpoint for redeeming a
+one-time admin invite. Publishing uses the [Publishing API](publishing-api.md),
+which takes the app's deploy key, not an admin login.
 
 The API is mounted at:
 
@@ -24,7 +25,6 @@ server origin.
 | `POST` | `/admin-api/v1/jobs/:id/retry` | Admin HTTP Basic | `urn:kixx:update` on `urn:kixx:admin:jobs` | Re-queue a failed job |
 | `GET` | `/admin-api/v1/job-schedules` | Admin HTTP Basic | `urn:kixx:list` on `urn:kixx:admin:jobs` | List recurring job schedules |
 | `POST` | `/admin-api/v1/users/invite` | Invite bearer token | None | Redeem an invite and create an admin account |
-| `POST` | `/admin-api/v1/publishing-api-tokens` | Admin HTTP Basic | `urn:kixx:create` on `urn:kixx:admin:api-tokens:publishing` | Mint a publishing API bearer token |
 
 Every endpoint path accepts an optional trailing slash.
 
@@ -129,12 +129,12 @@ same `InvalidCredentials` response to avoid account enumeration.
 
 Permissions come from the account's stored role IDs on every request:
 
-| Role | Migrations and jobs | Create publishing tokens |
-| --- | --- | --- |
-| `root-admin` | Yes | Yes |
-| `developer` | Yes | Yes |
-| `admin` | No | No |
-| `editor` | No | No |
+| Role | Migrations and jobs |
+| --- | --- |
+| `root-admin` | Yes |
+| `developer` | Yes |
+| `admin` | No |
+| `editor` | No |
 
 Unknown role IDs grant nothing.
 
@@ -558,79 +558,6 @@ curl \
     http://localhost:2026/admin-api/v1/users/invite
 ```
 
-## Create a publishing API token
-
-```http
-POST /admin-api/v1/publishing-api-tokens
-Content-Type: application/vnd.api+json
-```
-
-Mints a bearer token for the [Publishing API](publishing-api.md). The required
-resource type is `PublishingApiToken`.
-
-### Request
-
-```json
-{
-    "data": {
-        "type": "PublishingApiToken",
-        "attributes": {
-            "roles": ["editor"],
-            "timeToLiveSeconds": 2592000,
-            "description": "CMS production deploy"
-        }
-    }
-}
-```
-
-All attributes are optional:
-
-| Attribute | Type | Default | Requirements |
-| --- | --- | --- | --- |
-| `roles` | string array | `["editor"]` | One or more publishing-role IDs; currently only `editor` is valid |
-| `timeToLiveSeconds` | integer | `2592000` (30 days) | From 1 through `31536000` (365 days), inclusive |
-| `description` | string or `null` | `null` | Trimmed; a blank string becomes `null` |
-
-An omitted, null, empty, or non-array `roles` becomes `["editor"]`; any other
-role fails validation. A null TTL uses the default.
-
-### Response
-
-```http
-HTTP/1.1 201 Created
-Content-Type: application/vnd.api+json; charset=utf-8
-```
-
-```json
-{
-    "data": {
-        "type": "PublishingApiToken",
-        "id": "<sha256-token-digest>",
-        "attributes": {
-            "token": "kxpat_<secret>",
-            "roles": ["editor"],
-            "description": "CMS production deploy",
-            "createdBy": "<admin-user-id>",
-            "tokenCreationDate": "2026-08-27T12:00:00.000Z",
-            "tokenExpirationDate": "2026-09-26T12:00:00.000Z"
-        }
-    }
-}
-```
-
-**The plaintext `token` appears only in this response.** It is never stored;
-the `id` is its SHA-256 hex digest. If it is lost, mint a replacement. Use the
-shortest practical TTL.
-
-### Example
-
-```bash
-curl --user 'admin@example.com:password' \
-    --header 'Content-Type: application/vnd.api+json' \
-    --data '{"data":{"type":"PublishingApiToken","attributes":{"description":"CMS production deploy"}}}' \
-    http://localhost:2026/admin-api/v1/publishing-api-tokens
-```
-
 ## Operator workflows
 
 ### Safely apply a migration
@@ -656,5 +583,5 @@ deliberately rerun an applied one.
 3. Remove the environment value after the root admin is created. The consumed
    marker prevents reuse even before removal.
 
-The `kixx admin` commands wrap the migration and token endpoints too; see
+The `kixx admin` commands wrap the migration and invite endpoints too; see
 [`kixx admin`](../kixx-devkit/admin.md).

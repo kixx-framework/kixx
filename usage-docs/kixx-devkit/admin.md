@@ -1,7 +1,7 @@
 # `kixx admin` — Administration
 
-Commands for creating the first admin account, minting Publishing API tokens,
-and running data migrations against a deployment's Admin API. See
+Commands for creating the first admin account and running data migrations
+against a deployment's Admin API. See
 [configuration.md](configuration.md) for `--environment` (`-e`) and
 `--origin`, which every sub-command except `gen-secure-token` takes.
 
@@ -23,7 +23,7 @@ Every command resolves the environment and origin before prompting, so a bad
 `-e` fails without asking for secrets.
 
 The one exception is a throwaway local instance: `kixx local seed` writes the
-instance's admin login and Publishing API token to its `credentials.json`. See
+instance's admin login to its `credentials.json`. See
 [local.md](local.md).
 
 ## Bootstrap the first admin
@@ -41,13 +41,7 @@ instance's admin login and Publishing API token to its `credentials.json`. See
    kixx admin accept-invite -e production
    ```
 
-4. Mint a publishing token and store it in `.kixx/secrets.json`:
-
-   ```sh
-   kixx admin create-publishing-token -e production
-   ```
-
-5. Remove `ADMIN_BOOTSTRAP_TOKEN` from the deployment.
+4. Remove `ADMIN_BOOTSTRAP_TOKEN` from the deployment.
 
 The bootstrap token is single-use even while it stays configured. Removing it
 is still good practice. `ADMIN_BOOTSTRAP_TOKEN` should be marked `# @optional`
@@ -86,25 +80,6 @@ On success, prints the account's id, email address, and creation date. Errors:
 | `InvalidInvite` | The token is unknown, expired, revoked, or already used. |
 | `NewUserConflictError` | An admin with that email exists. The invite was not used; retry with another email. |
 | `InviteSpentInEmailRace` | A concurrent signup took the email and consumed the invite. A new invite is required. |
-
-## `create-publishing-token`
-
-Mints a Publishing API bearer token, authenticating as an existing admin.
-
-```sh
-kixx admin create-publishing-token -e <env> \
-  [--roles editor] [--ttl 2592000] [--description <text>] [--origin <url>]
-```
-
-| Option | Description |
-| --- | --- |
-| `--roles` | Publishing role id; repeat for several. Defaults to `editor` |
-| `--ttl` | Time to live in seconds, a positive whole number; defaults to 2592000 (30 days) |
-| `--description` | Operator-facing description |
-
-The token is printed once, in a labeled block naming
-`app.environments.<env>.publishingToken` in `.kixx/secrets.json`. The command
-writes it nowhere; copy it in by hand.
 
 ## `list-migrations`
 

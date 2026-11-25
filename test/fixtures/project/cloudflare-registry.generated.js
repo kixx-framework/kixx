@@ -6,6 +6,7 @@ import LoggerWriter from "../../../kixx/adapters/cloudflare/logger-writer/lib/lo
 import ServerRequest from "../../../kixx/adapters/cloudflare/server-request/lib/server-request.js";
 import * as kixxContentAddressableStorePlugin from "../../../kixx/content-addressable-store/plugin.js";
 import * as kixxHyperviewPlugin from "../../../kixx/hyperview/plugin.js";
+import * as kixxDeployKeyPlugin from "../../../kixx/deploy-key/plugin.js";
 import * as kixxAdaptersCloudflareKeyValueStorePlugin from "../../../kixx/adapters/cloudflare/key-value-store/plugin.js";
 import * as kixxAdaptersCloudflareContentStorePlugin from "../../../kixx/adapters/cloudflare/content-store/plugin.js";
 import * as visitsPlugin from "./plugins/visits/plugin.js";
@@ -18,6 +19,7 @@ export { LoggerWriter, ServerRequest };
 export const plugins = new Map([
     [ "kixx:./content-addressable-store/plugin.js", kixxContentAddressableStorePlugin ],
     [ "kixx:./hyperview/plugin.js", kixxHyperviewPlugin ],
+    [ "kixx:./deploy-key/plugin.js", kixxDeployKeyPlugin ],
     [ "kixx:./adapters/cloudflare/key-value-store/plugin.js", kixxAdaptersCloudflareKeyValueStorePlugin ],
     [ "kixx:./adapters/cloudflare/content-store/plugin.js", kixxAdaptersCloudflareContentStorePlugin ],
     [ "visits:./plugin.js", visitsPlugin ],
@@ -72,6 +74,9 @@ export const secrets = {
     ],
     "optional": [
         "VISITS_OPTIONAL_TOKEN"
+    ],
+    "requiredOutsideDevelopment": [
+        "DEPLOY_KEY_HASH"
     ]
 };
 

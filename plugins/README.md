@@ -100,7 +100,7 @@ Code outside `adapters/` imports no `node:*` or `cloudflare:*` module and no ada
 | `adapters` | Only `node` and `cloudflare`. Each holds `lifecycle`: module paths of that target's lifecycle modules, run after the top-level list. |
 | `config.keys` | The top-level sections of the environment config the plugin owns, such as `VISITS`. Uppercase letters, digits, and underscores. |
 | `config.defaults` | Only `all`, `node`, and `cloudflare`. Each is an object whose top-level keys are all in `config.keys`. See "Config". |
-| `secrets` | Objects with `name`, `description` (one line), and `required` (a boolean, default `true`). `BUILD_ID` and `ENVIRONMENT` are not secret names. See "Secrets". |
+| `secrets` | Objects with `name`, `description` (one line), and `required`: `true` (the default), `false`, or `"outsideDevelopment"`. `BUILD_ID` and `ENVIRONMENT` are not secret names. See "Secrets". |
 | `cloudflare.kvNamespaces` | Objects with only `config`: a config path. See "Cloudflare Resources". |
 | `cloudflare.durableObjects` | Objects with `className`, `module` (a module path), and `config` (a config path). |
 | `routes` | Objects with `module` (a module path) and, to mount it, `mount` and `name`. `mount` starts with `/`. `name` is lowercase letters, digits, and hyphens. Give both or neither. See "Routes". |
@@ -172,7 +172,7 @@ A target registry's exports:
 - `LoggerWriter`, `ServerRequest`: core's classes for the target.
 - `plugins`: a `Map` of lifecycle modules in the order they run, keyed `<owner>:<module path>` (`visits:./plugin.js`).
 - `configDefaults`: the config defaults for the target.
-- `secrets`: `{ required, optional }`, each a sorted list of names.
+- `secrets`: `{ required, optional, requiredOutsideDevelopment }`, each a sorted list of names.
 - `contentRoots`: where plugin content lives, as paths from the project root.
 
 Rules:
@@ -226,7 +226,7 @@ export default {
 
 A child pattern of `/` matches `<mount>/` only. Use `{/}` for the mount path itself.
 
-`routes.generated.js` exports every plugin's routes as one list, `pluginRoutes`. Its order is the plugins' lifecycle order; within a plugin, the manifest's own routes, then the routes it contributes through `whenInstalled`. The project decides where the list goes, in its own `virtual-hosts.js`:
+`routes.generated.js` exports every plugin's routes as one list, `pluginRoutes`. Core's routes come first: core mounts the Publishing API at `/publishing-api/v1`, behind the deploy key (see `usage-docs/kixx-app/publishing-api.md`), so no plugin may use that mount or the name `publishing-api`. Then come the plugins, in lifecycle order; within a plugin, the manifest's own routes, then the routes it contributes through `whenInstalled`. The project decides where the list goes, in its own `virtual-hosts.js`:
 
 ```js
 import { pluginRoutes } from './routes.generated.js';
@@ -266,7 +266,13 @@ Declare every secret the code reads: a plugin in its manifest, an app in `app/ap
 }
 ```
 
-Boot checks the declared secrets on every platform, before anything is built. Each required name must be a non-empty string in the environment. If any is missing, boot fails with one error naming all of them, and never a value:
+`required` takes one of three values:
+
+- `true`, the default: every environment must provide it.
+- `false`: an environment may omit it.
+- `"outsideDevelopment"`: every environment except `development` must provide it. Use it for a secret that guards something development leaves open.
+
+Boot checks the declared secrets on every platform, before anything is built. Each required name, and outside `development` each `"outsideDevelopment"` name, must be a non-empty string in the environment. If any is missing, boot fails with one error naming all of them, and never a value:
 
 ```
 Missing required environment secrets: A_SECRET, B_SECRET. Every declared secret is listed in example.env.secrets.
@@ -274,7 +280,34 @@ Missing required environment secrets: A_SECRET, B_SECRET. Every declared secret 
 
 An optional secret may be absent. Read a secret with `context.getEnvString(name)`. Never log one.
 
-`example.env.secrets` is generated from the declarations. It is the template for `.env.<environment>.secrets`, and the list of secret names every deployment must provide.
+Core declares one secret: `DEPLOY_KEY_HASH`, the SHA-256 of the deploy key, required outside development.
+
+`example.env.secrets` is generated from the declarations. It is the template for `.env.<environment>.secrets`, and the list of secret names every deployment must provide. A comment line reading exactly `# @optional` marks the next entry optional, and one reading exactly `# @required-outside-development` marks it required outside development. Only comment lines may come between a directive and its entry, so a description may not be exactly either directive.
+
+## Deploy Key
+
+The deploy key authorizes operations: publishing, and any endpoint a plugin adds for migrations, jobs, or recovery. It is `kxdk_` and 64 lowercase hex characters. The server holds only its SHA-256, as `DEPLOY_KEY_HASH`, and a client sends the key as `Authorization: Bearer <key>`. A valid key grants everything behind the check: there are no scopes.
+
+Core exports the check from `kixx/deploy-key/mod.js` (from a plugin, `../../kixx/deploy-key/mod.js`). Put `requireDeployKey` on an operations mount, where it throws 401 (`UnauthenticatedError`, code `DeployKeyRequired`) unless the request carries the key:
+
+```js
+import { requireDeployKey } from '../../kixx/deploy-key/mod.js';
+
+export default {
+    inboundMiddleware: [ requireDeployKey ],
+    routes: [
+        { pattern: '/migrations', name: 'migrations', targets: [ { name: 'run', methods: [ 'POST' ], requestHandlers: [ runMigrations ] } ] },
+    ],
+};
+```
+
+- `verifyDeployKey(context, request)` resolves `true` or `false` and never throws for a wrong key or a limited IP. Use it in code that answers its own 401.
+- `deployKeyActor(context)` returns `{ type: 'deploy-key', id, name: 'Deploy key' }` for recording who acted. `id` is the first 12 characters of the hash, so rotated keys can be told apart. The middleware doesn't set `context.user`: the deploy key is not a user.
+- `generateDeployKey()` resolves a new `{ key, hash }`.
+
+Both checks count each failure (a missing, malformed, or wrong key) per client IP on the `KeyValueStore` service, by `DEPLOY_KEY_FAILURE_LIMIT`: after 20 failures in a 15-minute window, `requireDeployKey` answers that IP's failures with 429 (`TooManyRequestsError`, code `TooManyFailedAttempts`), and the router sets `Retry-After` to the seconds left in the window. The correct key is never counted or limited. Counting is best-effort: a store failure is logged as a warning and the request proceeds. A test that needs the clock builds its own pair with `createDeployKeyAuthentication({ now })`.
+
+In `development` with no `DEPLOY_KEY_HASH` set, the check is open: every request passes, and the actor's `id` is `'development'`. Set a hash in development to enforce it there too. Outside development, boot fails without the hash, and in any environment it fails when the hash isn't 64 lowercase hex characters. The error names the secret, never the value.
 
 ## Cloudflare Resources
 

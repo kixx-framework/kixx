@@ -74,19 +74,29 @@ secrets.
 ## Declared secrets
 
 Core, each plugin, and the app declare the secrets they read in their
-manifests (`plugins/README.md`). The generator writes the names into each
-registry as `secrets` (`{ required, optional }`) and into
-`example.env.secrets`, which is generated and never edited.
+manifests (`plugins/README.md`). A secret's `required` is `true` (the
+default), `false`, or `"outsideDevelopment"`. Core declares one,
+`DEPLOY_KEY_HASH`, as `"outsideDevelopment"`. The generator writes the names
+into each registry as `secrets` (`{ required, optional,
+requiredOutsideDevelopment }`) and into `example.env.secrets`, which is
+generated and never edited. There, `# @optional` marks the next entry
+optional and `# @required-outside-development` marks it required outside
+development; an entry with no directive is required.
 
 `bootApplication()` (`kixx/context/boot-application.js`) checks them on every
-platform, before it builds anything: `assertDeclaredSecrets(env, secrets)` in
+platform, before it builds anything:
+`assertDeclaredSecrets(env, secrets, { environment: config.environment })` in
 `kixx/config/secrets-manifest.js` throws one `OperationalError` naming every
-required secret that is not a non-empty string in the environment. It never
-prints a value. On Node.js the environment is the merged one above; on
-Cloudflare it is the Worker's bindings, checked when the module loads.
+missing secret. A `required` name is missing when it is not a non-empty
+string in the environment. A `requiredOutsideDevelopment` name is checked the
+same way unless the environment is `development`. It never prints a value. On
+Node.js the environment is the merged one above; on Cloudflare it is the
+Worker's bindings, checked when the module loads.
 
-`parseSecretsManifest()` in the same module parses `example.env.secrets`. No
-server module reads that file.
+`parseSecretsManifest()` in the same module parses `example.env.secrets` into
+the same three lists. `compareSecretNames()` compares them with a
+deployment's live names for a given environment. No server module reads that
+file.
 
 ## Config templates
 

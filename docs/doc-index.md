@@ -16,7 +16,7 @@ JSDoc conventions for server-side JavaScript: supported tags, documenting the pu
 
 plugins/README.md
 
-What a plugin is and how it is wired in: the `plugin.json` manifest reference (also the schema of core's `kixx/plugin.json` and the app's `app/app.json`), lifecycle modules and their order (`register`, `initialize`, `start`, `stop`), the five generated files and how to regenerate them, routes and mounts, config defaults per target, declared secrets and the boot check, Cloudflare resources and Durable Object classes, contributing only when another plugin is installed, and thin entry points. Also the ports-and-adapters rules: the three roles, where Node.js and Cloudflare differences live, writing a contract, and checklists for adding a port or a platform.
+What a plugin is and how it is wired in: the `plugin.json` manifest reference (also the schema of core's `kixx/plugin.json` and the app's `app/app.json`), lifecycle modules and their order (`register`, `initialize`, `start`, `stop`), the five generated files and how to regenerate them, routes and mounts, config defaults per target, declared secrets and the boot check, the deploy key check for operations endpoints, Cloudflare resources and Durable Object classes, contributing only when another plugin is installed, and thin entry points. Also the ports-and-adapters rules: the three roles, where Node.js and Cloudflare differences live, writing a contract, and checklists for adding a port or a platform.
 
 ### Server Error Handling
 

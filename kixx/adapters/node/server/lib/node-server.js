@@ -38,7 +38,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
  * @property {Function} ServerRequest - Server request class for Node.js
  * @property {Map<string, Object>} plugins - Lifecycle modules, in the order they run
  * @property {Object} configDefaults - Config defaults, merged under the selected environment's config
- * @property {{ required: string[], optional: string[] }} secrets - Every declared secret name
+ * @property {{ required: string[], optional: string[], requiredOutsideDevelopment: string[] }} secrets - Every declared secret name
  */
 
 /**

@@ -14,8 +14,8 @@ import seedInstance from '../../lib/local/seed-instance.js';
 export default class LocalSeedCommand {
 
     static description = `
-        Boot a local instance once to create its root admin, mint a Publishing
-        API token, publish the app's content, and save credentials.json
+        Boot a local instance once to create its root admin and save
+        credentials.json
     `;
 
     static positionals = [ NAME_POSITIONAL ];
@@ -75,29 +75,24 @@ export default class LocalSeedCommand {
             log(warning);
         }
 
-        const { credentials, credentialsPath, publishResult } = await seedInstance({
+        const { credentials, credentialsPath } = await seedInstance({
             createAppProcess: this.#seedArgs.createAppProcess,
             createAdminClient: this.#seedArgs.createAdminClient,
-            createPublishingClient: this.#seedArgs.createPublishingClient,
             canConnect: this.#seedArgs.canConnect,
             acceptInvite: this.#seedArgs.acceptInvite,
-            publishRelease: this.#seedArgs.publishRelease,
             generatePassword: this.#seedArgs.generatePassword,
-            fileSystem: this.#seedArgs.fileSystem,
             sourceDirectory: this.#projectDirectory,
             instancesDirectory,
             name,
             log,
             stdout: verbose ? this.#stdout : undefined,
             stderr: verbose ? this.#stderr : undefined,
-            formatCommand,
         });
 
         log(`Seeded local instance "${ name }"`);
         log(`Base URL:    ${ credentials.baseUrl }`);
         log(`Username:    ${ credentials.username }`);
         log(`Build ID:    ${ credentials.buildId }`);
-        log(`Release:     ${ publishResult.releaseId }`);
         log(`Credentials: ${ credentialsPath }`);
         log('credentials.json is plain text; do not commit or share it.');
         log(`Next: ${ formatCommand(`start ${ name }`) }`);
