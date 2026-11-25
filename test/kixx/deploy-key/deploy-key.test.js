@@ -2,10 +2,16 @@ import util from 'node:util';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertFalsy } from 'kixx-assert';
 
+import { createFakeKVNamespace } from '../../fakes/workers-kv.js';
+import KeyValueStore from '../../../kixx/adapters/cloudflare/key-value-store/lib/key-value-store.js';
+import HttpRouter from '../../../kixx/http-router/http-router.js';
+import ServerResponse from '../../../kixx/http-router/server-response.js';
 import {
     DEPLOY_KEY_PREFIX,
     DEPLOY_KEY_HASH_SECRET,
+    DEPLOY_KEY_FAILURE_LIMIT,
     generateDeployKey,
+    createDeployKeyAuthentication,
     isDeployKeyHash,
     verifyDeployKey,
     requireDeployKey,
@@ -39,21 +45,57 @@ function makeLogger() {
     };
 }
 
-function makeContext({ hash, environment = 'production' } = {}) {
-    const env = {};
+// The failure counts live on the Cloudflare KeyValueStore adapter over the
+// Workers KV fake, which keeps KV's one-write-per-second rule by `now`. Pass
+// the same clock to createDeployKeyAuthentication(). `store` replaces the
+// adapter, for failures the fake can't produce.
+function makeContext({ hash, environment = 'production', now, store } = {}) {
+    const namespace = createFakeKVNamespace(now ? { now } : {});
+    const keyValueStore = store ?? new KeyValueStore();
+    const env = { KEY_VALUE_STORE: namespace };
 
     if (hash !== undefined) {
         env[DEPLOY_KEY_HASH_SECRET] = hash;
     }
 
-    return { env, config: { environment }, logger: makeLogger() };
+    return {
+        env,
+        config: { environment },
+        logger: makeLogger(),
+        requestId: 'req-1',
+        namespace,
+        getService(name) {
+            assertEqual('KeyValueStore', name);
+            return keyValueStore;
+        },
+    };
+}
+
+// A clock at the start of a window, which is ahead of the real clock: the
+// adapter checks the 60-second expiry floor against Date.now().
+function makeClock() {
+    const windowMs = DEPLOY_KEY_FAILURE_LIMIT.windowSeconds * 1000;
+    const clock = {
+        ms: (Math.floor(Date.now() / windowMs) + 1) * windowMs,
+        now: () => clock.ms,
+        // KV takes one write per second per key, so a test moves the clock
+        // on a second between failures it wants counted.
+        tick(ms = 1000) {
+            clock.ms += ms;
+        },
+    };
+    return clock;
+}
+
+function countWrites(context) {
+    return context.namespace.calls.filter(({ method }) => method === 'put');
 }
 
 // getAuthorizationBearer() returns null for a missing or malformed header,
 // as the server request does.
-function makeRequest(bearer = null) {
+function makeRequest(bearer = null, ip = '203.0.113.7') {
     return {
-        ip: '203.0.113.7',
+        ip,
         getAuthorizationBearer() {
             return bearer;
         },
@@ -221,6 +263,244 @@ describe('deploy-key', ({ before, describe }) => {
             assertEqual('deploy-key', actor.type);
             assertEqual('development', actor.id);
             assertEqual('Deploy key', actor.name);
+        });
+    });
+    describe('failure limit', ({ it }) => {
+        const { maxFailures, windowSeconds } = DEPLOY_KEY_FAILURE_LIMIT;
+
+        // Sends `count` failures a second apart and resolves the errors.
+        async function fail(auth, context, count, request = makeRequest(OTHER_KEY), clock = null) {
+            const errors = [];
+
+            for (let i = 0; i < count; i += 1) {
+                errors.push(await catchRejection(auth.requireDeployKey(context, request, {})));
+                clock?.tick();
+            }
+
+            return errors;
+        }
+
+        it('is 20 failures in 15 minutes', () => {
+            assertEqual(20, maxFailures);
+            assertEqual(900, windowSeconds);
+            assert(Object.isFrozen(DEPLOY_KEY_FAILURE_LIMIT));
+        });
+
+        it('answers the first 20 failures with 401 and counts each', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            const errors = await fail(auth, context, maxFailures, makeRequest(OTHER_KEY), clock);
+
+            for (const error of errors) {
+                assertEqual('DeployKeyRequired', error.code);
+            }
+
+            const writes = countWrites(context);
+            assertEqual(maxFailures, writes.length);
+            assertEqual(`kixx:deploy-key-failures:${ (clock.ms / 1000) - maxFailures }:203.0.113.7`, writes[0].key);
+            assertEqual('1', writes[0].value);
+            assertEqual(String(maxFailures), writes.at(-1).value);
+        });
+
+        it('answers the 21st failure with 429 and the seconds left in the window, without writing', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures, makeRequest(OTHER_KEY), clock);
+
+            const caught = await catchRejection(auth.requireDeployKey(context, makeRequest(OTHER_KEY), {}));
+
+            assertEqual('TooManyRequestsError', caught.name);
+            assertEqual(429, caught.httpStatusCode);
+            assertEqual('TooManyFailedAttempts', caught.code);
+            assertEqual('Too many failed deploy key attempts. Try again later.', caught.message);
+            assertEqual(windowSeconds - maxFailures, caught.retryAfterSeconds);
+            assertEqual(true, caught.expected);
+            assertEqual(maxFailures, countWrites(context).length);
+
+            const missing = await catchRejection(auth.requireDeployKey(context, makeRequest(null), {}));
+            assertEqual('TooManyFailedAttempts', missing.code);
+        });
+
+        it('passes the correct key from a limited IP without touching the store', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures + 1, makeRequest(OTHER_KEY), clock);
+            const callsBefore = context.namespace.calls.length;
+            const response = {};
+
+            assertEqual(response, await auth.requireDeployKey(context, makeRequest(TEST_KEY), response));
+            assertEqual(true, await auth.verifyDeployKey(context, makeRequest(TEST_KEY)));
+            assertEqual(callsBefore, context.namespace.calls.length);
+        });
+
+        it('returns false, never throws, from verifyDeployKey for a limited IP', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures, makeRequest(OTHER_KEY), clock);
+
+            assertEqual(false, await auth.verifyDeployKey(context, makeRequest(OTHER_KEY)));
+            assertEqual(false, await auth.verifyDeployKey(context, makeRequest(null)));
+        });
+
+        it('starts over when the window rolls over', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures + 1, makeRequest(OTHER_KEY), clock);
+            clock.tick(windowSeconds * 1000);
+
+            const caught = await catchRejection(auth.requireDeployKey(context, makeRequest(OTHER_KEY), {}));
+            assertEqual('DeployKeyRequired', caught.code);
+        });
+
+        it('counts each IP on its own, and requests with no IP together', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures, makeRequest(null, null), clock);
+
+            const other = await catchRejection(auth.requireDeployKey(context, makeRequest(OTHER_KEY, '198.51.100.9'), {}));
+            assertEqual('DeployKeyRequired', other.code);
+
+            const unknown = await catchRejection(auth.requireDeployKey(context, makeRequest(OTHER_KEY, null), {}));
+            assertEqual('TooManyFailedAttempts', unknown.code);
+            assertMatches(/:unknown$/, countWrites(context)[0].key);
+        });
+
+        it('never touches the store in development with no hash', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ environment: 'development', now: clock.now });
+
+            assertEqual(true, await auth.verifyDeployKey(context, makeRequest(null)));
+            assertEqual(true, await auth.verifyDeployKey(context, makeRequest(OTHER_KEY)));
+            assertEqual(0, context.namespace.calls.length);
+        });
+
+        it('answers 401 and warns when the count can\'t be read', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const puts = [];
+            const store = {
+                async get() {
+                    throw new Error('KV unavailable');
+                },
+                async put(_context, key, value) {
+                    puts.push({ key, value });
+                },
+            };
+            const context = makeContext({ hash: TEST_HASH, now: clock.now, store });
+
+            const caught = await catchRejection(auth.requireDeployKey(context, makeRequest(OTHER_KEY), {}));
+
+            assertEqual('DeployKeyRequired', caught.code);
+            assertEqual('1', puts[0].value);
+
+            const [ warning ] = context.logger.lines.filter(({ level }) => level === 'warn');
+            assertEqual('deploy key failure count unavailable', warning.args[0]);
+            assertEqual('req-1', warning.args[1].requestId);
+            assertEqual('KV unavailable', warning.args[2].message);
+        });
+
+        it('answers 401 and warns when KV rejects a second write within a second', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            const errors = await fail(auth, context, 2);
+
+            assertEqual('DeployKeyRequired', errors[0].code);
+            assertEqual('DeployKeyRequired', errors[1].code);
+
+            const warnings = context.logger.lines.filter(({ level }) => level === 'warn');
+            assertEqual(1, warnings.length);
+            assertEqual('deploy key failure not counted', warnings[0].args[0]);
+            assertMatches(/429/, warnings[0].args[2].message);
+        });
+
+        it('writes every count to expire at least 60 seconds out, even in a window\'s last second', async () => {
+            const clock = makeClock();
+            clock.tick((windowSeconds * 1000) - 1);
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, 1);
+
+            const [ write ] = countWrites(context);
+            assertEqual(Math.floor(clock.ms / 1000) + 61, write.options.expiration);
+        });
+
+        it('puts neither key nor hash in an error or a log line', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            const request = makeRequest(TEST_KEY.slice(0, -1) + '0');
+
+            // Two in one second log the KV 429; the rest reach the limit.
+            const errors = await fail(auth, context, 2, request);
+            clock.tick();
+            errors.push(...await fail(auth, context, maxFailures, request, clock));
+
+            await auth.requireDeployKey(context, makeRequest(TEST_KEY), {});
+
+            assertEqual('TooManyFailedAttempts', errors.at(-1).code);
+            assertNoSecret(errors, 'the errors');
+            assertNoSecret(JSON.stringify(mapErrorToJsonApiError(errors.at(-1))), 'the JSON:API error');
+            assertNoSecret(context.logger.lines, 'the log');
+            assert(context.logger.lines.some(({ level }) => level === 'warn'), 'expected warnings');
+        });
+
+        it('reaches the client through the HttpRouter as 429 with Retry-After', async () => {
+            const clock = makeClock();
+            const auth = createDeployKeyAuthentication({ now: clock.now });
+            const context = makeContext({ hash: TEST_HASH, now: clock.now });
+
+            await fail(auth, context, maxFailures, makeRequest(OTHER_KEY), clock);
+
+            const router = new HttpRouter([ {
+                hostname: 'www.example.com',
+                routes: [ {
+                    pattern: '/ops',
+                    targets: [ {
+                        name: 'ops',
+                        methods: [ 'POST' ],
+                        requestHandlers: [ auth.requireDeployKey, (_context, _request, response) => response.respondWithJSON(200, {}) ],
+                    } ],
+                } ],
+            } ]);
+            router.on('error', () => {});
+
+            const request = Object.assign(makeRequest(OTHER_KEY), {
+                id: 'req-1',
+                method: 'POST',
+                url: { hostname: 'www.example.com', pathname: '/ops' },
+                setHostnameParams() {
+                    return this;
+                },
+                setPathnameParams() {
+                    return this;
+                },
+            });
+            context.useRoutes = () => context;
+
+            const response = await router.handleRequest(context, request, new ServerResponse());
+
+            assertEqual(429, response.status);
+            assertEqual(String(windowSeconds - maxFailures), response.headers.get('retry-after'));
+            assertEqual('no-store', response.headers.get('cache-control'));
+            assertEqual('application/vnd.api+json; charset=utf-8', response.headers.get('content-type'));
+            assertEqual('TooManyFailedAttempts', JSON.parse(response.body).errors[0].code);
         });
     });
 });

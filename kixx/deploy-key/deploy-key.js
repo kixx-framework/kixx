@@ -7,9 +7,14 @@
 // outside development and rejects a malformed one (see ./plugin.js), so this
 // module doesn't check either again. If either ever happened, the comparison
 // would fail and the client would get 401, which is the safe outcome.
+//
+// Failed checks are counted per client IP on the KeyValueStore, so a client
+// guessing keys is slowed down (see DEPLOY_KEY_FAILURE_LIMIT). The correct key
+// is never counted or limited. Counting is best-effort: the store has no
+// atomic increment, and a store failure is logged and ignored.
 
 import { isNonEmptyString } from '../assertions/mod.js';
-import { UnauthenticatedError } from '../errors/mod.js';
+import { TooManyRequestsError, UnauthenticatedError } from '../errors/mod.js';
 import { generateSecretToken, sha256Hex, timingSafeEqual } from '../utils/crypto.js';
 
 
@@ -34,6 +39,21 @@ const DEPLOY_KEY_HASH_PATTERN = /^[0-9a-f]{64}$/;
 // How many leading hash characters name the key in an actor record. Enough to
 // tell rotated keys apart, and of no use for finding the key.
 const ACTOR_ID_LENGTH = 12;
+
+// Each window's counts live under their own keys, so a new window starts at 0.
+const FAILURE_KEY_PREFIX = 'kixx:deploy-key-failures';
+
+// A count outlives its window by this much, which keeps every expiry past the
+// KeyValueStore's 60-second floor.
+const FAILURE_EXPIRY_MARGIN_SECONDS = 60;
+
+/**
+ * Failed deploy key checks allowed per client IP in one window. After
+ * `maxFailures`, a wrong or missing key from that IP gets 429 until the window
+ * ends. A request with no known IP shares one count.
+ * @type {{ maxFailures: number, windowSeconds: number }}
+ */
+export const DEPLOY_KEY_FAILURE_LIMIT = Object.freeze({ maxFailures: 20, windowSeconds: 900 });
 
 
 /**
@@ -69,56 +89,132 @@ export function isDeployKeyHash(value) {
 }
 
 /**
- * Checks the request's bearer credential against the stored deploy key hash.
+ * Creates the deploy key check with its own clock. verifyDeployKey() and
+ * requireDeployKey() below are this, with the real clock. Tests pass `now`.
  *
- * In development with no hash set, every request passes, with or without a
- * credential. Anywhere a hash is set, including development, the request
- * passes only when the SHA-256 of its `Authorization: Bearer` credential
- * equals the hash. A missing, malformed, or wrong credential fails.
- *
- * It never throws for a failed check, so code that answers its own 401 can
- * use it.
- *
- * @param {Object} context - The request context; reads `env.DEPLOY_KEY_HASH` and `config.environment`
- * @param {Object} request - The server request; reads `getAuthorizationBearer()`
- * @returns {Promise<boolean>} True when the request carries the deploy key, or the key is open
+ * @param {Object} [options]
+ * @param {function(): number} [options.now] - A clock returning milliseconds since the epoch; defaults to `Date.now()`
+ * @returns {{ verifyDeployKey: function(Object, Object): Promise<boolean>, requireDeployKey: function(Object, Object, Object): Promise<Object> }}
  */
-export async function verifyDeployKey(context, request) {
-    const hash = context.env[DEPLOY_KEY_HASH_SECRET];
+export function createDeployKeyAuthentication({ now = () => Date.now() } = {}) {
 
-    if (!isNonEmptyString(hash)) {
-        return context.config.environment === DEVELOPMENT_ENVIRONMENT;
+    // Resolves { verified: true }, or the failure with the IP's limit state.
+    async function checkDeployKey(context, request) {
+        const hash = context.env[DEPLOY_KEY_HASH_SECRET];
+
+        if (!isNonEmptyString(hash) && context.config.environment === DEVELOPMENT_ENVIRONMENT) {
+            return { verified: true };
+        }
+
+        if (await presentsDeployKey(request, hash)) {
+            return { verified: true };
+        }
+
+        return countFailure(context, request);
     }
 
-    const credential = request.getAuthorizationBearer();
+    async function countFailure(context, request) {
+        const { maxFailures, windowSeconds } = DEPLOY_KEY_FAILURE_LIMIT;
 
-    if (credential === null) {
-        return false;
+        const nowSeconds = Math.floor(now() / 1000);
+        const windowStart = nowSeconds - (nowSeconds % windowSeconds);
+        const windowEnd = windowStart + windowSeconds;
+
+        const ip = request.ip ?? 'unknown';
+        const key = `${ FAILURE_KEY_PREFIX }:${ windowStart }:${ ip }`;
+        const store = context.getService('KeyValueStore');
+
+        let count = 0;
+        try {
+            count = parseCount(await store.get(context, key));
+        } catch (error) {
+            context.logger.warn('deploy key failure count unavailable', { requestId: context.requestId, ip }, error);
+        }
+
+        if (count >= maxFailures) {
+            return { verified: false, limited: true, retryAfterSeconds: Math.max(1, windowEnd - nowSeconds) };
+        }
+
+        try {
+            await store.put(context, key, String(count + 1), { expiresAt: windowEnd + FAILURE_EXPIRY_MARGIN_SECONDS });
+        } catch (error) {
+            context.logger.warn('deploy key failure not counted', { requestId: context.requestId, ip }, error);
+        }
+
+        return { verified: false, limited: false };
     }
 
-    return timingSafeEqual(await sha256Hex(credential), hash);
+    /**
+     * Checks the request's bearer credential against the stored deploy key hash.
+     *
+     * In development with no hash set, every request passes, with or without a
+     * credential. Anywhere a hash is set, including development, the request
+     * passes only when the SHA-256 of its `Authorization: Bearer` credential
+     * equals the hash. A missing, malformed, or wrong credential fails, and
+     * the failure is counted against the client IP.
+     *
+     * It never throws for a failed check, including a limited IP, so code that
+     * answers its own 401 can use it.
+     *
+     * @param {Object} context - The request context; reads `env.DEPLOY_KEY_HASH` and `config.environment`, and counts failures on the `KeyValueStore` service
+     * @param {Object} request - The server request; reads `getAuthorizationBearer()` and `ip`
+     * @returns {Promise<boolean>} True when the request carries the deploy key, or the key is open
+     */
+    async function verifyDeployKey(context, request) {
+        const { verified } = await checkDeployKey(context, request);
+        return verified;
+    }
+
+    /**
+     * Inbound middleware that admits only requests carrying the deploy key (see
+     * verifyDeployKey()). A valid key grants everything behind it.
+     *
+     * It doesn't set `context.user`: the deploy key is not a user. A handler
+     * that records who acted calls deployKeyActor().
+     *
+     * @param {Object} context - The request context
+     * @param {Object} request - The server request
+     * @param {Object} response - The server response
+     * @returns {Promise<Object>} The response, unchanged
+     * @throws {UnauthenticatedError} When the request doesn't carry the deploy key (401, code `DeployKeyRequired`)
+     * @throws {TooManyRequestsError} When it doesn't, and its IP is over DEPLOY_KEY_FAILURE_LIMIT (429, code `TooManyFailedAttempts`, with `retryAfterSeconds`)
+     */
+    async function requireDeployKey(context, request, response) {
+        const { verified, limited, retryAfterSeconds } = await checkDeployKey(context, request);
+
+        if (verified) {
+            return response;
+        }
+
+        if (limited) {
+            throw new TooManyRequestsError(
+                'Too many failed deploy key attempts. Try again later.',
+                { code: 'TooManyFailedAttempts', retryAfterSeconds },
+                requireDeployKey,
+            );
+        }
+
+        throw new UnauthenticatedError('A valid deploy key is required.', { code: 'DeployKeyRequired' }, requireDeployKey);
+    }
+
+    return { verifyDeployKey, requireDeployKey };
 }
+
+const defaultAuthentication = createDeployKeyAuthentication();
 
 /**
- * Inbound middleware that admits only requests carrying the deploy key (see
- * verifyDeployKey()). A valid key grants everything behind it.
- *
- * It doesn't set `context.user`: the deploy key is not a user. A handler that
- * records who acted calls deployKeyActor().
- *
- * @param {Object} context - The request context
- * @param {Object} request - The server request
- * @param {Object} response - The server response
- * @returns {Promise<Object>} The response, unchanged
- * @throws {UnauthenticatedError} When the request doesn't carry the deploy key (401, code `DeployKeyRequired`)
+ * Checks the request's deploy key and resolves true or false; never throws
+ * for a failed or limited check. See createDeployKeyAuthentication().
+ * @type {function(Object, Object): Promise<boolean>}
  */
-export async function requireDeployKey(context, request, response) {
-    if (await verifyDeployKey(context, request)) {
-        return response;
-    }
+export const verifyDeployKey = defaultAuthentication.verifyDeployKey;
 
-    throw new UnauthenticatedError('A valid deploy key is required.', { code: 'DeployKeyRequired' }, requireDeployKey);
-}
+/**
+ * Inbound middleware that admits only requests carrying the deploy key, with
+ * 401 or, for a limited IP, 429. See createDeployKeyAuthentication().
+ * @type {function(Object, Object, Object): Promise<Object>}
+ */
+export const requireDeployKey = defaultAuthentication.requireDeployKey;
 
 /**
  * The actor to record for something the deploy key did, such as creating a
@@ -132,4 +228,22 @@ export function deployKeyActor(context) {
     const id = isNonEmptyString(hash) ? hash.slice(0, ACTOR_ID_LENGTH) : DEVELOPMENT_ENVIRONMENT;
 
     return { type: 'deploy-key', id, name: 'Deploy key' };
+}
+
+
+// Hashes and compares only when there is both a stored hash and a credential.
+async function presentsDeployKey(request, hash) {
+    const credential = request.getAuthorizationBearer();
+
+    if (!isNonEmptyString(hash) || credential === null) {
+        return false;
+    }
+
+    return timingSafeEqual(await sha256Hex(credential), hash);
+}
+
+// A stored count is decimal text. Anything else counts as 0.
+function parseCount(value) {
+    const count = Number(value);
+    return Number.isInteger(count) && count > 0 ? count : 0;
 }

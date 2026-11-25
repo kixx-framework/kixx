@@ -301,9 +301,11 @@ export default {
 };
 ```
 
-- `verifyDeployKey(context, request)` resolves `true` or `false` and never throws for a wrong key. Use it in code that answers its own 401.
+- `verifyDeployKey(context, request)` resolves `true` or `false` and never throws for a wrong key or a limited IP. Use it in code that answers its own 401.
 - `deployKeyActor(context)` returns `{ type: 'deploy-key', id, name: 'Deploy key' }` for recording who acted. `id` is the first 12 characters of the hash, so rotated keys can be told apart. The middleware doesn't set `context.user`: the deploy key is not a user.
 - `generateDeployKey()` resolves a new `{ key, hash }`.
+
+Both checks count each failure (a missing, malformed, or wrong key) per client IP on the `KeyValueStore` service, by `DEPLOY_KEY_FAILURE_LIMIT`: after 20 failures in a 15-minute window, `requireDeployKey` answers that IP's failures with 429 (`TooManyRequestsError`, code `TooManyFailedAttempts`), and the router sets `Retry-After` to the seconds left in the window. The correct key is never counted or limited. Counting is best-effort: a store failure is logged as a warning and the request proceeds. A test that needs the clock builds its own pair with `createDeployKeyAuthentication({ now })`.
 
 In `development` with no `DEPLOY_KEY_HASH` set, the check is open: every request passes, and the actor's `id` is `'development'`. Set a hash in development to enforce it there too. Outside development, boot fails without the hash, and in any environment it fails when the hash isn't 64 lowercase hex characters. The error names the secret, never the value.
 

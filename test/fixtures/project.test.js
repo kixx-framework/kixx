@@ -771,8 +771,13 @@ describe('fixture project', ({ describe }) => {
 
         it('keeps the count in the namespace bound as KEY_VALUE_STORE', () => {
             const puts = booted.env.KEY_VALUE_STORE.calls.filter(({ method }) => method === 'put');
+            const isFailureCount = ({ key }) => key.startsWith('kixx:deploy-key-failures:');
 
-            assertEqual(2, puts.length);
+            assertEqual(2, puts.filter((call) => !isFailureCount(call)).length);
+
+            // One write per refused Publishing API request. The second may
+            // hit KV's one-write-per-second 429; the request still got 401.
+            assertEqual(2, puts.filter(isFailureCount).length);
             assertEqual(0, booted.env.CA_STORE_KV_STORE.calls.length);
         });
 
