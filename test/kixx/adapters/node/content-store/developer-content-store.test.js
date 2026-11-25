@@ -139,6 +139,21 @@ describe('DeveloperContentStore', ({ it }) => {
         }
     });
 
+    it('rejects every publishing history method', async () => {
+        const store = makeStore(path.resolve());
+        const errors = await Promise.all([
+            catchAsyncError(() => store.recordRelease()),
+            catchAsyncError(() => store.getRelease()),
+            catchAsyncError(() => store.listReleases()),
+            catchAsyncError(() => store.listActivations()),
+        ]);
+
+        assertEqual(4, errors.length);
+        for (const error of errors) {
+            assertEqual('AssertionError', error.name);
+        }
+    });
+
     it('wraps non-ENOENT filesystem failures with their cause', async () => {
         const cause = Object.assign(new Error('permission denied'), { code: 'EACCES' });
         const fileSystem = {

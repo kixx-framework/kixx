@@ -134,6 +134,22 @@ export default class DeveloperContentStore {
         throw new AssertionError('DeveloperContentStore#assignBuild() cannot write in developer mode');
     }
 
+    async recordRelease() {
+        throw new AssertionError('DeveloperContentStore#recordRelease() cannot write in developer mode');
+    }
+
+    async getRelease() {
+        throw new AssertionError('DeveloperContentStore#getRelease() has no Release records in developer mode');
+    }
+
+    async listReleases() {
+        throw new AssertionError('DeveloperContentStore#listReleases() has no Release records in developer mode');
+    }
+
+    async listActivations() {
+        throw new AssertionError('DeveloperContentStore#listActivations() has no Activation history in developer mode');
+    }
+
     /**
      * Permanently closes this adapter.
      * @returns {void}

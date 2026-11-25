@@ -39,6 +39,17 @@ function makeStore(rootDirectory, options = {}) {
     });
 }
 
+function releaseInput(releaseId) {
+    return {
+        releaseId,
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 1,
+        totalBytes: 10,
+        contractVersion: 2,
+        provenance: {},
+    };
+}
+
 // Every assignment needs an Activation; most tests do not care what it says.
 function assignment(fields) {
     return {
@@ -104,12 +115,15 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
+            const recorded = await store.recordRelease(makeContext(), releaseInput('root'));
             const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             store.close();
 
             const reopened = makeStore(rootDirectory);
             const pointer = await reopened.getBuildPointer(makeContext(), 'build');
             assertEqual(JSON.stringify(assigned.pointer), JSON.stringify(pointer));
+            assertEqual(JSON.stringify(recorded.record), JSON.stringify(await reopened.getRelease(makeContext(), 'root')));
+            assertEqual(1, (await reopened.listReleases(makeContext())).items.length);
             const { items } = await reopened.listActivations(makeContext(), { buildId: 'build' });
             assertEqual(1, items.length);
             assertEqual(assigned.pointer.assignmentId, items[0].assignmentId);
@@ -298,12 +312,13 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
         });
 
-        it('stamps assignments from the injected clock and lists same-instant Activations in reverse insertion order', async () => {
+        it('stamps history from the injected clock and lists same-instant rows in reverse insertion order', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const instant = Date.UTC(2027, 0, 15, 12, 30, 0);
             const store = makeStore(rootDirectory, { now: () => instant });
             for (const rootHash of [ 'first', 'second', 'third' ]) {
                 await store.saveIndex(makeContext(), rootHash, { '/': [ 'tree', rootHash ] });
+                await store.recordRelease(makeContext(), releaseInput(rootHash));
             }
 
             const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'first' }));
@@ -315,6 +330,12 @@ describe('Node ContentStore', ({ after, describe }) => {
             assertEqual('third,second,first', items.map((item) => item.toReleaseId).join(','));
             for (const item of items) {
                 assertEqual('2027-01-15T12:30:00.000Z', item.activatedAt);
+            }
+
+            const releases = await store.listReleases(makeContext());
+            assertEqual('third,second,first', releases.items.map((item) => item.releaseId).join(','));
+            for (const item of releases.items) {
+                assertEqual('2027-01-15T12:30:00.000Z', item.createdAt);
             }
             store.close();
         });

@@ -14,7 +14,10 @@ import {
     isString,
 } from '../../../../assertions/mod.js';
 import { OperationalError } from '../../../../errors/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import {
+    BUILD_ASSIGNMENT_OUTCOME,
+    RELEASE_RECORD_OUTCOME,
+} from '../../../../content-addressable-store/content-store-interface.js';
 import { isValidAssignmentId } from '../../../../content-addressable-store/build-assignment.js';
 import {
     decodeHistoryCursor,
@@ -22,6 +25,7 @@ import {
     normalizeActivation,
     normalizeCodeInfo,
     normalizeHistoryPage,
+    normalizeReleaseInput,
 } from '../../../../content-addressable-store/publishing-history.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
 
@@ -33,6 +37,10 @@ const BULK_FILE_LIMIT = 100;
 const STREAM_CHUNK_SIZE = 64 * 1024;
 
 const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint';
+const RELEASE_COLUMNS = `
+    sequence, release_id, created_at, created_by_type, created_by_id, created_by_name,
+    object_count, total_bytes, contract_version, provenance_json
+`;
 const ACTIVATION_COLUMNS = `
     sequence, build_id, assignment_id, from_release_id, to_release_id, activated_at,
     reason, actor_type, actor_id, actor_name, source_revision, summary, force_reason
@@ -459,6 +467,82 @@ export default class ContentStore {
     }
 
     /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     * @param {Object} context - Request context
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult>}
+     */
+    async recordRelease(context, release) {
+        this.#assertOpen();
+        const input = normalizeReleaseInput(release, 'NodeContentStore#recordRelease: release');
+        const { releaseId } = input;
+
+        const trace = new TraceLogger(context.logger, 'content-store-record-release', { releaseId });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const res = this.#transact(database, () => this.#recordReleaseInTransaction(database, input));
+            trace.ok();
+            return res;
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError(`NodeContentStore failed to record release "${ releaseId }"`, { cause });
+        }
+    }
+
+    /**
+     * Reads one Release record.
+     * @param {Object} context - Request context
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)>} The record, or null when none was recorded
+     */
+    async getRelease(context, releaseId) {
+        this.#assertOpen();
+        assertNonEmptyString(releaseId, 'NodeContentStore#getRelease: releaseId');
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-release', { releaseId });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const row = database.prepare(`SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`).get(releaseId);
+            trace.ok();
+            return row ? releaseFromRow(row) : null;
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError(`NodeContentStore failed to load release "${ releaseId }"`, { cause });
+        }
+    }
+
+    /**
+     * Lists Release records newest first.
+     * @param {Object} context - Request context
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPageOptions} [options] - Page options
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     */
+    async listReleases(context, options) {
+        this.#assertOpen();
+        const { limit, cursor } = normalizeHistoryPage(options, 'NodeContentStore#listReleases: options');
+        const before = cursor === null ? Number.MAX_SAFE_INTEGER : decodeHistoryCursor(cursor);
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-releases', { limit });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const rows = database.prepare(`
+                SELECT ${ RELEASE_COLUMNS }
+                FROM releases
+                WHERE sequence < ?
+                ORDER BY sequence DESC
+                LIMIT ?
+            `).all(before, limit + 1);
+            trace.ok();
+            return pageFromRows(rows, limit, releaseFromRow);
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError('NodeContentStore failed to list releases', { cause });
+        }
+    }
+
+    /**
      * Lists Activations newest first, for one build or across every build.
      * @param {Object} context - Request context
      * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentActivationPageOptions} [options] - Page options and an optional buildId filter
@@ -580,6 +664,43 @@ export default class ContentStore {
             pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode },
             previousRootHash,
         };
+    }
+
+    // Runs inside a transaction, so the closure check, the existence check,
+    // and the insert are one operation.
+    #recordReleaseInTransaction(database, input) {
+        const { releaseId, createdBy } = input;
+
+        const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(releaseId);
+        if (!closure) {
+            return { outcome: RELEASE_RECORD_OUTCOME.MISSING_CLOSURE };
+        }
+
+        const select = database.prepare(`SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`);
+        const existing = select.get(releaseId);
+        if (existing) {
+            return { outcome: RELEASE_RECORD_OUTCOME.EXISTS, record: releaseFromRow(existing) };
+        }
+
+        database.prepare(`
+            INSERT INTO releases (
+                release_id, created_at, created_by_type, created_by_id, created_by_name,
+                object_count, total_bytes, contract_version, provenance_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            releaseId,
+            new Date(this.#now()).toISOString(),
+            createdBy.type,
+            createdBy.id,
+            createdBy.name,
+            input.objectCount,
+            input.totalBytes,
+            input.contractVersion,
+            JSON.stringify(input.provenance),
+        );
+
+        return { outcome: RELEASE_RECORD_OUTCOME.CREATED, record: releaseFromRow(select.get(releaseId)) };
     }
 
     // Commits what the callback wrote, or rolls all of it back when the
@@ -897,6 +1018,18 @@ function pointerFromRow(row) {
         assignedAt: row.assigned_at,
         assignmentId: row.assignment_id,
         code: codeFromRow(row),
+    };
+}
+
+function releaseFromRow(row) {
+    return {
+        releaseId: row.release_id,
+        createdAt: row.created_at,
+        createdBy: { type: row.created_by_type, id: row.created_by_id, name: row.created_by_name },
+        objectCount: row.object_count,
+        totalBytes: row.total_bytes,
+        contractVersion: row.contract_version,
+        provenance: JSON.parse(row.provenance_json),
     };
 }
 

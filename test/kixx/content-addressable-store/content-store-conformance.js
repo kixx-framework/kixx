@@ -363,7 +363,8 @@ export default function contentStoreConformance(describe, makeContentStore) {
 }
 
 /**
- * Publishing history contract: Activations, build code info, and paging.
+ * Publishing history contract: Release records, Activations, build code
+ * info, and paging.
  *
  * Only adapters that implement the history methods run this export. It is
  * folded into the default export once every adapter implements them.
@@ -373,11 +374,124 @@ export default function contentStoreConformance(describe, makeContentStore) {
  */
 export function contentStoreHistoryConformance(describe, makeContentStore) {
 
+    describe('contract: release records', ({ it }) => {
+        it('records a Release once and keeps the first record', async () => {
+            const { store, context } = makeContentStore();
+            const input = releaseInput({
+                releaseId: 'release-hash',
+                provenance: {
+                    sourceRevision: 'revision-1',
+                    message: 'First publish',
+                    client: 'test-client',
+                    intendedForBuildId: 'build-1',
+                },
+            });
+            await store.saveIndex(context, 'release-hash', { '/': [ 'tree', 'release-hash' ] });
+
+            const created = await store.recordRelease(context, input);
+            const repeated = await store.recordRelease(context, releaseInput({
+                releaseId: 'release-hash',
+                createdBy: { type: 'user', id: 'user-2', name: 'Ada Editor' },
+                objectCount: 9,
+                totalBytes: 900,
+                provenance: { message: 'Second publish' },
+            }));
+            const read = await store.getRelease(context, 'release-hash');
+
+            assertEqual('created', created.outcome);
+            assertEqual('exists', repeated.outcome);
+            for (const record of [ created.record, repeated.record, read ]) {
+                assertEqual(
+                    'contractVersion,createdAt,createdBy,objectCount,provenance,releaseId,totalBytes',
+                    Object.keys(record).sort().join(','),
+                );
+                assertEqual('release-hash', record.releaseId);
+                assertEqual(created.record.createdAt, record.createdAt);
+                assertActor({ type: 'deploy-key', id: 'test-key', name: null }, record.createdBy);
+                assertEqual(3, record.objectCount);
+                assertEqual(120, record.totalBytes);
+                assertEqual(2, record.contractVersion);
+                assertEqual('client,intendedForBuildId,message,sourceRevision', Object.keys(record.provenance).sort().join(','));
+                assertEqual('revision-1', record.provenance.sourceRevision);
+                assertEqual('First publish', record.provenance.message);
+                assertEqual('test-client', record.provenance.client);
+                assertEqual('build-1', record.provenance.intendedForBuildId);
+            }
+            assertEqual(created.record.createdAt, new Date(created.record.createdAt).toISOString());
+        });
+
+        it('reports a missing closure and records nothing', async () => {
+            const { store, context } = makeContentStore();
+
+            const result = await store.recordRelease(context, releaseInput({ releaseId: 'never-saved-hash' }));
+
+            assertEqual('missingClosure', result.outcome);
+            assertEqual(undefined, result.record);
+            assertEqual(null, await store.getRelease(context, 'never-saved-hash'));
+            assertEqual(0, (await store.listReleases(context)).items.length);
+        });
+
+        it('resolves null for an unknown Release', async () => {
+            const { store, context } = makeContentStore();
+
+            assertEqual(null, await store.getRelease(context, 'unknown-hash'));
+        });
+
+        it('lists Releases newest first and pages through them once', async () => {
+            const { store, context } = makeContentStore();
+            const ids = (page) => page.items.map((item) => item.releaseId).join(',');
+
+            const empty = await store.listReleases(context);
+            assertEqual(0, empty.items.length);
+            assertEqual(null, empty.cursor);
+
+            for (const releaseId of [ 'hash-1', 'hash-2', 'hash-3' ]) {
+                await store.saveIndex(context, releaseId, { '/': [ 'tree', releaseId ] });
+                await store.recordRelease(context, releaseInput({ releaseId }));
+            }
+
+            const everything = await store.listReleases(context);
+            assertEqual('hash-3,hash-2,hash-1', ids(everything));
+            assertEqual(null, everything.cursor);
+
+            const pageOne = await store.listReleases(context, { limit: 2 });
+            const pageTwo = await store.listReleases(context, { limit: 2, cursor: pageOne.cursor });
+            assertEqual('hash-3,hash-2', ids(pageOne));
+            assertEqual('string', typeof pageOne.cursor);
+            assertEqual('hash-1', ids(pageTwo));
+            assertEqual(null, pageTwo.cursor);
+        });
+
+        it('rejects a malformed Release record and writes nothing', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'release-hash', { '/': [ 'tree', 'release-hash' ] });
+
+            const malformed = [
+                undefined,
+                releaseInput({ releaseId: '' }),
+                releaseInput({ releaseId: 'release-hash', createdBy: undefined }),
+                releaseInput({ releaseId: 'release-hash', createdBy: { type: 'robot', id: 'key-1' } }),
+                releaseInput({ releaseId: 'release-hash', objectCount: -1 }),
+                releaseInput({ releaseId: 'release-hash', totalBytes: 1.5 }),
+                releaseInput({ releaseId: 'release-hash', contractVersion: 0 }),
+                releaseInput({ releaseId: 'release-hash', provenance: { branch: 'main' } }),
+                releaseInput({ releaseId: 'release-hash', createdAt: '2027-01-01T00:00:00.000Z' }),
+            ];
+            for (const badRelease of malformed) {
+                await assertAssertionError(() => store.recordRelease(context, badRelease));
+            }
+            await assertAssertionError(() => store.getRelease(context, ''));
+
+            assertEqual(null, await store.getRelease(context, 'release-hash'));
+        });
+    });
+
     describe('contract: history paging', ({ it }) => {
         it('rejects a malformed cursor as a bad request', async () => {
             const { store, context } = makeContentStore();
 
             for (const cursor of [ 'abc', '0', '01', '1.5' ]) {
+                await assertInvalidCursor(() => store.listReleases(context, { cursor }));
                 await assertInvalidCursor(() => store.listActivations(context, { cursor }));
             }
         });
@@ -386,6 +500,7 @@ export function contentStoreHistoryConformance(describe, makeContentStore) {
             const { store, context } = makeContentStore();
 
             for (const limit of [ 0, 101, 1.5, '10' ]) {
+                await assertAssertionError(() => store.listReleases(context, { limit }));
                 await assertAssertionError(() => store.listActivations(context, { limit }));
             }
         });
@@ -647,6 +762,17 @@ export function contentStoreHistoryConformance(describe, makeContentStore) {
 function assignment(fields) {
     return {
         activation: { reason: 'publish', actor: { type: 'deploy-key', id: 'test-key' } },
+        ...fields,
+    };
+}
+
+function releaseInput(fields) {
+    return {
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 3,
+        totalBytes: 120,
+        contractVersion: 2,
+        provenance: {},
         ...fields,
     };
 }
