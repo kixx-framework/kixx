@@ -61,7 +61,7 @@ kixx/
 ├── agents/plans/                # Structured implementation plans
 ├── run-tests.js                 # Unit test runner (`node run-tests.js [path]`)
 ├── run-linter.js                # Linter (`node run-linter.js [path]`)
-├── eslint.config.js             # Lint config for kixx/, plugins/, test/, and test-app/
+├── eslint.config.js             # Lint config for kixx/, plugins/, test/, test-app/, and tools/
 ├── package.json                 # Private; dev dependencies only
 ├── vendored-code.json           # Version and digest of every vendored copy
 └── deno.json                    # Deno lint settings
