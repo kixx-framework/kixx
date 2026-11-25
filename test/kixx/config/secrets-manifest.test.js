@@ -1,9 +1,15 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from 'kixx-assert';
+import {
+    assert,
+    assertEqual,
+    assertMatches,
+    assertNotMatches,
+} from 'kixx-assert';
 
 import {
     parseSecretsManifest,
     compareSecretNames,
+    assertDeclaredSecrets,
 } from '../../../kixx/config/secrets-manifest.js';
 
 
@@ -165,6 +171,119 @@ describe('secrets-manifest', ({ describe }) => {
 
             assertEqual(0, comparison.missing.length);
             assertEqual(0, comparison.extra.length);
+        });
+    });
+
+    describe('assertDeclaredSecrets', ({ it }) => {
+        const MISSING_MESSAGE_SUFFIX = 'Every declared secret is listed in example.env.secrets.';
+
+        function makeSecrets() {
+            return {
+                required: [ 'ZEBRA_SECRET', 'ALPHA_SECRET', 'MIDDLE_SECRET' ],
+                optional: [ 'OPTIONAL_SECRET' ],
+            };
+        }
+
+        it('passes when every required and optional secret is present', () => {
+            const env = {
+                ZEBRA_SECRET: 'z-value',
+                ALPHA_SECRET: 'a-value',
+                MIDDLE_SECRET: 'm-value',
+                OPTIONAL_SECRET: 'o-value',
+            };
+
+            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets())));
+        });
+
+        it('passes when an optional secret is absent', () => {
+            const env = {
+                ZEBRA_SECRET: 'z-value',
+                ALPHA_SECRET: 'a-value',
+                MIDDLE_SECRET: 'm-value',
+            };
+
+            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets())));
+        });
+
+        it('passes when nothing is declared', () => {
+            const caught = catchError(() => assertDeclaredSecrets({}, { required: [], optional: [] }));
+
+            assertEqual(null, caught);
+        });
+
+        it('reports every missing required secret in one error, sorted by name', () => {
+            const caught = catchError(() => assertDeclaredSecrets({ MIDDLE_SECRET: 'm-value' }, makeSecrets()));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertEqual('OPERATIONAL_ERROR', caught.code);
+            assertEqual(
+                `Missing required environment secrets: ALPHA_SECRET, ZEBRA_SECRET. ${ MISSING_MESSAGE_SUFFIX }`,
+                caught.message,
+            );
+        });
+
+        it('counts an empty string as missing', () => {
+            const env = {
+                ZEBRA_SECRET: 'z-value',
+                ALPHA_SECRET: '',
+                MIDDLE_SECRET: 'm-value',
+            };
+
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual(`Missing required environment secrets: ALPHA_SECRET. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
+        });
+
+        it('counts a value that is not a string as missing', () => {
+            const env = {
+                ZEBRA_SECRET: 'z-value',
+                ALPHA_SECRET: 'a-value',
+                MIDDLE_SECRET: { get() {} },
+            };
+
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual(`Missing required environment secrets: MIDDLE_SECRET. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
+        });
+
+        it('names only the missing secrets and holds no value from the environment', () => {
+            const env = {
+                ZEBRA_SECRET: 'z-value-5f2c',
+                MIDDLE_SECRET: 'm-value-91ab',
+                OPTIONAL_SECRET: 'o-value-77de',
+                BUILD_ID: 'build-3e40',
+                UNDECLARED_SECRET: 'u-value-c0d1',
+            };
+
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+
+            assert(caught, 'expected an error to be thrown');
+            assertMatches('ALPHA_SECRET', caught.message);
+
+            for (const [ name, value ] of Object.entries(env)) {
+                assertNotMatches(value, caught.message);
+                assertNotMatches(name, caught.message);
+            }
+        });
+
+        it('does not reorder the declared lists', () => {
+            const secrets = makeSecrets();
+
+            catchError(() => assertDeclaredSecrets({}, secrets));
+
+            assertEqual('ZEBRA_SECRET,ALPHA_SECRET,MIDDLE_SECRET', secrets.required.join(','));
+        });
+
+        it('throws an AssertionError when a declared list is not an Array', () => {
+            for (const secrets of [ undefined, {}, { required: [] }, { optional: [] } ]) {
+                const caught = catchError(() => assertDeclaredSecrets({}, secrets));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
         });
     });
 });

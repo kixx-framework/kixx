@@ -28,11 +28,14 @@ node run-linter.js test-app        # lint the integration suite
 **Keep the layers apart.**
 
 - Core under `kixx/` never imports outside `kixx/`.
+- Core outside `kixx/adapters/` never imports an adapter. Adapters are reached through generated registries and entry points.
 - `node:*` modules appear only in `kixx/adapters/`.
-- `cloudflare:*` modules appear only in the Durable Object shells listed in `test/kixx/import-hygiene.test.js`. A shell passes `ctx` and `env` to a plain class that holds all the behavior, delegates each RPC method in one line, and does nothing else. List a new shell there.
+- `cloudflare:*` modules appear only in the Durable Object shells and the Cloudflare-only modules listed in `test/kixx/import-hygiene.test.js`. A shell passes `ctx` and `env` to a plain class that holds all the behavior, delegates each RPC method in one line, and does nothing else. List a new shell there.
 - A module takes every platform service it uses from its caller: bindings, storage handles, `fetch`, clocks, and output sinks. A unit test hands it a fake from `test/fakes/`.
 - Unit tests never import a Durable Object shell, an entry point, or a `cloudflare:*` module.
-- `test/kixx/import-hygiene.test.js` enforces the import rules above. The v6 ports-and-adapters guide is `reference-app/plugins/README.md` until S07 replaces it.
+- `test/kixx/import-hygiene.test.js` enforces the import rules above.
+- The plugin guide is `plugins/README.md`: manifests, lifecycle modules, generated registries, entry points, and the ports-and-adapters rules.
+- Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A generated JavaScript file turns lint off for itself.
 - Every change must work on Node.js, Deno, and Cloudflare.
 - Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 

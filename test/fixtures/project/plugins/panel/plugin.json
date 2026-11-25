@@ -1,0 +1,25 @@
+{
+    "name": "panel",
+    "version": "7.0.0-alpha.0",
+    "core": "7.0.0",
+    "description": "A panel other plugins add to. Shows a dependency, a required secret, and middleware on a mount.",
+    "dependencies": [ "visits" ],
+    "services": [ "Panel" ],
+    "lifecycle": [ "./plugin.js" ],
+    "config": {
+        "keys": [ "PANEL" ],
+        "defaults": {
+            "all": { "PANEL": { "title": "Fixture panel" } }
+        }
+    },
+    "secrets": [
+        {
+            "name": "PANEL_SIGNING_SECRET",
+            "required": true,
+            "description": "Shows that a plugin declares a required secret."
+        }
+    ],
+    "routes": [
+        { "module": "./routes.js", "mount": "/panel", "name": "panel" }
+    ]
+}

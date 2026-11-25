@@ -1,0 +1,13 @@
+{
+    "name": "fixture-project",
+    "environments": {
+        "test": {
+            "LOGGER": { "level": "NONE" },
+            // Relative paths, so DATA_DIRECTORY decides where the stores live.
+            "KEY_VALUE_STORE": { "path": "key-value-store.sqlite" },
+            "CONTENT_STORE": { "rootDirectory": "content-store" },
+            // Overrides one default of the visits plugin and leaves the rest.
+            "VISITS": { "greeting": "hello from the fixture" }
+        }
+    }
+}

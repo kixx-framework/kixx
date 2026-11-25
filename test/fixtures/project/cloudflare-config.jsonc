@@ -1,0 +1,21 @@
+{
+    "name": "fixture-project",
+    "environments": {
+        "test": {
+            "LOGGER": { "level": "NONE" },
+            // Placeholders. The fixture is never deployed, so no such resource exists.
+            "KEY_VALUE_STORE": {
+                "namespaceName": "fixture-key-value-store",
+                "namespaceId": "not-a-real-namespace-id"
+            },
+            "CONTENT_STORE": {
+                "kvNamespace": {
+                    "namespaceName": "fixture-content-store",
+                    "namespaceId": "not-a-real-namespace-id"
+                }
+            },
+            // Overrides one default of the visits plugin and leaves the rest.
+            "VISITS": { "greeting": "hello from the fixture" }
+        }
+    }
+}

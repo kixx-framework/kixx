@@ -1,0 +1,49 @@
+{
+    "name": "visits",
+    "version": "7.0.0-alpha.0",
+    "core": "7.0.0",
+    "description": "Counts visits. Shows adapters, config, routes, content, start and stop, and a conditional contribution.",
+    "services": [ "FixtureLog", "Visits", "VisitsPlatform" ],
+    "lifecycle": [ "./plugin.js" ],
+    "adapters": {
+        "node": { "lifecycle": [ "./adapters/node/plugin.js" ] },
+        "cloudflare": { "lifecycle": [ "./adapters/cloudflare/plugin.js" ] }
+    },
+    "config": {
+        "keys": [ "VISITS" ],
+        "defaults": {
+            "all": {
+                "VISITS": {
+                    "greeting": "hello",
+                    "tags": [ "default-one", "default-two" ],
+                    "limits": { "perMinute": 60, "perHour": 600 }
+                }
+            },
+            "node": { "VISITS": { "platformNote": "a default for Node.js" } },
+            "cloudflare": { "VISITS": { "platformNote": "a default for Cloudflare" } }
+        }
+    },
+    "secrets": [
+        {
+            "name": "VISITS_OPTIONAL_TOKEN",
+            "required": false,
+            "description": "Shows that an optional secret may be absent."
+        }
+    ],
+    "routes": [
+        { "module": "./routes.js", "mount": "/visits", "name": "visits" }
+    ],
+    "content": { "pagesDirectory": "./pages" },
+    "whenInstalled": {
+        "panel": {
+            "routes": [
+                { "module": "./panel-routes.js", "mount": "/panel/visits", "name": "panel-visits" }
+            ]
+        },
+        "reports": {
+            "routes": [
+                { "module": "./reports-routes.js", "mount": "/reports/visits", "name": "reports-visits" }
+            ]
+        }
+    }
+}

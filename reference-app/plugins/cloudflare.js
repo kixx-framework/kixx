@@ -1,18 +1,19 @@
-import * as cloudflareContentStore from './cloudflare-content-store/plugin.js';
+// The legacy map: the v6 Cloudflare adapter packages that are not yet
+// plugins. Nothing loads this file. Generated registries wire core and every
+// plugin that has a manifest.
+//
+// Delete an entry when its package becomes a plugin with a manifest, and
+// delete this file when the map is empty.
 import * as cloudflareDocumentStoreEngine from './cloudflare-document-store-engine/plugin.js';
 import * as cloudflareJobQueue from './cloudflare-job-queue/plugin.js';
-import * as cloudflareKeyValueStore from './cloudflare-key-value-store/plugin.js';
 import * as cloudflareObjectStore from './cloudflare-object-store/plugin.js';
 
 export const plugins = new Map([
-    [ 'cloudflareContentStore', cloudflareContentStore ],
     [ 'cloudflareDocumentStoreEngine', cloudflareDocumentStoreEngine ],
     [ 'cloudflareJobQueue', cloudflareJobQueue ],
-    [ 'cloudflareKeyValueStore', cloudflareKeyValueStore ],
     [ 'cloudflareObjectStore', cloudflareObjectStore ],
 ]);
 
 export const durableObjects = {
-    ContentAddressableIndexStore: cloudflareContentStore.ContentAddressableIndexStore,
     JobQueueStore: cloudflareJobQueue.JobQueueStore,
 };

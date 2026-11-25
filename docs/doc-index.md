@@ -12,11 +12,17 @@ docs/code-documentation-guide.md
 
 JSDoc conventions for server-side JavaScript: supported tags, documenting the public contract, no JSDoc on module-private functions, and documenting events and classes.
 
+### Plugin Guide
+
+plugins/README.md
+
+What a plugin is and how it is wired in: the `plugin.json` manifest reference (also the schema of core's `kixx/plugin.json` and the app's `app/app.json`), lifecycle modules and their order (`register`, `initialize`, `start`, `stop`), the five generated files and how to regenerate them, routes and mounts, config defaults per target, declared secrets and the boot check, Cloudflare resources and Durable Object classes, contributing only when another plugin is installed, and thin entry points. Also the ports-and-adapters rules: the three roles, where Node.js and Cloudflare differences live, writing a contract, and checklists for adding a port or a platform.
+
 ### Server Error Handling
 
 docs/server-error-handling.md
 
-Expected operational errors versus programmer bugs and how each entry point applies the rule, turning assumptions into `assert*` checks, and wrapping and rethrowing with `cause`.
+Expected operational errors versus programmer bugs and how each platform's server module applies the rule, turning assumptions into `assert*` checks, and wrapping and rethrowing with `cause`.
 
 ### Vendored Code
 
@@ -34,7 +40,7 @@ API references for framework code under `kixx/`: the `is*` tests and `assert*` h
 
 test/README.md
 
-The unit suite and the integration suite, and which one a test belongs in. Dependency injection of platform services, thin Durable Object shells, the shared fakes in `test/fakes/` and how to write one, shared conformance suites and the rules for running one on a real platform, and the import hygiene rules. Also testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
+The unit suite and the integration suite, and which one a test belongs in. Dependency injection of platform services, thin Durable Object shells, the shared fakes in `test/fakes/` and how to write one, the fixture project in `test/fixtures/`, shared conformance suites and the rules for running one on a real platform, and the import hygiene rules. Also testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
 
 ### Integration Suite
 
@@ -52,7 +58,7 @@ The CSRF threat model and the protection for browser HTML forms that sign in or 
 
 docs/configuration-internals.md
 
-`parseJsonc`, `readConfig`, `resolveFilepath`, and environment merging; the `*.jsonc.template` config templates, their `json` helper, and the Node.js and Cloudflare rendering contexts; and the checklist for adding a new setting.
+`parseJsonc`, `readConfig` and the config defaults it lays under a project's config, `resolveFilepath`, environment merging, and the boot check of declared secrets; the `*.jsonc.template` config templates, their `json` helper, and the Node.js and Cloudflare rendering contexts; and the checklist for adding a new setting.
 
 ### Static Assets
 
@@ -64,7 +70,7 @@ kixx/static-assets/README.md
 
 usage-docs/kixx-app/configuration.md
 
-Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, merging dotenv files, the server port, the `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
+Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, config defaults, merging dotenv files, the server port, the generated `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
 
 ### Administrative Data API
 
@@ -117,12 +123,6 @@ Statically registered migrations an operator runs in batches from the admin pane
 reference-app/app/admin-data-api/README.md
 
 Registering a Collection as an Administrative Data API resource: the registration shape, rules the registry enforces, and where the contract is tested.
-
-### Plugins and Cross-Platform Architecture
-
-reference-app/plugins/README.md
-
-Ports-and-adapters architecture: the three plugin roles, adapters that skip the registry, general plugins, the two-phase plugin module contract, where Node.js and Cloudflare differences live, how contracts are written, checklists for adding ports or platforms, and rules for application code.
 
 ### Templating Guide
 

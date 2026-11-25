@@ -3,10 +3,23 @@
 // appear only in adapters, and nothing imports a module that is leaving
 // core except the known edges below.
 //
+// Adapters are reached only through generated registries and entry points
+// (TECH-3). So no core module outside adapters/ imports one: it would carry
+// a platform's code into every target's bundle.
+//
 // Unit tests never run the platform (QA-7, D56). So cloudflare:* modules
 // appear only in the Durable Object shells listed below, each shell is
 // only a binding to a plain class, and nothing a unit test imports
-// reaches a shell or a cloudflare:* module.
+// reaches a shell or a cloudflare:* module. Core's manifest declares
+// exactly those shells, because a generated registry exports what the
+// manifest declares.
+//
+// The fixture project under test/fixtures/ holds what a real project
+// holds, so two of its files can load only on Cloudflare. They are listed
+// in CLOUDFLARE_ONLY_MODULES, and no unit test reaches one. Its entry
+// points are listed in ENTRY_POINTS: no test file reaches one, and each
+// imports exactly what a thin shell may (PLUG-5). Its platform-neutral
+// files stay platform-neutral.
 //
 // The probe in test-app/probe/ is bundled into every target the
 // integration suite runs on (QA-8). So everything it reaches imports by
@@ -25,6 +38,7 @@ import { assertEqual } from 'kixx-assert';
 
 const REPOSITORY_DIRECTORY = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'kixx/');
+const CORE_MANIFEST_FILE = path.join(CORE_DIRECTORY, 'plugin.json');
 const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
 const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
@@ -44,13 +58,54 @@ const KNOWN_EDGES = [
 ];
 
 // Durable Object classes, as core-relative paths. These are the only core
-// files that import a cloudflare:* module. List a new shell here.
+// files that import a cloudflare:* module. List a new shell here, and
+// declare it in core's manifest (kixx/plugin.json).
 //
 // Core has no Cloudflare entry point to list. One would export a shell, so
 // the rule that no unit test reaches a shell keeps tests away from it too.
 const DURABLE_OBJECT_SHELLS = [
     'adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
 ];
+
+// Files under test/ that only Cloudflare can load, as repository-relative
+// paths: a Cloudflare entry point, and a generated registry that exports
+// Durable Object shells. No unit test may reach one. List a file here when a
+// fixture gains one.
+const CLOUDFLARE_ONLY_MODULES = [
+    'test/fixtures/project/cloudflare-server.js',
+    'test/fixtures/project/cloudflare-durable-objects.generated.js',
+];
+
+// Entry points under test/, as repository-relative paths. An entry point
+// starts a server when it loads, so no test file may import one: the
+// integration suite covers them. List a fixture's entry point here.
+const ENTRY_POINTS = [
+    'test/fixtures/project/node-server.js',
+    'test/fixtures/project/cloudflare-server.js',
+];
+
+const FIXTURE_PROJECT_DIRECTORY = path.join(TEST_DIRECTORY, 'fixtures/project/');
+
+// Everything each of the fixture's entry points imports, in order. An entry
+// point names no plugin and no service: it imports one core server module,
+// the generated registries, the project's virtual hosts, and its app.
+const FIXTURE_ENTRY_POINT_IMPORTS = {
+    'node-server.js': [
+        '../../../kixx/adapters/node/server/lib/node-server.js',
+        './node-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+    ],
+    'cloudflare-server.js': [
+        'cloudflare:workers',
+        '../../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js',
+        './cloudflare-config.generated.js',
+        './cloudflare-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+        './cloudflare-durable-objects.generated.js',
+    ],
+};
 
 // Static import and export specifiers, including multi-line import lists.
 // Excluding `(` and `=` keeps it from matching `export function f(…)`,
@@ -106,6 +161,19 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
+    it('imports no adapter from core outside adapters/', () => {
+        // A file that imports a Node.js adapter holds no node:* specifier of
+        // its own, so the rule above would not catch it.
+        const violations = imports.filter(({ file, specifier, target }) => {
+            return specifier.startsWith('.')
+                && !file.startsWith('adapters/')
+                && isInsideCore(target)
+                && toCorePath(target).startsWith('adapters/');
+        });
+
+        assertEqual('', formatViolations(violations));
+    });
+
     it('imports cloudflare:* modules only in Durable Object shells', () => {
         const cloudflareImports = imports.filter(({ specifier }) => specifier.startsWith('cloudflare:'));
 
@@ -132,6 +200,16 @@ describe('import hygiene', ({ it }) => {
         });
 
         assertEqual('', formatViolations(violations));
+    });
+
+    it('declares exactly the Durable Object shells in core\'s manifest', () => {
+        // A shell no manifest declares would never be exported from a Worker,
+        // and a declared module that isn't a listed shell would escape the
+        // thin-shell rule above.
+        const manifest = JSON.parse(fs.readFileSync(CORE_MANIFEST_FILE, 'utf8'));
+        const declared = manifest.cloudflare.durableObjects.map(({ module }) => module.replace(/^\.\//, ''));
+
+        assertEqual(DURABLE_OBJECT_SHELLS.slice().sort().join('\n'), declared.sort().join('\n'));
     });
 
     it('imports modules leaving core only through known edges', () => {
@@ -174,11 +252,18 @@ describe('import hygiene', ({ it }) => {
         const violations = [];
 
         // Every .js file under test/ is a starting point: test files, and the
-        // fakes and suites they share.
-        for (const { file, specifiers, chain } of readImportGraph(listJavaScriptFiles(TEST_DIRECTORY))) {
+        // fakes, suites, and fixture files they share. The files only
+        // Cloudflare can load are not, and reaching one is a violation.
+        const entryFiles = listJavaScriptFiles(TEST_DIRECTORY).filter((filepath) => !isCloudflareOnlyModule(filepath));
+
+        for (const { file, specifiers, chain } of readImportGraph(entryFiles, isCloudflareOnlyModule)) {
             const trail = chain.map(toRepositoryPath).join(' -> ');
 
-            if (DURABLE_OBJECT_SHELLS.includes(toCorePath(file))) {
+            if (isCloudflareOnlyModule(file)) {
+                violations.push({ file: trail, specifier: '(a module only Cloudflare can load)' });
+            }
+
+            if (isDurableObjectShell(file)) {
                 violations.push({ file: trail, specifier: '(a Durable Object shell)' });
             }
 
@@ -188,6 +273,74 @@ describe('import hygiene', ({ it }) => {
                 }
             }
         }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('lists only modules that Cloudflare alone can load', () => {
+        const problems = [];
+
+        for (const entry of CLOUDFLARE_ONLY_MODULES) {
+            const filepath = path.join(REPOSITORY_DIRECTORY, entry);
+
+            if (!fs.existsSync(filepath)) {
+                problems.push(`CLOUDFLARE_ONLY_MODULES lists ${ entry }, which doesn't exist`);
+                continue;
+            }
+
+            // What makes a file Cloudflare-only is a cloudflare:* import or a
+            // Durable Object shell. An entry with neither is stale.
+            const needsCloudflare = extractSpecifiers(fs.readFileSync(filepath, 'utf8')).some((specifier) => {
+                return specifier.startsWith('cloudflare:')
+                    || (specifier.startsWith('.') && isDurableObjectShell(path.resolve(path.dirname(filepath), specifier)));
+            });
+
+            if (!needsCloudflare) {
+                problems.push(`CLOUDFLARE_ONLY_MODULES lists ${ entry }, which imports no cloudflare:* module and no Durable Object shell`);
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('reaches no entry point from a test file', () => {
+        const testFiles = listJavaScriptFiles(TEST_DIRECTORY).filter((filepath) => filepath.endsWith('.test.js'));
+        const stopAt = (filepath) => isEntryPoint(filepath) || isCloudflareOnlyModule(filepath);
+
+        const violations = readImportGraph(testFiles, stopAt)
+            .filter(({ file }) => isEntryPoint(file))
+            .map(({ chain }) => ({ file: chain.map(toRepositoryPath).join(' -> '), specifier: '(an entry point)' }));
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('keeps the fixture\'s entry points to the imports of a thin shell', () => {
+        // The lists are compared exactly, so an entry point that gains an
+        // import, and with it a feature of its own, fails here.
+        for (const [ fileName, expected ] of Object.entries(FIXTURE_ENTRY_POINT_IMPORTS)) {
+            const source = fs.readFileSync(path.join(FIXTURE_PROJECT_DIRECTORY, fileName), 'utf8');
+
+            assertEqual(expected.join('\n'), extractSpecifiers(source).join('\n'), fileName);
+        }
+
+        // Every listed entry point of the fixture has a list above.
+        const listed = ENTRY_POINTS
+            .filter((entry) => isInsideDirectory(FIXTURE_PROJECT_DIRECTORY, path.join(REPOSITORY_DIRECTORY, entry)))
+            .map((entry) => path.basename(entry));
+
+        assertEqual(Object.keys(FIXTURE_ENTRY_POINT_IMPORTS).sort().join(','), listed.sort().join(','));
+    });
+
+    it('keeps the fixture\'s platform-neutral files platform-neutral', () => {
+        const violations = [];
+
+        // The Cloudflare registry must load in a Worker, so nothing it
+        // reaches may need Node.js.
+        collectPlatformImports(violations, 'cloudflare-registry.generated.js', [ 'node:' ]);
+
+        // Routes and virtual hosts load on every target.
+        collectPlatformImports(violations, 'routes.generated.js', [ 'node:', 'cloudflare:' ]);
+        collectPlatformImports(violations, 'virtual-hosts.js', [ 'node:', 'cloudflare:' ]);
 
         assertEqual('', formatViolations(violations));
     });
@@ -250,7 +403,10 @@ function readCoreImports() {
 //
 // A dynamic import() isn't followed, because SPECIFIER_PATTERN doesn't
 // match one.
-function readImportGraph(entryFiles) {
+//
+// A file that `stopAt` accepts is recorded but never read, so its imports
+// aren't followed: it may import a file that doesn't exist here.
+function readImportGraph(entryFiles, stopAt = () => false) {
     const graph = new Map();
     const queue = entryFiles.map((filepath) => [ filepath ]);
 
@@ -262,7 +418,7 @@ function readImportGraph(entryFiles) {
             continue;
         }
 
-        const specifiers = extractSpecifiers(fs.readFileSync(file, 'utf8'));
+        const specifiers = stopAt(file) ? [] : extractSpecifiers(fs.readFileSync(file, 'utf8'));
         graph.set(file, { file, specifiers, chain });
 
         for (const specifier of specifiers) {
@@ -294,6 +450,39 @@ function toCorePath(filepath) {
 
 function toRepositoryPath(filepath) {
     return path.relative(REPOSITORY_DIRECTORY, filepath).split(path.sep).join('/');
+}
+
+// Adds a violation for each specifier with one of the prefixes, in any file
+// the fixture file reaches.
+function collectPlatformImports(violations, fixtureFileName, prefixes) {
+    const entryFile = path.join(FIXTURE_PROJECT_DIRECTORY, fixtureFileName);
+
+    for (const { specifiers, chain } of readImportGraph([ entryFile ])) {
+        const trail = chain.map(toRepositoryPath).join(' -> ');
+
+        for (const specifier of specifiers) {
+            if (prefixes.some((prefix) => specifier.startsWith(prefix))) {
+                violations.push({ file: trail, specifier });
+            }
+        }
+    }
+}
+
+function isInsideDirectory(directory, filepath) {
+    const relativePath = path.relative(directory, filepath);
+    return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+}
+
+function isEntryPoint(filepath) {
+    return ENTRY_POINTS.includes(toRepositoryPath(filepath));
+}
+
+function isDurableObjectShell(filepath) {
+    return isInsideCore(filepath) && DURABLE_OBJECT_SHELLS.includes(toCorePath(filepath));
+}
+
+function isCloudflareOnlyModule(filepath) {
+    return CLOUDFLARE_ONLY_MODULES.includes(toRepositoryPath(filepath));
 }
 
 function leavingModuleOf(corePath) {

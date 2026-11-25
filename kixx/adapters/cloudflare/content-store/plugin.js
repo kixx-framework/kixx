@@ -3,34 +3,52 @@
 // exception. The alternative is maintaining a wire-format constant
 // here, which would run the risk of critical drift.
 import { FORMAT } from '../../../content-addressable-store/addressing.js';
+import { assertNonEmptyString, assertNumberNotNaN } from '../../../assertions/mod.js';
 import ContentStore from './lib/content-store.js';
-// Export the Durable Object class for the Cloudflare runtime binding.
-export { default as ContentAddressableIndexStore } from './lib/content-addressable-index-store.js';
 
 
-const DEFAULTS = {
-    kvBindingName: 'CA_STORE_KV_STORE',
-    durableObjectBindingName: 'CA_STORE_DURABLE_OBJECT',
-    blobReadCacheTtlSeconds: 60 * 60 * 24,
-    indexCacheTtlSeconds: 10,
-};
+const CONFIG_PATH = 'context.config.env.CONTENT_STORE';
 
 
 export function register(context) {
     const { logger, config } = context;
-    const {
+
+    // Core's manifest gives every value here a default, merged under the
+    // project's config before boot. A missing one means the registry's
+    // defaults were not passed to readConfig().
+    const storeConfig = config?.env?.CONTENT_STORE;
+    const kvBindingName = storeConfig?.kvNamespace?.bindingName;
+    const durableObjectBindingName = storeConfig?.durableObject?.bindingName;
+    const blobReadCacheTtlSeconds = storeConfig?.blobReadCacheTtlSeconds;
+    const indexCacheTtlSeconds = storeConfig?.indexCacheTtlSeconds;
+
+    assertNonEmptyString(
         kvBindingName,
+        `cloudflare content store requires ${ CONFIG_PATH }.kvNamespace.bindingName`,
+    );
+    assertNonEmptyString(
         durableObjectBindingName,
+        `cloudflare content store requires ${ CONFIG_PATH }.durableObject.bindingName`,
+    );
+    assertNumberNotNaN(
         blobReadCacheTtlSeconds,
+        `cloudflare content store requires ${ CONFIG_PATH }.blobReadCacheTtlSeconds`,
+    );
+    assertNumberNotNaN(
         indexCacheTtlSeconds,
-    } = config.env.CONTENT_STORE ?? {};
+        `cloudflare content store requires ${ CONFIG_PATH }.indexCacheTtlSeconds`,
+    );
 
     context.registerService('ContentStore', new ContentStore({
         logger,
-        kvBindingName: kvBindingName ?? DEFAULTS.kvBindingName,
-        durableObjectBindingName: durableObjectBindingName ?? DEFAULTS.durableObjectBindingName,
+        kvBindingName,
+        durableObjectBindingName,
         wireFormat: FORMAT,
-        blobReadCacheTtlSeconds: blobReadCacheTtlSeconds ?? DEFAULTS.blobReadCacheTtlSeconds,
-        indexCacheTtlSeconds: indexCacheTtlSeconds ?? DEFAULTS.indexCacheTtlSeconds,
+        blobReadCacheTtlSeconds,
+        indexCacheTtlSeconds,
+        // The Workers scheduler is looked up when a retry waits, not when the
+        // store is built. Reading the global here, at registration, would
+        // throw wherever it doesn't exist, as in a unit test.
+        scheduler: { wait: (milliseconds) => scheduler.wait(milliseconds) },
     }));
 }

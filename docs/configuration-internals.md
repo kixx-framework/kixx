@@ -13,21 +13,27 @@ unquoted keys or single-quoted strings.
 
 ## Loading a config: `readConfig`
 
-`kixx/config/read-config.js` turns a source config module and a selected
-environment name into the frozen runtime config the application uses:
+`kixx/config/read-config.js` turns a source config and a selected
+environment name into the frozen runtime config the application uses. The
+two server modules call it. On Node.js
+(`kixx/adapters/node/server/lib/node-server.js`):
 
 ```js
-import { readConfig } from './kixx/config/read-config.js';
+import { readConfig } from '../../../../config/read-config.js';
 import { readSourceConfigFile } from './node-environment.js';
 
-const sourceConfig = readSourceConfigFile(path.join(THIS_DIRECTORY, 'node-config.jsonc'));
-const config = readConfig(sourceConfig, environment, { resolveFilepath });
+const sourceConfig = readSourceConfigFile(path.join(baseDirectory, 'node-config.jsonc'), readFile);
+const config = readConfig(sourceConfig, environment, {
+    resolveFilepath,
+    defaults: registry.configDefaults,
+});
 ```
 
 On Node.js, `readSourceConfigFile` reads the file and parses it with
-`parseJsonc`. The Cloudflare Worker has no filesystem, so it imports
-`cloudflare-config.generated.js`, which the deployment CLI writes at build
-time.
+`parseJsonc`. The Cloudflare Worker has no filesystem, so its entry point
+imports `cloudflare-config.generated.js`, which the deployment CLI writes at
+build time, and hands it to `createWorker()`
+(`kixx/adapters/cloudflare/server/lib/cloudflare-worker.js`).
 
 It throws if `config.environments` is not a plain object, or if
 `environment` does not match a key in it. The returned object is deep-frozen
@@ -36,19 +42,51 @@ environment name becomes `config.environment`, and everything else at the
 top level (like `name`) passes through unchanged. Application code reads
 settings from `config.env`, never by re-selecting from `config.environments`.
 
+**Defaults.** `options.defaults` is laid under the selected section:
+`config.env` is `deepMerge({}, defaults ?? {}, environments[environment])`
+(`kixx/utils/deep-merge.js`). Plain objects merge key by key. An array or any
+other value in the project's config replaces the default whole. So
+`config.env` is always a merged copy, never the source object.
+
+The defaults come from the manifests: core's `kixx/plugin.json` and each
+installed plugin's `plugin.json` declare them per target under
+`config.defaults`. The generator writes each target's merged defaults into
+its registry as `configDefaults`, and the server module passes them here. A
+module reads the merged value and keeps no fallback of its own. See
+`plugins/README.md`.
+
 In runtimes with a filesystem, `resolveFilepath` is attached to the frozen
 config and turns config-relative store paths into real paths.
-`createResolveFilepath` in `node-environment.js` builds it: it joins a
+`createResolveFilepath` in
+`kixx/adapters/node/server/lib/node-environment.js` builds it: it joins a
 config path's POSIX-style segments against `DATA_DIRECTORY` when set, or
-against `lib/` otherwise.
+against the project directory otherwise.
 
 ## Environment merging
 
-`node-environment.js` (`readEnvironment`, backed by
-`kixx/config/merge-environment-sources.js`) merges the dotenv file, its
-`.secrets` sibling, and `process.env`, rejecting duplicate keys.
-`kixx/config/secrets-manifest.js` parses `example.env.secrets`, and
-`readEnvironment` checks the merged result against it.
+`kixx/adapters/node/server/lib/node-environment.js` (`readEnvironment`,
+backed by `kixx/config/merge-environment-sources.js`) merges the dotenv file,
+its `.secrets` sibling, and the process environment, rejecting duplicate
+keys. The process environment is an argument (`processEnv`, default
+`process.env`), so a test passes its own. `readEnvironment` does not check
+secrets.
+
+## Declared secrets
+
+Core, each plugin, and the app declare the secrets they read in their
+manifests (`plugins/README.md`). The generator writes the names into each
+registry as `secrets` (`{ required, optional }`) and into
+`example.env.secrets`, which is generated and never edited.
+
+`bootApplication()` (`kixx/context/boot-application.js`) checks them on every
+platform, before it builds anything: `assertDeclaredSecrets(env, secrets)` in
+`kixx/config/secrets-manifest.js` throws one `OperationalError` naming every
+required secret that is not a non-empty string in the environment. It never
+prints a value. On Node.js the environment is the merged one above; on
+Cloudflare it is the Worker's bindings, checked when the module loads.
+
+`parseSecretsManifest()` in the same module parses `example.env.secrets`. No
+server module reads that file.
 
 ## Config templates
 

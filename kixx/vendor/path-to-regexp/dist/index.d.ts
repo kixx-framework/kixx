@@ -72,16 +72,12 @@ export interface Wildcard {
  */
 export interface Group {
     type: "group";
-    tokens: Token[];
+    tokens: readonly Token[];
 }
 /**
- * A token that corresponds with a regexp capture.
+ * Tokens that corresponds with a regexp capture.
  */
 export type Key = Parameter | Wildcard;
-/**
- * A sequence of `path-to-regexp` keys that match capturing groups.
- */
-export type Keys = Array<Key>;
 /**
  * A sequence of path match characters.
  */
@@ -89,10 +85,9 @@ export type Token = Text | Parameter | Wildcard | Group;
 /**
  * Tokenized path instance.
  */
-export declare class TokenData {
-    readonly tokens: Token[];
-    readonly originalPath?: string | undefined;
-    constructor(tokens: Token[], originalPath?: string | undefined);
+export interface TokenData {
+    tokens: readonly Token[];
+    originalPath?: string;
 }
 /**
  * ParseError is thrown when there is an error processing the path.
@@ -127,7 +122,7 @@ export type Match<P extends ParamData> = false | MatchResult<P>;
  */
 export type MatchFunction<P extends ParamData> = (path: string) => Match<P>;
 /**
- * Supported path types.
+ * Supported path inputs.
  */
 export type Path = string | TokenData;
 /**
@@ -139,7 +134,7 @@ export declare function match<P extends ParamData>(path: Path | Path[], options?
  */
 export declare function pathToRegexp(path: Path | Path[], options?: PathToRegexpOptions & ParseOptions): {
     regexp: RegExp;
-    keys: Keys;
+    keys: Key[];
 };
 /**
  * Stringify token data into a path string.

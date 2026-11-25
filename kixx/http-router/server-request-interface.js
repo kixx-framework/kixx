@@ -11,7 +11,7 @@
  *
  * Hostname and pathname patterns use path-to-regexp syntax: named parameters
  * are prefixed with a colon (`:id`) and wildcard parameters with an asterisk
- * (`*path`). See `lib/vendor/path-to-regexp/Readme.md`.
+ * (`*path`). See `kixx/vendor/path-to-regexp/Readme.md`.
  *
  * ## Routing core vs application conveniences
  *

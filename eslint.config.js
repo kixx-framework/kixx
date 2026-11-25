@@ -334,7 +334,8 @@ export default [
             'devkit/',
             'docs/',
             'usage-docs/',
-            'tools/',
+            // v6, knowingly broken, and never run.
+            'tools/build-test-app.js',
             'agents/',
         ],
     },
@@ -345,6 +346,7 @@ export default [
             'plugins/',
             'test/',
             'test-app/',
+            'tools/',
             'eslint.config.js',
             'run-linter.js',
             'run-tests.js',

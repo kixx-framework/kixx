@@ -1,4 +1,10 @@
-import { assert, assertArray, isString } from '../assertions/mod.js';
+import {
+    assert,
+    assertArray,
+    isNonEmptyString,
+    isObjectNotNull,
+    isString,
+} from '../assertions/mod.js';
 import { OperationalError } from '../errors/mod.js';
 
 
@@ -27,11 +33,12 @@ const OPTIONAL_DIRECTIVE = '# @optional';
  * Parses the text of a secrets manifest into the sets of required and optional
  * secret names.
  *
- * The manifest is the committed `example.env.secrets` template, which serves
- * two purposes at once: developers copy it to create a local secrets file, and
- * deployments read it as the authoritative list of secret *names* an
- * environment must provide. Only the names are meaningful here; the value
- * after `=` is a placeholder and is discarded.
+ * The manifest is `example.env.secrets`, a committed file generated from the
+ * secrets that core, the installed plugins, and the app declare in their
+ * manifests. It serves two purposes at once: developers copy it to create a
+ * local secrets file, and deployments read it as the authoritative list of
+ * secret *names* an environment must provide. Only the names are meaningful
+ * here; the value after `=` is a placeholder and is discarded.
  *
  * A comment line reading exactly `# @optional` marks the next entry optional.
  * Further comment lines may follow the directive, so it can be placed at the
@@ -148,6 +155,43 @@ export function compareSecretNames(options) {
     extra.sort();
 
     return { missing, extra };
+}
+
+/**
+ * Checks that the environment provides every secret the installed code
+ * declares as required. It runs at boot on every platform, so a deployment
+ * that lacks a secret fails at once, not on the first request that reads it.
+ *
+ * A required name is missing when its value in `env` is not a non-empty
+ * string. Optional names are never checked. Every missing name is reported in
+ * one error, and the message holds names only: never a value, and never the
+ * name of a secret that is present.
+ *
+ * @param {Object} env - Environment variables, secrets, and platform bindings
+ * @param {SecretsManifest} secrets - The declared secret names
+ * @returns {void}
+ * @throws {OperationalError} When one or more required secrets are missing
+ */
+export function assertDeclaredSecrets(env, secrets) {
+    const { required, optional } = secrets ?? {};
+
+    assert(isObjectNotNull(env), 'assertDeclaredSecrets: env must be an object');
+    assertArray(required, 'assertDeclaredSecrets: secrets.required');
+    assertArray(optional, 'assertDeclaredSecrets: secrets.optional');
+
+    const missing = required.filter((name) => !isNonEmptyString(env[name]));
+
+    if (missing.length === 0) {
+        return;
+    }
+
+    missing.sort();
+
+    throw new OperationalError(
+        `Missing required environment secrets: ${ missing.join(', ') }. Every declared secret is listed in example.env.secrets.`,
+        {},
+        assertDeclaredSecrets,
+    );
 }
 
 // A blank line and the end of the file are one condition, not two: a file
