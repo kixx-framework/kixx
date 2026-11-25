@@ -226,7 +226,7 @@ export default {
 
 A child pattern of `/` matches `<mount>/` only. Use `{/}` for the mount path itself.
 
-`routes.generated.js` exports every plugin's routes as one list, `pluginRoutes`. Its order is the plugins' lifecycle order; within a plugin, the manifest's own routes, then the routes it contributes through `whenInstalled`. The project decides where the list goes, in its own `virtual-hosts.js`:
+`routes.generated.js` exports every plugin's routes as one list, `pluginRoutes`. Core's routes come first: core mounts the Publishing API at `/publishing-api/v1`, behind the deploy key (see `usage-docs/kixx-app/publishing-api.md`), so no plugin may use that mount or the name `publishing-api`. Then come the plugins, in lifecycle order; within a plugin, the manifest's own routes, then the routes it contributes through `whenInstalled`. The project decides where the list goes, in its own `virtual-hosts.js`:
 
 ```js
 import { pluginRoutes } from './routes.generated.js';

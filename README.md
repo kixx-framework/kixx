@@ -81,7 +81,7 @@ Kixx Core
 
 Kixx core lives in `kixx/`. When we say "Kixx", we mean core (not `devkit/`). It is vendored into each project as `kixx/`, so it never imports anything outside itself.
 
-- Modules - HTTP routing, server-rendered HTML pages and templates, data storage (key/value and published content), logging, and configuration.
+- Modules - HTTP routing, server-rendered HTML pages and templates, data storage (key/value and published content), the Publishing API and its deploy key, logging, and configuration.
 - `adapters/` - Connectors that run the same app on Node.js (`node/`, which Deno also uses) or Cloudflare (`cloudflare/`). Your app code doesn't change between platforms.
 
 A plugin is a directory in `plugins/` with a manifest, `plugin.json`. Core has one too (`kixx/plugin.json`). From the installed manifests a generator writes registries, which wire core and the plugins into each platform's entry point, so adding a plugin never edits an entry point. The registries are committed. See [plugins/README.md](plugins/README.md). No plugin ships yet.
