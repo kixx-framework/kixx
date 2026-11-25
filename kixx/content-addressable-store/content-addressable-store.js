@@ -19,12 +19,29 @@ import {
     normalizePathname,
     isValidPathname,
 } from './content-layout.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from './content-store-interface.js';
-import { assert, assertNonEmptyString, isString } from '../assertions/mod.js';
+import { BUILD_ASSIGNMENT_OUTCOME, RELEASE_RECORD_OUTCOME } from './content-store-interface.js';
+import {
+    normalizeActivation,
+    normalizeActor,
+    normalizeCodeInfo,
+    validateReleaseProvenance,
+} from './publishing-history.js';
+import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject, isString } from '../assertions/mod.js';
 import { ConflictError, NotFoundError, OperationalError, ValidationError } from '../errors/mod.js';
 
 const BULK_FILE_LIMIT = 100;
 const MISSING_OBJECT_REPORT_LIMIT = 1000;
+
+const ASSIGNMENT_KEYS = [
+    'releaseId',
+    'expectedAssignmentId',
+    'reason',
+    'actor',
+    'sourceRevision',
+    'summary',
+    'forceReason',
+    'code',
+];
 
 /**
  * Version of the published content semantics this runtime supports.
@@ -47,8 +64,17 @@ export const CONTENT_CONTRACT_VERSION = 2;
  *
  * This class owns the Release lifecycle against that model:
  *
- * - {@link ContentAddressableStore#createRelease} verifies and persists a closure.
- * - {@link ContentAddressableStore#assignRelease} points a build id at it.
+ * - {@link ContentAddressableStore#createRelease} verifies and persists a
+ *   closure, then records the Release: who created it, when, its size, and
+ *   its provenance. The first record for a Release is kept.
+ * - {@link ContentAddressableStore#assignRelease} points a build id at it. The
+ *   store appends an Activation in the same atomic write that moves the
+ *   pointer, so every changed assignment has a history entry and a failed one
+ *   has neither.
+ * - {@link ContentAddressableStore#getRelease},
+ *   {@link ContentAddressableStore#listReleases}, and
+ *   {@link ContentAddressableStore#listActivations} read that history, newest
+ *   first.
  * - {@link ContentAddressableStore#openSnapshot} resolves a build id to the
  *   closure it names and returns a {@link ContentSnapshot} for reading it.
  * - {@link ContentAddressableStore#getStaticAssetByHash} reads an asset blob by
@@ -275,7 +301,7 @@ export default class ContentAddressableStore {
      * Reads pointer metadata for any build without loading its Release closure.
      * @param {Object} context - Request or execution context
      * @param {string} buildId - Operator-chosen build identifier
-     * @returns {Promise<Object|null>} Pointer metadata or null when unassigned
+     * @returns {Promise<Object|null>} Pointer metadata, with the build's code info, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentAddressableStore#getBuildPointer: buildId');
@@ -294,18 +320,39 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Assigns an existing Release to any build using an optional assignment identity precondition.
+     * Assigns an existing Release to any build and records the Activation.
+     *
+     * The pointer and its Activation are written together by the store. An
+     * assignment which changes nothing writes no Activation.
      * @param {Object} context - Request or execution context
      * @param {string} buildId - Build identifier to assign
-     * @param {Object} assignment - Release and assignment precondition
+     * @param {Object} assignment - Release, precondition, and what to record
      * @param {string} assignment.releaseId - Existing Release id
      * @param {(string|null)} [assignment.expectedAssignmentId] - Expected assignment identity, null for unassigned, or absent for unconditional
-     * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, assignmentId: string, isChanged: boolean, previousReleaseId: (string|null)}>} Assignment result
+     * @param {('publish'|'rollback'|'carry-forward'|'restore')} assignment.reason - Why the assignment is changing
+     * @param {{type: ('deploy-key'|'user'), id: string, name?: string}} assignment.actor - Who is changing it
+     * @param {string} [assignment.sourceRevision] - Source revision the content was published from
+     * @param {string} [assignment.summary] - Plain-language summary of the change
+     * @param {string} [assignment.forceReason] - Why a publish gate was overridden
+     * @param {{revision: string, fingerprint: string}} [assignment.code] - The build's code info; set once per build
+     * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, assignmentId: string, isChanged: boolean, previousReleaseId: (string|null), code: ({revision: string, fingerprint: string}|null)}>} Assignment result
      * @throws {NotFoundError} When the Release does not exist
-     * @throws {ConflictError} When the assignment precondition fails
+     * @throws {ConflictError} With code `BuildPointerConflict` when the assignment precondition fails,
+     *   or `BuildCodeMismatch` when the build already has different code info
+     * @throws {OperationalError} When the backing store fails; nothing was written
      */
     async assignRelease(context, buildId, assignment) {
-        const { releaseId, expectedAssignmentId } = assignment ?? {};
+        const {
+            releaseId,
+            expectedAssignmentId,
+            reason,
+            actor,
+            sourceRevision,
+            summary,
+            forceReason,
+            code,
+        } = assignment ?? {};
+
         assertNonEmptyString(buildId, 'ContentAddressableStore#assignRelease: buildId');
         assertNonEmptyString(releaseId, 'ContentAddressableStore#assignRelease: releaseId');
         // A removed precondition must never silently become an unconditional write.
@@ -315,17 +362,35 @@ export default class ContentAddressableStore {
             'ContentAddressableStore#assignRelease: expectedAssignmentId',
         );
 
+        // A misspelled field must never be silently left out of the history.
+        for (const key of Object.keys(assignment)) {
+            assert(ASSIGNMENT_KEYS.includes(key), `ContentAddressableStore#assignRelease: assignment has an unknown key "${ key }"`);
+        }
+
+        const activation = normalizeActivation(
+            { reason, actor, sourceRevision, summary, forceReason },
+            'ContentAddressableStore#assignRelease: assignment',
+        );
+        const codeInfo = normalizeCodeInfo(code, 'ContentAddressableStore#assignRelease: assignment.code');
+
         this.#logger.info('assign-release assign-build', { buildId });
         const result = await this.#store.assignBuild(context, buildId, {
             rootHash: releaseId,
             expectedAssignmentId,
+            activation,
+            code: codeInfo,
         });
+
         if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE) {
             throw new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
         }
         if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.CONFLICT) {
             throw new ConflictError('The build assignment precondition failed.', { code: 'BuildPointerConflict' });
         }
+        if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.CODE_MISMATCH) {
+            throw new ConflictError('The build already has a different code revision or fingerprint.', { code: 'BuildCodeMismatch' });
+        }
+
         assert(
             result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED
                 || result.outcome === BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
@@ -335,6 +400,8 @@ export default class ContentAddressableStore {
         assert(isString(result.pointer.assignedAt), 'ContentAddressableStore#assignRelease: assignment result assignedAt');
         assert(isValidAssignmentId(result.pointer.assignmentId), 'ContentAddressableStore#assignRelease: assignment result assignmentId');
         assert(result.previousRootHash === null || isValidHash(result.previousRootHash), 'ContentAddressableStore#assignRelease: assignment result previousRootHash');
+        assert(isValidCodeInfoResult(result.pointer.code), 'ContentAddressableStore#assignRelease: assignment result code');
+
         return {
             buildId,
             releaseId: result.pointer.rootHash,
@@ -342,7 +409,24 @@ export default class ContentAddressableStore {
             assignmentId: result.pointer.assignmentId,
             isChanged: result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
             previousReleaseId: result.previousRootHash,
+            code: result.pointer.code,
         };
+    }
+
+    /**
+     * Lists Activations newest first: one build's, or every build's.
+     * @param {Object} context - Request or execution context
+     * @param {Object} [options] - Paging and an optional build filter
+     * @param {string} [options.buildId] - List this build's Activations only
+     * @param {number} [options.limit=100] - Page size, from 1 to 100
+     * @param {(string|null)} [options.cursor] - The `cursor` of an earlier page
+     * @returns {Promise<{items: Object[], cursor: (string|null)}>} A page; `cursor` is null on the last one
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     */
+    async listActivations(context, options) {
+        this.#logger.info('list-activations', { buildId: options?.buildId ?? null });
+        const { items, cursor } = await this.#store.listActivations(context, options);
+        return { items, cursor };
     }
 
     /**
@@ -412,20 +496,78 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Verifies and persists an immutable Release without assigning a build.
+     * Verifies and persists an immutable Release and records it, without
+     * assigning a build.
+     *
+     * Creating the same content again changes nothing and returns the first
+     * record, whoever asks and whatever provenance they send.
      * @param {Object} context - Request or execution context
      * @param {Object} manifest - Complete Release manifest
-     * @param {Object} [_options] - Reserved creation options
-     * @returns {Promise<Object>} Release identity and aggregate statistics
-     * @throws {ValidationError} When the manifest, referenced objects, or structured payloads are invalid
+     * @param {Object} options - Who is creating the Release, and from what
+     * @param {{type: ('deploy-key'|'user'), id: string, name?: string}} options.createdBy - Who is creating it
+     * @param {Object} [options.provenance] - Optional `sourceRevision`, `message`, `client`, and `intendedForBuildId`
+     * @returns {Promise<{releaseId: string, createdAt: string, createdBy: Object, objectCount: number, totalBytes: number, contractVersion: number, provenance: Object}>} The stored Release record
+     * @throws {ValidationError} When the provenance, the manifest, referenced objects, or structured payloads are invalid
      */
-    async createRelease(context, manifest, _options) {
+    async createRelease(context, manifest, options) {
+        const { createdBy, provenance = {} } = options ?? {};
+
+        // Both are checked before anything is read or written.
+        const actor = normalizeActor(createdBy, 'ContentAddressableStore#createRelease: options.createdBy');
+        validateReleaseProvenance(provenance);
+
         const prepared = await this.#prepareRelease(context, manifest);
         for (const generated of prepared.generatedObjects) {
             await this.#store.putFile(context, generated.pathname, generated.hash, generated.text);
         }
         await this.#store.saveIndex(context, prepared.releaseId, prepared.entries);
-        return releaseResult(prepared);
+
+        // A failure before this call leaves a closure with no record. It is
+        // inert, and creating the Release again repairs it.
+        this.#logger.info('create-release record-release', { releaseId: prepared.releaseId });
+        const result = await this.#store.recordRelease(context, {
+            ...releaseResult(prepared),
+            createdBy: actor,
+            provenance,
+        });
+
+        assert(
+            result.outcome === RELEASE_RECORD_OUTCOME.CREATED || result.outcome === RELEASE_RECORD_OUTCOME.EXISTS,
+            'ContentAddressableStore#createRelease: unexpected Release record result',
+        );
+        assert(
+            isPlainObject(result.record) && result.record.releaseId === prepared.releaseId,
+            'ContentAddressableStore#createRelease: Release record result record',
+        );
+
+        return result.record;
+    }
+
+    /**
+     * Reads one Release record.
+     * @param {Object} context - Request or execution context
+     * @param {string} releaseId - Release root hash
+     * @returns {Promise<Object|null>} The record, or null when no Release was recorded under the id
+     */
+    async getRelease(context, releaseId) {
+        assertNonEmptyString(releaseId, 'ContentAddressableStore#getRelease: releaseId');
+        this.#logger.info('get-release', { releaseId });
+        return await this.#store.getRelease(context, releaseId);
+    }
+
+    /**
+     * Lists Release records newest first.
+     * @param {Object} context - Request or execution context
+     * @param {Object} [options] - Paging
+     * @param {number} [options.limit=100] - Page size, from 1 to 100
+     * @param {(string|null)} [options.cursor] - The `cursor` of an earlier page
+     * @returns {Promise<{items: Object[], cursor: (string|null)}>} A page; `cursor` is null on the last one
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     */
+    async listReleases(context, options) {
+        this.#logger.info('list-releases');
+        const { items, cursor } = await this.#store.listReleases(context, options);
+        return { items, cursor };
     }
 
     /**
@@ -538,6 +680,11 @@ async function makeGeneratedObject(pathname, text) {
 function releaseResult(prepared) {
     const { releaseId, objectCount, totalBytes, contractVersion } = prepared;
     return { releaseId, objectCount, totalBytes, contractVersion };
+}
+
+function isValidCodeInfoResult(code) {
+    return code === null
+        || (isPlainObject(code) && isNonEmptyString(code.revision) && isNonEmptyString(code.fingerprint));
 }
 
 function getStructuredKind(pathname) {

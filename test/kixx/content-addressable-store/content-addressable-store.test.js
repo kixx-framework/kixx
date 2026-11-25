@@ -1,20 +1,32 @@
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 import ContentAddressableStore, { CONTENT_CONTRACT_VERSION } from '../../../kixx/content-addressable-store/content-addressable-store.js';
+import { BadRequestError, OperationalError } from '../../../kixx/errors/mod.js';
 import { CONTENT_CONTRACT_PATH } from '../../../kixx/content-addressable-store/content-layout.js';
 import ContentAddressableIndex from '../../../kixx/content-addressable-store/content-addressable-index.js';
 
+const DEPLOY_KEY = Object.freeze({ type: 'deploy-key', id: 'test-key' });
+
+// A double of the content store port, enough to serve the service's own
+// logic. What an adapter must do is the conformance suite's job.
 function makeContentStore() {
     const blobs = new Map();
     const closures = new Map();
     const builds = new Map();
+    const releases = new Map();
+    const activations = [];
     const calls = [];
+    const received = [];
     let saveCount = 0;
     return {
         blobs,
         closures,
         builds,
+        releases,
+        activations,
         calls,
+        // The arguments of each publishing call, without the context.
+        received,
         get saveCount() {
             return saveCount;
         },
@@ -24,6 +36,7 @@ function makeContentStore() {
             return typeof payload === 'string' ? new TextEncoder().encode(payload).byteLength : payload.byteLength;
         },
         async statFiles(_context, hashes) {
+            calls.push('statFiles');
             return hashes.map((hash) => {
                 const payload = blobs.get(hash);
                 if (payload === undefined) {
@@ -33,6 +46,7 @@ function makeContentStore() {
             });
         },
         async getFiles(_context, _type, files) {
+            calls.push('getFiles');
             return files.map(({ hash }) => blobs.get(hash) ?? null);
         },
         async getFile(_context, _type, _pathname, hash) {
@@ -40,12 +54,14 @@ function makeContentStore() {
             return blobs.get(hash) ?? null;
         },
         async saveIndex(_context, rootHash, entries) {
+            calls.push('saveIndex');
             if (!closures.has(rootHash)) {
                 saveCount += 1;
                 closures.set(rootHash, entries);
             }
         },
         async getIndex(_context, rootHash) {
+            calls.push('getIndex');
             return closures.get(rootHash) ?? null;
         },
         async getBuild(_context, buildId) {
@@ -54,13 +70,44 @@ function makeContentStore() {
             return rootHash ? { rootHash, entries: closures.get(rootHash) } : null;
         },
         async getBuildPointer(_context, buildId) {
+            calls.push('getBuildPointer');
             return builds.get(buildId) ?? null;
         },
         async listBuilds() {
+            calls.push('listBuilds');
             return [ ...builds ].map(([ buildId, pointer ]) => ({ buildId, ...pointer }));
+        },
+        async recordRelease(_context, release) {
+            calls.push('recordRelease');
+            received.push({ method: 'recordRelease', args: [ release ] });
+            if (!closures.has(release.releaseId)) {
+                return { outcome: 'missingClosure' };
+            }
+            if (releases.has(release.releaseId)) {
+                return { outcome: 'exists', record: releases.get(release.releaseId) };
+            }
+            const record = { ...release, createdAt: '2026-09-01T00:00:00.000Z' };
+            releases.set(release.releaseId, record);
+            return { outcome: 'created', record };
+        },
+        async getRelease(_context, releaseId) {
+            calls.push('getRelease');
+            received.push({ method: 'getRelease', args: [ releaseId ] });
+            return releases.get(releaseId) ?? null;
+        },
+        async listReleases(_context, options) {
+            calls.push('listReleases');
+            received.push({ method: 'listReleases', args: [ options ] });
+            return { items: [ ...releases.values() ].reverse(), cursor: null };
+        },
+        async listActivations(_context, options) {
+            calls.push('listActivations');
+            received.push({ method: 'listActivations', args: [ options ] });
+            return { items: activations.toReversed(), cursor: null };
         },
         async assignBuild(_context, buildId, assignment) {
             calls.push('assignBuild');
+            received.push({ method: 'assignBuild', args: [ buildId, assignment ] });
             if (!closures.has(assignment.rootHash)) {
                 return { outcome: 'missingClosure' };
             }
@@ -75,8 +122,21 @@ function makeContentStore() {
                     previousRootHash: current.rootHash,
                 };
             }
-            const pointer = { rootHash: assignment.rootHash, assignedAt: '2026-09-01T00:00:00.000Z', assignmentId: crypto.randomUUID() };
+            const pointer = {
+                rootHash: assignment.rootHash,
+                assignedAt: '2026-09-01T00:00:00.000Z',
+                assignmentId: crypto.randomUUID(),
+                code: current?.code ?? assignment.code ?? null,
+            };
             builds.set(buildId, pointer);
+            activations.push({
+                buildId,
+                assignmentId: pointer.assignmentId,
+                fromReleaseId: current?.rootHash ?? null,
+                toReleaseId: pointer.rootHash,
+                activatedAt: pointer.assignedAt,
+                ...assignment.activation,
+            });
             return { outcome: 'assigned', pointer, previousRootHash: current?.rootHash ?? null };
         },
     };
@@ -84,25 +144,39 @@ function makeContentStore() {
 
 function makeLogger() {
     const errors = [];
-    const noop = () => {};
+    const entries = [];
+    const record = (level) => (message, info) => {
+        entries.push({ level, message, info });
+    };
     const child = {
-        debug: noop,
-        info: noop,
-        warn: noop,
+        debug: record('debug'),
+        info: record('info'),
+        warn: record('warn'),
         error(message, info) {
+            entries.push({ level: 'error', message, info });
             errors.push({ message, info });
         },
         createChild: () => child,
     };
-    return { logger: { createChild: () => child }, errors };
+    return { logger: { createChild: () => child }, errors, entries };
 }
 
 function makeStore() {
     const contentStore = makeContentStore();
     const store = new ContentAddressableStore();
-    const { logger, errors } = makeLogger();
+    const { logger, errors, entries } = makeLogger();
     store.initialize({ logger, contentStore });
-    return { store, contentStore, errors };
+    return { store, contentStore, errors, logEntries: entries };
+}
+
+// The arguments every createRelease() call needs.
+function creation(fields) {
+    return { createdBy: DEPLOY_KEY, ...fields };
+}
+
+// The arguments every assignRelease() call needs.
+function assignment(fields) {
+    return { reason: 'publish', actor: DEPLOY_KEY, ...fields };
 }
 
 async function catchAsyncError(fn) {
@@ -129,7 +203,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const caught = await catchAsyncError(() => store.createRelease({}, { staticAssets: {
                 '/a': { objectId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', size: 1 },
                 '/b': { objectId: 'bbbbbbbbbbbbbbbbbbbbbbbbbb', size: 2 },
-            } }));
+            } }, creation()));
             assertEqual('ValidationError', caught.name);
             assertEqual(2, caught.errors.length);
             assertEqual(0, contentStore.closures.size);
@@ -140,7 +214,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const object = await uploadText(store, 'abc');
             const caught = await catchAsyncError(() => store.createRelease({}, {
                 staticAssets: { '/a': { objectId: object.objectId, size: 99 } },
-            }));
+            }, creation()));
             assertEqual('ValidationError', caught.name);
             assertEqual(0, contentStore.closures.size);
         });
@@ -164,7 +238,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
 
             const validated = await store.validateRelease({}, manifest);
             assertEqual(0, contentStore.closures.size);
-            const created = await store.createRelease({}, manifest);
+            const created = await store.createRelease({}, manifest, creation());
             assertEqual(validated.releaseId, created.releaseId);
             assertEqual(1, contentStore.closures.size);
         });
@@ -177,7 +251,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const manifest = { pages: { '/': { templates: { 'page.html': template } } } };
 
             await store.validateRelease({}, manifest);
-            await store.createRelease({}, manifest);
+            await store.createRelease({}, manifest, creation());
 
             assertEqual(0, getFiles.mock.callCount());
             tracker.reset();
@@ -196,7 +270,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const blobCount = contentStore.blobs.size;
 
             for (const method of [ 'validateRelease', 'createRelease' ]) {
-                const caught = await catchAsyncError(() => store[method]({}, manifest));
+                const caught = await catchAsyncError(() => store[method]({}, manifest, creation()));
                 assert(caught, 'expected validation to fail');
                 assertEqual('ValidationError', caught.name);
                 assertEqual(102, caught.errors.length);
@@ -231,8 +305,8 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const { store, contentStore } = makeStore();
             const object = await uploadText(store, 'abc');
             const manifest = { staticAssets: { '/a': object } };
-            const first = await store.createRelease({}, manifest);
-            const second = await store.createRelease({}, manifest);
+            const first = await store.createRelease({}, manifest, creation());
+            const second = await store.createRelease({}, manifest, creation());
             assertEqual(first.releaseId, second.releaseId);
             assertEqual(1, contentStore.saveCount);
             assertEqual(
@@ -240,62 +314,429 @@ describe('ContentAddressableStore', ({ describe, it }) => {
                 JSON.stringify(await store.getReleaseManifest({}, first.releaseId)),
             );
         });
+
+        it('returns the stored Release record', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const manifest = { staticAssets: { '/a': object } };
+            const validated = await store.validateRelease({}, manifest);
+            const createdBy = { type: 'user', id: 'user-1', name: 'Ada' };
+            const provenance = { sourceRevision: 'abc123', message: 'First publish' };
+
+            const record = await store.createRelease({}, manifest, { createdBy, provenance });
+
+            assertEqual(
+                'contractVersion,createdAt,createdBy,objectCount,provenance,releaseId,totalBytes',
+                Object.keys(record).sort().join(),
+            );
+            assertEqual(validated.releaseId, record.releaseId);
+            assertEqual('2026-09-01T00:00:00.000Z', record.createdAt);
+            assertEqual(JSON.stringify(createdBy), JSON.stringify(record.createdBy));
+            assertEqual(1, record.objectCount);
+            assertEqual(3, record.totalBytes);
+            assertEqual(CONTENT_CONTRACT_VERSION, record.contractVersion);
+            assertEqual(JSON.stringify(provenance), JSON.stringify(record.provenance));
+
+            // The record is written last, after the closure it names.
+            assertEqual('saveIndex,recordRelease', contentStore.calls.slice(-2).join());
+            assertEqual(1, contentStore.releases.size);
+        });
+
+        it('records an actor without a name and empty provenance by default', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+
+            const record = await store.createRelease({}, { staticAssets: { '/a': object } }, { createdBy: DEPLOY_KEY });
+
+            assertEqual(null, record.createdBy.name);
+            assertEqual('{}', JSON.stringify(record.provenance));
+            const [ input ] = contentStore.received.find(({ method }) => method === 'recordRelease').args;
+            assertEqual(
+                'contractVersion,createdBy,objectCount,provenance,releaseId,totalBytes',
+                Object.keys(input).sort().join(),
+            );
+        });
+
+        // CONT-3: a repeated Release keeps its first record.
+        it('preserves the first record when identical content is recreated', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const manifest = { staticAssets: { '/a': object } };
+            const first = await store.createRelease({}, manifest, {
+                createdBy: { type: 'user', id: 'user-1' },
+                provenance: { sourceRevision: 'first' },
+            });
+            const putsAfterFirst = contentStore.calls.filter((call) => call === 'putFile').length;
+            const savesAfterFirst = contentStore.calls.filter((call) => call === 'saveIndex').length;
+
+            const second = await store.createRelease({}, manifest, {
+                createdBy: { type: 'deploy-key', id: 'other-key' },
+                provenance: { sourceRevision: 'second' },
+            });
+
+            assertEqual(JSON.stringify(first), JSON.stringify(second));
+            assertEqual('user-1', second.createdBy.id);
+            assertEqual('first', second.provenance.sourceRevision);
+            assertEqual(1, contentStore.releases.size);
+
+            // The generated objects and the closure are still written on each call.
+            assertEqual(putsAfterFirst + 2, contentStore.calls.filter((call) => call === 'putFile').length);
+            assertEqual(savesAfterFirst + 1, contentStore.calls.filter((call) => call === 'saveIndex').length);
+            assertEqual(1, contentStore.saveCount);
+        });
+
+        it('rejects invalid provenance before reading or writing content', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const manifest = { staticAssets: { '/a': object } };
+            const callCount = contentStore.calls.length;
+
+            const unknown = await catchAsyncError(() => store.createRelease({}, manifest, creation({
+                provenance: { branch: 'main', author: 'Ada' },
+            })));
+            assertEqual('ValidationError', unknown.name);
+            assertEqual('provenance.branch,provenance.author', unknown.errors.map(({ source }) => source).join());
+
+            const tooLong = await catchAsyncError(() => store.createRelease({}, manifest, creation({
+                provenance: { message: 'm'.repeat(2001) },
+            })));
+            assertEqual('ValidationError', tooLong.name);
+            assertEqual('provenance.message', tooLong.errors[0].source);
+
+            const notAnObject = await catchAsyncError(() => store.createRelease({}, manifest, creation({
+                provenance: null,
+            })));
+            assertEqual('ValidationError', notAnObject.name);
+
+            assertEqual(callCount, contentStore.calls.length);
+        });
+
+        it('rejects a missing or malformed creator before reading or writing content', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const manifest = { staticAssets: { '/a': object } };
+            const callCount = contentStore.calls.length;
+
+            const badOptions = [
+                undefined,
+                {},
+                { createdBy: 'token-1' },
+                { createdBy: { type: 'robot', id: 'r2' } },
+                { createdBy: { type: 'user', id: '' } },
+                { createdBy: { type: 'user', id: 'user-1', nmae: 'Ada' } },
+            ];
+
+            for (const options of badOptions) {
+                const caught = await catchAsyncError(() => store.createRelease({}, manifest, options));
+                assertEqual('AssertionError', caught.name);
+                assert(caught.message.startsWith('ContentAddressableStore#createRelease: options.createdBy'));
+            }
+
+            assertEqual(callCount, contentStore.calls.length);
+        });
+
+        it('asserts when the store reports no closure for the Release it just saved', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            contentStore.recordRelease = async () => ({ outcome: 'missingClosure' });
+
+            const caught = await catchAsyncError(() => store.createRelease({}, { staticAssets: { '/a': object } }, creation()));
+
+            assertEqual('AssertionError', caught.name);
+        });
+
+        it('lets a failed Release record write propagate', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const failure = new OperationalError('index unavailable');
+            contentStore.recordRelease = async () => {
+                throw failure;
+            };
+
+            const caught = await catchAsyncError(() => store.createRelease({}, { staticAssets: { '/a': object } }, creation()));
+
+            assertEqual(failure, caught);
+        });
+
+        it('never logs who created a Release or its provenance', async () => {
+            const { store, logEntries } = makeStore();
+            const object = await uploadText(store, 'abc');
+
+            await store.createRelease({}, { staticAssets: { '/a': object } }, {
+                createdBy: { type: 'user', id: 'user-1', name: 'Private Name' },
+                provenance: { message: 'Private message' },
+            });
+
+            const text = JSON.stringify(logEntries);
+            assertEqual(false, text.includes('Private Name'));
+            assertEqual(false, text.includes('Private message'));
+            assertEqual(1, logEntries.filter(({ message }) => message.startsWith('create-release')).length);
+        });
+    });
+
+    describe('history reads', ({ it }) => {
+        it('gets a Release record, or null when none was recorded', async () => {
+            const { store } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const record = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+
+            assertEqual(JSON.stringify(record), JSON.stringify(await store.getRelease({}, record.releaseId)));
+            assertEqual(null, await store.getRelease({}, 'aaaaaaaaaaaaaaaaaaaaaaaaaa'));
+
+            const caught = await catchAsyncError(() => store.getRelease({}, ''));
+            assertEqual('AssertionError', caught.name);
+        });
+
+        it('passes Release paging through and returns the page', async () => {
+            const { store, contentStore } = makeStore();
+            const context = {};
+            const options = { limit: 2, cursor: '7' };
+            const items = [ { releaseId: 'b' }, { releaseId: 'a' } ];
+            const received = [];
+            contentStore.listReleases = async (...args) => {
+                received.push(args);
+                return { items, cursor: '5' };
+            };
+
+            const page = await store.listReleases(context, options);
+
+            assertEqual(1, received.length);
+            assertEqual(context, received[0][0]);
+            assertEqual(options, received[0][1]);
+            assertEqual('cursor,items', Object.keys(page).sort().join());
+            assertEqual(items, page.items);
+            assertEqual('5', page.cursor);
+        });
+
+        it('passes Activation paging and the build filter through and returns the page', async () => {
+            const { store, contentStore } = makeStore();
+            const options = { buildId: 'build-1', limit: 1, cursor: '3' };
+            const items = [ { buildId: 'build-1' } ];
+            const received = [];
+            contentStore.listActivations = async (...args) => {
+                received.push(args);
+                return { items, cursor: null };
+            };
+
+            const page = await store.listActivations({}, options);
+            await store.listActivations({});
+
+            assertEqual(options, received[0][1]);
+            assertEqual(undefined, received[1][1]);
+            assertEqual('cursor,items', Object.keys(page).sort().join());
+            assertEqual(items, page.items);
+            assertEqual(null, page.cursor);
+        });
+
+        it('lets an invalid cursor error from the store propagate unchanged', async () => {
+            const { store, contentStore } = makeStore();
+            const failure = new BadRequestError('The cursor is invalid.', { code: 'InvalidCursor' });
+            const reject = async () => {
+                throw failure;
+            };
+            contentStore.listReleases = reject;
+            contentStore.listActivations = reject;
+
+            assertEqual(failure, await catchAsyncError(() => store.listReleases({}, { cursor: 'x' })));
+            assertEqual(failure, await catchAsyncError(() => store.listActivations({}, { cursor: 'x' })));
+        });
     });
 
     describe('assignment', ({ it }) => {
         it('assigns to a non-running unassigned build and retries as a no-op', async () => {
             const { store } = makeStore();
             const object = await uploadText(store, 'abc');
-            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            const pointer = await store.assignRelease({}, 'future', { releaseId: release.releaseId, expectedAssignmentId: null });
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            const pointer = await store.assignRelease({}, 'future', assignment({ releaseId: release.releaseId, expectedAssignmentId: null }));
             assertEqual(release.releaseId, pointer.releaseId);
-            const unchanged = await store.assignRelease({}, 'future', { releaseId: release.releaseId, expectedAssignmentId: pointer.assignmentId });
+            const unchanged = await store.assignRelease({}, 'future', assignment({ releaseId: release.releaseId, expectedAssignmentId: pointer.assignmentId }));
             assertEqual(false, unchanged.isChanged);
             assertEqual(release.releaseId, unchanged.previousReleaseId);
         });
 
         it('rejects the removed precondition argument instead of writing unconditionally', async () => {
             const { store, contentStore } = makeStore();
-            const caught = await catchAsyncError(() => store.assignRelease({}, 'build', {
+            const caught = await catchAsyncError(() => store.assignRelease({}, 'build', assignment({
                 releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', precondition: null,
-            }));
+            })));
             assertEqual('AssertionError', caught.name);
             assertEqual(0, contentStore.calls.length);
         });
 
         it('translates missing Releases and stale pointers', async () => {
             const { store } = makeStore();
-            const missing = await catchAsyncError(() => store.assignRelease({}, 'build', { releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa' }));
+            const missing = await catchAsyncError(() => store.assignRelease({}, 'build', assignment({ releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa' })));
             assertEqual('ReleaseNotFound', missing.code);
             const object = await uploadText(store, 'abc');
-            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            const conflict = await catchAsyncError(() => store.assignRelease({}, 'build', {
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            const conflict = await catchAsyncError(() => store.assignRelease({}, 'build', assignment({
                 releaseId: release.releaseId,
                 expectedAssignmentId: crypto.randomUUID(),
-            }));
+            })));
             assertEqual('BuildPointerConflict', conflict.code);
         });
 
         it('uses the captured assignment result without reading the pointer again', async () => {
             const { store, contentStore } = makeStore();
             const object = await uploadText(store, 'abc');
-            const first = await store.createRelease({}, { staticAssets: { '/first': object } });
-            const second = await store.createRelease({}, { staticAssets: { '/second': object } });
+            const first = await store.createRelease({}, { staticAssets: { '/first': object } }, creation());
+            const second = await store.createRelease({}, { staticAssets: { '/second': object } }, creation());
             contentStore.assignBuild = async () => ({
                 outcome: 'assigned',
-                pointer: { rootHash: first.releaseId, assignedAt: '2020-01-01T00:00:00.000Z', assignmentId: '00000000-0000-4000-8000-000000000001' },
+                pointer: { rootHash: first.releaseId, assignedAt: '2020-01-01T00:00:00.000Z', assignmentId: '00000000-0000-4000-8000-000000000001', code: null },
                 previousRootHash: null,
             });
             contentStore.getBuildPointer = async () => {
                 throw new Error(`later assignment to ${ second.releaseId }`);
             };
 
-            const result = await store.assignRelease({}, 'build', { releaseId: first.releaseId });
+            const result = await store.assignRelease({}, 'build', assignment({ releaseId: first.releaseId }));
 
             assertEqual(first.releaseId, result.releaseId);
             assertEqual('2020-01-01T00:00:00.000Z', result.assignedAt);
             assertEqual(true, result.isChanged);
             assertEqual(null, result.previousReleaseId);
+        });
+
+        it('passes the Activation and code info to the store and returns the code', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            const code = { revision: 'rev-1', fingerprint: 'print-1' };
+
+            const result = await store.assignRelease({}, 'build', {
+                releaseId: release.releaseId,
+                expectedAssignmentId: null,
+                reason: 'rollback',
+                actor: { type: 'user', id: 'user-1', name: 'Ada' },
+                sourceRevision: 'abc123',
+                summary: 'Fix the footer',
+                forceReason: 'Emergency',
+                code,
+            });
+
+            const [ buildId, sent ] = contentStore.received.find(({ method }) => method === 'assignBuild').args;
+            assertEqual('build', buildId);
+            assertEqual('activation,code,expectedAssignmentId,rootHash', Object.keys(sent).sort().join());
+            assertEqual(release.releaseId, sent.rootHash);
+            assertEqual(null, sent.expectedAssignmentId);
+            assertEqual(JSON.stringify({
+                reason: 'rollback',
+                actor: { type: 'user', id: 'user-1', name: 'Ada' },
+                sourceRevision: 'abc123',
+                summary: 'Fix the footer',
+                forceReason: 'Emergency',
+            }), JSON.stringify(sent.activation));
+            assertEqual(JSON.stringify(code), JSON.stringify(sent.code));
+
+            assertEqual(
+                'assignedAt,assignmentId,buildId,code,isChanged,previousReleaseId,releaseId',
+                Object.keys(result).sort().join(),
+            );
+            assertEqual(JSON.stringify(code), JSON.stringify(result.code));
+            assertEqual(true, result.isChanged);
+        });
+
+        it('sends absent optional fields as null and reports a build without code info', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+
+            const result = await store.assignRelease({}, 'build', {
+                releaseId: release.releaseId,
+                reason: 'publish',
+                actor: DEPLOY_KEY,
+            });
+
+            const [ , sent ] = contentStore.received.find(({ method }) => method === 'assignBuild').args;
+            assertEqual(undefined, sent.expectedAssignmentId);
+            assertEqual(JSON.stringify({
+                reason: 'publish',
+                actor: { type: 'deploy-key', id: 'test-key', name: null },
+                sourceRevision: null,
+                summary: null,
+                forceReason: null,
+            }), JSON.stringify(sent.activation));
+            assertEqual(null, sent.code);
+            assertEqual(null, result.code);
+        });
+
+        it('requires a reason and an actor, and rejects malformed history fields, before any store call', async () => {
+            const { store, contentStore } = makeStore();
+            const releaseId = 'aaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+            const badAssignments = [
+                { releaseId, actor: DEPLOY_KEY },
+                { releaseId, reason: 'deploy', actor: DEPLOY_KEY },
+                { releaseId, reason: 'publish' },
+                { releaseId, reason: 'publish', actor: { type: 'user' } },
+                { releaseId, reason: 'publish', actor: DEPLOY_KEY, summary: 's'.repeat(2001) },
+                { releaseId, reason: 'publish', actor: DEPLOY_KEY, sourceRevision: '' },
+                { releaseId, reason: 'publish', actor: DEPLOY_KEY, forceReson: 'typo' },
+                { releaseId, reason: 'publish', actor: DEPLOY_KEY, code: { revision: 'rev-1' } },
+            ];
+
+            for (const fields of badAssignments) {
+                const caught = await catchAsyncError(() => store.assignRelease({}, 'build', fields));
+                assertEqual('AssertionError', caught.name);
+                assert(caught.message.startsWith('ContentAddressableStore#assignRelease: assignment'));
+            }
+
+            assertEqual(0, contentStore.calls.length);
+        });
+
+        // CONT-5: a build's code info is set once.
+        it('translates a code mismatch into a 409 conflict', async () => {
+            const { store, contentStore } = makeStore();
+            contentStore.assignBuild = async () => ({
+                outcome: 'codeMismatch',
+                code: { revision: 'rev-1', fingerprint: 'print-1' },
+            });
+
+            const caught = await catchAsyncError(() => store.assignRelease({}, 'build', assignment({
+                releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
+                code: { revision: 'rev-2', fingerprint: 'print-2' },
+            })));
+
+            assertEqual('ConflictError', caught.name);
+            assertEqual('BuildCodeMismatch', caught.code);
+            assertEqual(409, caught.httpStatusCode);
+        });
+
+        // CONT-3: the pointer and its Activation are one write, so there is no
+        // separate history failure to carry on from.
+        it('lets a failed assignment propagate without logging it as carried on', async () => {
+            const { store, contentStore, logEntries } = makeStore();
+            const failure = new OperationalError('index unavailable');
+            contentStore.assignBuild = async () => {
+                throw failure;
+            };
+
+            const caught = await catchAsyncError(() => store.assignRelease({}, 'build', assignment({
+                releaseId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
+            })));
+
+            assertEqual(failure, caught);
+            assertEqual(0, logEntries.filter(({ level }) => level === 'error' || level === 'warn').length);
+        });
+
+        it('never logs the actor name, the summary, or the override reason', async () => {
+            const { store, logEntries } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            logEntries.length = 0;
+
+            await store.assignRelease({}, 'build', {
+                releaseId: release.releaseId,
+                reason: 'publish',
+                actor: { type: 'user', id: 'user-1', name: 'Private Name' },
+                summary: 'Private summary',
+                forceReason: 'Private override',
+            });
+
+            const text = JSON.stringify(logEntries);
+            assertEqual(1, logEntries.length);
+            assertEqual(false, text.includes('Private'));
         });
     });
 
@@ -307,8 +748,8 @@ describe('ContentAddressableStore', ({ describe, it }) => {
         it('serves a snapshot for a build with a compatible Release', async () => {
             const { store, contentStore } = makeStore();
             const object = await uploadText(store, 'abc');
-            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            await store.assignRelease({}, 'build-1', assignment({ releaseId: release.releaseId, expectedAssignmentId: null }));
 
             const context = { runtime: { build: { id: 'build-1' } } };
             const snapshot = await store.openSnapshot(context);
@@ -354,8 +795,8 @@ describe('ContentAddressableStore', ({ describe, it }) => {
         it('reports 503 naming both versions when the Release contract is unsupported', async () => {
             const { store, contentStore, errors } = makeStore();
             const object = await uploadText(store, 'abc');
-            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            await store.assignRelease({}, 'build-1', assignment({ releaseId: release.releaseId, expectedAssignmentId: null }));
 
             const index = new ContentAddressableIndex(contentStore.closures.get(release.releaseId));
             const contractHash = index.getNode(CONTENT_CONTRACT_PATH).hash;
@@ -376,8 +817,8 @@ describe('ContentAddressableStore', ({ describe, it }) => {
         it('refuses a Release recorded under contract 1', async () => {
             const { store, contentStore } = makeStore();
             const object = await uploadText(store, 'abc');
-            const release = await store.createRelease({}, { staticAssets: { '/a': object } });
-            await store.assignRelease({}, 'build-1', { releaseId: release.releaseId, expectedAssignmentId: null });
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            await store.assignRelease({}, 'build-1', assignment({ releaseId: release.releaseId, expectedAssignmentId: null }));
 
             const index = new ContentAddressableIndex(contentStore.closures.get(release.releaseId));
             const contractHash = index.getNode(CONTENT_CONTRACT_PATH).hash;
