@@ -2,11 +2,10 @@ import process from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
 import util from 'node:util';
-import { assertNonEmptyString, isNonEmptyString } from './kixx/assertions/mod.js';
-import { OperationalError } from './kixx/errors/mod.js';
-import { mergeEnvironmentSources } from './kixx/config/merge-environment-sources.js';
-import { parseSecretsManifest } from './kixx/config/secrets-manifest.js';
-import { parseJsonc } from './kixx/config/parse-jsonc.js';
+import { assertNonEmptyString, isNonEmptyString } from '../../../../assertions/mod.js';
+import { OperationalError } from '../../../../errors/mod.js';
+import { mergeEnvironmentSources } from '../../../../config/merge-environment-sources.js';
+import { parseJsonc } from '../../../../config/parse-jsonc.js';
 
 
 // Reads UTF-8 text, throwing the raw filesystem error. Injectable wherever it
@@ -38,9 +37,8 @@ export function resolveDotenvFilepath(options) {
 }
 
 /**
- * Merges the plain dotenv file, its derived `.secrets` sibling, and
- * process.env into one environment object, then optionally checks the result
- * against the secrets manifest.
+ * Merges the plain dotenv file, its derived `.secrets` sibling, and the
+ * process environment into one environment object.
  *
  * Each file is independently optional, which is what lets the dotenv-file and
  * process-environment deployment styles be used together rather than as an
@@ -48,21 +46,23 @@ export function resolveDotenvFilepath(options) {
  * mergeEnvironmentSources so a key placed in the wrong file fails loudly at
  * startup instead of resolving silently.
  *
- * When `secretsManifestFile` is given, every secret name the manifest requires
- * must resolve to a non-empty string, or startup fails here — before any store
- * is opened. This is what keeps the manifest honest with what the application
- * actually reads. Names the manifest marks `# @optional` are not checked.
+ * Declared secrets are not checked here. Boot checks them against the
+ * registry's list.
  *
  * @param {Object} options
  * @param {string} options.dotenvFile - Absolute path to the plain dotenv file.
- * @param {string} [options.secretsManifestFile] - Absolute path to `example.env.secrets`. Omitted, no check runs.
+ * @param {Object} [options.processEnv] - The process environment, defaulting to `process.env`.
  * @param {(filepath: string) => string} [options.readFile] - UTF-8 file reader, defaulting to `fs.readFileSync`.
  * @returns {Object} Merged environment variables, keyed by name.
- * @throws {OperationalError} When a dotenv file exists but cannot be read or parsed, a key is defined by more
- *     than one source, the manifest is missing or unreadable, or a required secret is absent.
+ * @throws {OperationalError} When a dotenv file exists but cannot be read or parsed, or a key is defined by more
+ *     than one source.
  */
 export function readEnvironment(options) {
-    const { dotenvFile, secretsManifestFile, readFile = defaultReadFile } = options ?? {};
+    const {
+        dotenvFile,
+        processEnv = process.env,
+        readFile = defaultReadFile,
+    } = options ?? {};
 
     assertNonEmptyString(dotenvFile, 'readEnvironment: dotenvFile');
 
@@ -71,60 +71,11 @@ export function readEnvironment(options) {
     // configurable so --dotenv keeps selecting the pair with one flag.
     const dotenvSecretsFile = `${ dotenvFile }.secrets`;
 
-    const env = mergeEnvironmentSources([
+    return mergeEnvironmentSources([
         { name: dotenvFile, values: readOptionalDotEnvFile(dotenvFile, readFile) },
         { name: dotenvSecretsFile, values: readOptionalDotEnvFile(dotenvSecretsFile, readFile) },
-        { name: 'process.env', values: process.env },
+        { name: 'process.env', values: processEnv },
     ]);
-
-    if (isNonEmptyString(secretsManifestFile)) {
-        assertRequiredSecrets(env, secretsManifestFile, readFile);
-    }
-
-    return env;
-}
-
-// Unlike the dotenv files, the manifest is committed and must exist: a
-// deployment which cannot find it has no way to know what it is missing, so an
-// absent file is a misconfiguration rather than a shape to tolerate.
-function assertRequiredSecrets(env, secretsManifestFile, readFile) {
-    let source;
-
-    try {
-        source = readFile(secretsManifestFile);
-    } catch (cause) {
-        throw new OperationalError(
-            `Unable to read the secrets manifest from ${ secretsManifestFile }`,
-            { cause },
-            readEnvironment,
-        );
-    }
-
-    let manifest;
-
-    try {
-        manifest = parseSecretsManifest(source);
-    } catch (cause) {
-        throw new OperationalError(
-            `Unable to parse the secrets manifest from ${ secretsManifestFile }: ${ cause.message }`,
-            { cause },
-            readEnvironment,
-        );
-    }
-
-    // Report every missing name at once, the way mergeEnvironmentSources
-    // reports every duplicate: missing secrets usually arrive as a group, and
-    // one per boot cycle would be a slow way to find that out.
-    const missing = manifest.required.filter((name) => !isNonEmptyString(env[name]));
-
-    if (missing.length > 0) {
-        throw new OperationalError(
-            `Missing required environment secrets: ${ missing.join(', ') }. ` +
-            `They are declared in ${ secretsManifestFile }.`,
-            {},
-            readEnvironment,
-        );
-    }
 }
 
 /**

@@ -11,7 +11,7 @@ import {
     readOptionalDotEnvFile,
     readSourceConfigFile,
     createResolveFilepath,
-} from '../node-environment.js';
+} from '../../../../../../kixx/adapters/node/server/lib/node-environment.js';
 
 
 function catchError(fn) {
@@ -23,12 +23,22 @@ function catchError(fn) {
     return null;
 }
 
+const tempDirectories = [];
+
 function makeTempDirectory() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'node-environment-test-'));
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'node-environment-test-'));
+    tempDirectories.push(directory);
+    return directory;
 }
 
 
-describe('node-environment', ({ describe }) => {
+describe('node-environment', ({ describe, after }) => {
+
+    after(() => {
+        for (const directory of tempDirectories) {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
+    });
 
     describe('resolveDotenvFilepath', ({ it }) => {
         it('defaults to .env.<environment> inside baseDirectory', () => {
@@ -120,26 +130,60 @@ describe('node-environment', ({ describe }) => {
     });
 
     describe('readEnvironment', ({ it }) => {
-        it('merges the plain file, its .secrets sibling, and process.env', () => {
+        it('merges the plain file, its .secrets sibling, and the process environment', () => {
             const dir = makeTempDirectory();
             const dotenvFile = path.join(dir, '.env.test');
 
             fs.writeFileSync(dotenvFile, 'PLAIN_KEY=plain-value\n');
             fs.writeFileSync(`${ dotenvFile }.secrets`, 'SECRET_KEY=secret-value\n');
 
-            const env = readEnvironment({ dotenvFile });
+            const env = readEnvironment({
+                dotenvFile,
+                processEnv: { PROCESS_KEY: 'process-value' },
+            });
 
             assertEqual('plain-value', env.PLAIN_KEY);
             assertEqual('secret-value', env.SECRET_KEY);
+            assertEqual('process-value', env.PROCESS_KEY);
         });
 
-        it('tolerates a missing dotenv pair, falling back to process.env alone', () => {
+        it('tolerates a missing dotenv pair, falling back to the process environment alone', () => {
+            const dir = makeTempDirectory();
+            const dotenvFile = path.join(dir, '.env.test');
+
+            const env = readEnvironment({
+                dotenvFile,
+                processEnv: { PROCESS_KEY: 'process-value' },
+            });
+
+            assertEqual('PROCESS_KEY', Object.keys(env).join(','));
+            assertEqual('process-value', env.PROCESS_KEY);
+        });
+
+        it('reads the real process environment when processEnv is not given', () => {
             const dir = makeTempDirectory();
             const dotenvFile = path.join(dir, '.env.test');
 
             const env = readEnvironment({ dotenvFile });
 
-            assertUndefined(env.PLAIN_KEY);
+            assertEqual(Object.keys(process.env).sort().join(','), Object.keys(env).sort().join(','));
+        });
+
+        it('reads both files through an injected readFile', () => {
+            const dotenvFile = '/app/.env.test';
+            const files = new Map([
+                [ dotenvFile, 'PLAIN_KEY=plain-value\n' ],
+                [ `${ dotenvFile }.secrets`, 'SECRET_KEY=secret-value\n' ],
+            ]);
+
+            const env = readEnvironment({
+                dotenvFile,
+                processEnv: {},
+                readFile: (filepath) => files.get(filepath),
+            });
+
+            assertEqual('plain-value', env.PLAIN_KEY);
+            assertEqual('secret-value', env.SECRET_KEY);
         });
 
         it('throws an OperationalError when a key is defined by more than one source', () => {
@@ -149,129 +193,27 @@ describe('node-environment', ({ describe }) => {
             fs.writeFileSync(dotenvFile, 'DUPLICATE_KEY=plain\n');
             fs.writeFileSync(`${ dotenvFile }.secrets`, 'DUPLICATE_KEY=secret\n');
 
-            const caught = catchError(() => readEnvironment({ dotenvFile }));
+            const caught = catchError(() => readEnvironment({ dotenvFile, processEnv: {} }));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
             assertMatches('DUPLICATE_KEY', caught.message);
         });
 
-        it('accepts required secrets from the secrets file and process.env', () => {
+        it('throws an OperationalError when a file and the process environment define one key', () => {
             const dir = makeTempDirectory();
             const dotenvFile = path.join(dir, '.env.test');
-            const secretsManifestFile = path.join(dir, 'example.env.secrets');
-            const processSecretName = 'KIXX_TEST_REQUIRED_PROCESS_SECRET';
-            const previousProcessSecret = process.env[processSecretName];
 
-            fs.writeFileSync(`${ dotenvFile }.secrets`, 'REQUIRED_FILE_SECRET=file-value\n');
-            fs.writeFileSync(
-                secretsManifestFile,
-                `REQUIRED_FILE_SECRET=ignored\n${ processSecretName }=ignored\n`,
-            );
-            process.env[processSecretName] = 'process-value';
-
-            try {
-                const env = readEnvironment({ dotenvFile, secretsManifestFile });
-
-                assertEqual('file-value', env.REQUIRED_FILE_SECRET);
-                assertEqual('process-value', env[processSecretName]);
-            } finally {
-                if (typeof previousProcessSecret === 'undefined') {
-                    delete process.env[processSecretName];
-                } else {
-                    process.env[processSecretName] = previousProcessSecret;
-                }
-            }
-        });
-
-        it('allows an optional secret to be absent', () => {
-            const dir = makeTempDirectory();
-            const dotenvFile = path.join(dir, '.env.test');
-            const secretsManifestFile = path.join(dir, 'example.env.secrets');
-
-            fs.writeFileSync(secretsManifestFile, '# @optional\nOPTIONAL_SECRET=ignored\n');
-
-            const env = readEnvironment({ dotenvFile, secretsManifestFile });
-
-            assertUndefined(env.OPTIONAL_SECRET);
-        });
-
-        it('reports every missing required secret in sorted order', () => {
-            const dir = makeTempDirectory();
-            const dotenvFile = path.join(dir, '.env.test');
-            const secretsManifestFile = path.join(dir, 'example.env.secrets');
-
-            fs.writeFileSync(secretsManifestFile, 'ZEBRA_SECRET=ignored\nALPHA_SECRET=ignored\n');
-
-            const caught = catchError(() => readEnvironment({ dotenvFile, secretsManifestFile }));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('OperationalError', caught.name);
-            assertMatches('ALPHA_SECRET, ZEBRA_SECRET', caught.message);
-            assertMatches(secretsManifestFile, caught.message);
-        });
-
-        it('rejects an empty required secret', () => {
-            const dir = makeTempDirectory();
-            const dotenvFile = path.join(dir, '.env.test');
-            const secretsManifestFile = path.join(dir, 'example.env.secrets');
-
-            fs.writeFileSync(`${ dotenvFile }.secrets`, 'EMPTY_SECRET=\n');
-            fs.writeFileSync(secretsManifestFile, 'EMPTY_SECRET=ignored\n');
-
-            const caught = catchError(() => readEnvironment({ dotenvFile, secretsManifestFile }));
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('OperationalError', caught.name);
-            assertMatches('Missing required environment secrets: EMPTY_SECRET', caught.message);
-        });
-
-        it('wraps a manifest read failure and preserves its cause', () => {
-            const dotenvFile = '/app/.env.test';
-            const secretsManifestFile = '/app/example.env.secrets';
-            const readFailure = new Error('read failed');
-            const readFile = (filepath) => {
-                if (filepath === secretsManifestFile) {
-                    throw readFailure;
-                }
-
-                const error = new Error('missing');
-                error.code = 'ENOENT';
-                throw error;
-            };
+            fs.writeFileSync(dotenvFile, 'DUPLICATE_KEY=plain\n');
 
             const caught = catchError(() => {
-                readEnvironment({ dotenvFile, secretsManifestFile, readFile });
+                readEnvironment({ dotenvFile, processEnv: { DUPLICATE_KEY: 'process' } });
             });
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
-            assertMatches(`Unable to read the secrets manifest from ${ secretsManifestFile }`, caught.message);
-            assertEqual(readFailure, caught.cause);
-        });
-
-        it('wraps a malformed manifest and preserves the parser error', () => {
-            const dotenvFile = '/app/.env.test';
-            const secretsManifestFile = '/app/example.env.secrets';
-            const readFile = (filepath) => {
-                if (filepath === secretsManifestFile) {
-                    return 'NOT-VALID=value';
-                }
-
-                const error = new Error('missing');
-                error.code = 'ENOENT';
-                throw error;
-            };
-
-            const caught = catchError(() => {
-                readEnvironment({ dotenvFile, secretsManifestFile, readFile });
-            });
-
-            assert(caught, 'expected an error to be thrown');
-            assertEqual('OperationalError', caught.name);
-            assertMatches(`Unable to parse the secrets manifest from ${ secretsManifestFile }`, caught.message);
-            assertEqual('OperationalError', caught.cause.name);
-            assertMatches('invalid secret name', caught.cause.message);
+            assertMatches('DUPLICATE_KEY', caught.message);
+            assertMatches('process.env', caught.message);
         });
     });
 
