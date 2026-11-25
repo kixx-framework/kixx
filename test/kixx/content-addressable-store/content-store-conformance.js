@@ -11,10 +11,12 @@ import { assert, assertEqual } from '../../../kixx/assertions/mod.js';
  *
  * The factory absorbs each platform's backing bindings and construction
  * details. This suite deliberately avoids caching, retry, and durability
- * guarantees that are not portable across adapters.
+ * guarantees that are not portable across adapters. It covers blobs, index
+ * closures and build pointers, and publishing history: Release records,
+ * Activations, build code info, and paging.
  *
  * @param {Function} describe - Nested describe handle from the adapter suite.
- * @param {MakeContentStore} makeContentStore - Creates an isolated store and context.
+ * @param {MakeContentStore} makeContentStore - Creates an isolated, empty store and context.
  */
 export default function contentStoreConformance(describe, makeContentStore) {
 
@@ -360,19 +362,6 @@ export default function contentStoreConformance(describe, makeContentStore) {
             await assertAssertionError(() => store.getBuildPointer(context, ''));
         });
     });
-}
-
-/**
- * Publishing history contract: Release records, Activations, build code
- * info, and paging.
- *
- * Only adapters that implement the history methods run this export. It is
- * folded into the default export once every adapter implements them.
- *
- * @param {Function} describe - Nested describe handle from the adapter suite.
- * @param {MakeContentStore} makeContentStore - Creates an isolated, empty store and context.
- */
-export function contentStoreHistoryConformance(describe, makeContentStore) {
 
     describe('contract: release records', ({ it }) => {
         it('records a Release once and keeps the first record', async () => {

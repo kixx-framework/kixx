@@ -9,9 +9,7 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import ContentStore from '../../../../../../kixx/adapters/node/content-store/lib/content-store.js';
 import Logger from '../../../../../../kixx/logger/logger.js';
-import contentStoreConformance, {
-    contentStoreHistoryConformance,
-} from '../../../../content-addressable-store/content-store-conformance.js';
+import contentStoreConformance from '../../../../content-addressable-store/content-store-conformance.js';
 
 
 const temporaryDirectories = [];
@@ -96,7 +94,6 @@ describe('Node ContentStore', ({ after, describe }) => {
     });
 
     contentStoreConformance(describe, makeConformanceStore);
-    contentStoreHistoryConformance(describe, makeConformanceStore);
 
     describe('construction', ({ it }) => {
         it('requires a logger, root directory, and positive format', () => {
