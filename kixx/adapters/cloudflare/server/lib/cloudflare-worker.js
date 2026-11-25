@@ -1,59 +1,100 @@
-import { env } from 'cloudflare:workers';
-// Generated from cloudflare-config.jsonc by the deployment CLI; not committed.
-import sourceConfig from './cloudflare-config.generated.js';
-import { readConfig } from './kixx/config/read-config.js';
-import HttpRouter from './kixx/http-router/http-router.js';
-import LoggerWriter from './plugins/cloudflare-logger-writer/lib/logger-writer.js';
-import ServerRequest from './plugins/cloudflare-server-request/lib/server-request.js';
-import ServerResponse from './kixx/http-router/server-response.js';
-import { bootApplication } from './kixx/context/boot-application.js';
-import * as app from './app/app.js';
-import { plugins as generalPlugins } from './plugins/general.js';
-import { plugins as cloudflarePlugins, durableObjects } from './plugins/cloudflare.js';
-import { mergePluginMaps } from './plugins/merge-plugin-maps.js';
-import virtualHosts from './virtual-hosts.js';
-import TraceLogger from './kixx/logger/trace-logger.js';
+import { readConfig } from '../../../../config/read-config.js';
+import HttpRouter from '../../../../http-router/http-router.js';
+import ServerResponse from '../../../../http-router/server-response.js';
+import { bootApplication } from '../../../../context/boot-application.js';
+import TraceLogger from '../../../../logger/trace-logger.js';
+import { assert, assertFunction, isObjectNotNull } from '../../../../assertions/mod.js';
 
 
-// ENVIRONMENT selects which section of the source config is loaded, so it is
-// the one setting which cannot itself come from the config.
-const environment = env.ENVIRONMENT || 'development';
-const config = readConfig(sourceConfig, environment);
+/**
+ * @typedef {Object} WorkerRegistry
+ * @property {Function} LoggerWriter - Logger writer class for Cloudflare
+ * @property {Function} ServerRequest - Server request class for Cloudflare
+ * @property {Map<string, Object>} plugins - Lifecycle modules, in the order they run
+ * @property {Object} configDefaults - Config defaults, merged under the selected environment's config
+ * @property {{ required: string[], optional: string[] }} secrets - Every declared secret name
+ */
 
-// Merge plugin maps, allowing platform plugins to override general plugins.
-const plugins = mergePluginMaps(generalPlugins, cloudflarePlugins);
+/**
+ * @typedef {Object} Worker
+ * @property {function(Request, Object, { waitUntil: Function }): Promise<Response>} fetch - The Worker's fetch handler
+ */
 
-const { appContext, logger } = bootApplication({
-    env,
-    config,
-    LoggerWriter,
-    plugins,
-    app,
-});
 
-const router = new HttpRouter(virtualHosts);
+/**
+ * Boots the application and returns the Worker's fetch handler. A Cloudflare
+ * entry point calls it once, at module scope, and exports the result by
+ * default.
+ *
+ * Booting happens here, during the Worker's startup: the config section for
+ * `env.ENVIRONMENT` (or `development`) is read with the registry's defaults
+ * under it, every declared secret is checked, and each lifecycle module is
+ * registered and initialized. A failure throws, which fails the startup. A
+ * Worker has no process lifetime, so start() and stop() hooks are never
+ * called.
+ *
+ * The returned `fetch()` never throws. A request the router can't answer gets
+ * a JSON:API 500, and the error is reported to the runtime through
+ * `waitUntil()`.
+ *
+ * @param {Object} options
+ * @param {Object} options.env - The module-scope environment the entry point imports from the Workers runtime
+ * @param {Object} options.sourceConfig - The project's Cloudflare config, with an `environments` section
+ * @param {WorkerRegistry} options.registry - The exports of the project's Cloudflare registry module
+ * @param {Array<Object>} options.virtualHosts - Virtual host specifications for the router
+ * @param {Object} options.app - The application's own lifecycle hooks
+ * @param {function(number): Promise<void>} [options.wait] - Resolves after a number of milliseconds; defaults to the Workers scheduler
+ * @returns {Worker}
+ * @throws {OperationalError} When the config has no section for the environment, or a declared secret is missing
+ */
+export function createWorker(options) {
+    const {
+        env,
+        sourceConfig,
+        registry,
+        virtualHosts,
+        app,
+        // The Workers scheduler is looked up when it is used, so this module
+        // also loads where that global doesn't exist.
+        wait = (milliseconds) => scheduler.wait(milliseconds),
+    } = options ?? {};
 
-// Key on `expected`, not `httpError`: a bug is fatal even when it carries an
-// HTTP status code. Expected HTTP errors (404, 422, ...) are routine and not logged.
-router.on('error', ({ error, requestId }) => {
-    if (!error.expected) {
-        logger.error('unexpected error while routing request', { requestId }, error);
-    } else if (!error.httpError) {
-        logger.warn('operational error while routing request', { requestId }, error);
-    }
-});
+    assert(isObjectNotNull(env), 'createWorker: options.env must be an object');
+    assert(isObjectNotNull(registry), 'createWorker: options.registry must be a registry module');
+    assertFunction(registry.ServerRequest, 'createWorker: options.registry.ServerRequest');
+    assertFunction(wait, 'createWorker: options.wait');
 
-// Export the Cloudflare Durable Objects which are part of this Worker.
-export const { ContentAddressableIndexStore, JobQueueStore } = durableObjects;
+    const { ServerRequest } = registry;
 
-// The JobQueueStore Durable Object reconciles schedules when it is constructed,
-// so each isolate pings it once, in the background, after a deploy.
-let hasPingedJobQueue = false;
+    // ENVIRONMENT selects which section of the source config is loaded, so it is
+    // the one setting which cannot itself come from the config.
+    const environment = env.ENVIRONMENT || 'development';
+    const config = readConfig(sourceConfig, environment, { defaults: registry.configDefaults });
 
-export default {
+    const { appContext, logger } = bootApplication({
+        env,
+        config,
+        LoggerWriter: registry.LoggerWriter,
+        plugins: registry.plugins,
+        app,
+        secrets: registry.secrets,
+    });
+
+    const router = new HttpRouter(virtualHosts);
+
+    // Key on `expected`, not `httpError`: a bug is fatal even when it carries an
+    // HTTP status code. Expected HTTP errors (404, 422, ...) are routine and not logged.
+    router.on('error', ({ error, requestId }) => {
+        if (!error.expected) {
+            logger.error('unexpected error while routing request', { requestId }, error);
+        } else if (!error.httpError) {
+            logger.warn('operational error while routing request', { requestId }, error);
+        }
+    });
+
     // requestEnvironment is the per-request env binding snapshot provided by the Workers runtime.
     // It may differ from the module-level `env` used at startup (e.g. in tail worker configurations).
-    async fetch(nativeRequest, requestEnvironment, cloudflare) {
+    async function handleFetch(nativeRequest, requestEnvironment, cloudflare) {
         const trace = new TraceLogger(logger, 'http-fetch');
         let pathname;
 
@@ -61,11 +102,6 @@ export default {
             const request = new ServerRequest(nativeRequest);
             pathname = request.url.pathname;
             const requestContext = appContext.createRequestContext(requestEnvironment, request);
-
-            if (!hasPingedJobQueue) {
-                hasPingedJobQueue = true;
-                cloudflare.waitUntil(pingJobQueue(requestContext));
-            }
 
             const response = await router.handleRequest(requestContext, request, new ServerResponse());
 
@@ -84,7 +120,7 @@ export default {
             // as a success: no exception event.
             // Rejecting a waitUntil() promise gives us both — the platform records the
             // exception with its stack, and the client still gets our response.
-            cloudflare.waitUntil(waitToThrow(1000, error));
+            cloudflare.waitUntil(waitToThrow(wait, 1000, error));
 
             // Last resort: the routing pipeline could not turn this error into a response.
             // mapErrorToJsonError() redacts the message of any error which is not a
@@ -104,20 +140,12 @@ export default {
                 },
             });
         }
-    },
-};
-
-// Never fails the request: a failed ping only delays schedule pickup until the
-// next job or request that instantiates the Durable Object.
-async function pingJobQueue(requestContext) {
-    try {
-        await appContext.getService('JobQueue').ping(requestContext);
-    } catch (error) {
-        logger.warn('job queue ping failed', null, error);
     }
+
+    return { fetch: handleFetch };
 }
 
-async function waitToThrow(milliseconds, error) {
-    await scheduler.wait(milliseconds);
+async function waitToThrow(wait, milliseconds, error) {
+    await wait(milliseconds);
     throw error;
 }
