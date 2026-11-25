@@ -59,4 +59,8 @@ export default class ContentAddressableIndexStore extends DurableObject {
     assignBuild(buildId, assignment) {
         return this.#core.assignBuild(buildId, assignment);
     }
+
+    listActivations(page) {
+        return this.#core.listActivations(page);
+    }
 }

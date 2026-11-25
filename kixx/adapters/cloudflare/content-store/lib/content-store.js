@@ -12,6 +12,13 @@ import {
     isPlainObject,
 } from '../../../../assertions/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import {
+    decodeHistoryCursor,
+    encodeHistoryCursor,
+    normalizeActivation,
+    normalizeCodeInfo,
+    normalizeHistoryPage,
+} from '../../../../content-addressable-store/publishing-history.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
 
 
@@ -317,7 +324,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentBuildPointer|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentStore#getBuildPointer: buildId');
@@ -346,7 +353,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
+     * @returns {Promise<Array<import('../../../../content-addressable-store/content-store-interface.js').ListedContentBuildPointer>>} Registered build pointers
      */
     async listBuilds(context) {
         const trace = new TraceLogger(context.logger, 'content-store-list-builds');
@@ -589,11 +596,13 @@ export default class ContentStore {
     /**
      * Points a build at a previously persisted index closure, optionally only
      * when the build's current assignment identity still equals
-     * `expectedAssignmentId`.
+     * `expectedAssignmentId`. A changed assignment and its Activation are
+     * written together or not at all.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignment} assignment - Desired closure, optional pointer precondition, the Activation to record, and optional code info
      * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
+     * @throws {AssertionError} When the assignment is malformed; no Durable Object call is made
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
      */
@@ -608,13 +617,19 @@ export default class ContentStore {
             assert(isValidAssignmentId(expectedAssignmentId), 'ContentStore#assignBuild: expectedAssignmentId');
         }
 
+        // An error thrown inside the Durable Object arrives as a plain remote
+        // Error, so input is validated on this side of the call.
+        const activation = normalizeActivation(assignment.activation, 'ContentStore#assignBuild: assignment.activation');
+        const code = normalizeCodeInfo(assignment.code, 'ContentStore#assignBuild: assignment.code');
+        const forwarded = { rootHash, expectedAssignmentId, activation, code };
+
         const trace = new TraceLogger(context.logger, 'content-assign-build', { buildId, rootHash, expectedAssignmentId });
         let result;
         try {
             result = await this.#callDurableObject(
                 context,
                 'assignBuild',
-                (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedAssignmentId }),
+                (durableObject) => durableObject.assignBuild(buildId, forwarded),
             );
             trace.ok();
         } catch (err) {
@@ -630,14 +645,62 @@ export default class ContentStore {
         // A concurrent read can still repopulate the cache, and other isolates
         // retain their entries until the configured TTL. Invalidating before
         // assignment would be worse: a failed assignment leaves the old closure
-        // correct and would only force a redundant read. A conflict or missing-
-        // closure outcome left the pointer untouched, so its cache stays valid.
+        // correct and would only force a redundant read. Every other outcome
+        // left the pointer's closure untouched, so its cache stays valid.
         if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED) {
             this.#buildCache.delete(buildId);
         }
 
         const { success: _success, ...assignmentResult } = result;
         return assignmentResult;
+    }
+
+    /**
+     * Lists Activations newest first, for one build or across every build.
+     * Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentActivationPageOptions} [options] - Page options and an optional buildId filter
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async listActivations(context, options) {
+        assert(
+            options === undefined || options === null || isPlainObject(options),
+            'ContentStore#listActivations: options must be a plain object',
+        );
+
+        const { buildId, ...pageOptions } = options ?? {};
+        if (buildId !== undefined && buildId !== null) {
+            assertNonEmptyString(buildId, 'ContentStore#listActivations: options.buildId');
+        }
+        const { limit, cursor } = normalizeHistoryPage(pageOptions, 'ContentStore#listActivations: options');
+        const page = {
+            buildId: buildId ?? null,
+            limit,
+            before: cursor === null ? null : decodeHistoryCursor(cursor),
+        };
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-activations', { buildId, limit });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'listActivations',
+                (durableObject) => durableObject.listActivations(page),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#listActivations() was unsuccessful: ${ result.message }`);
+        }
+
+        return historyPageFromResult(result);
     }
 }
 
@@ -652,6 +715,13 @@ function assertValidType(value, method, acceptedTypes) {
 // reason carries the same message, and is reported as stored too.
 function isKvWriteRateLimitError(err) {
     return isString(err?.message) && err.message.includes(KV_WRITE_RATE_LIMIT_MESSAGE);
+}
+
+// The Durable Object reports where the next page starts; callers get that
+// position as an opaque cursor.
+function historyPageFromResult(result) {
+    const { items, nextSequence } = result;
+    return { items, cursor: nextSequence === null ? null : encodeHistoryCursor(nextSequence) };
 }
 
 function assertValidTupleArity(entries) {
