@@ -38,6 +38,26 @@ describe('secrets-manifest', ({ describe }) => {
 
             assertEqual('ALPHA_SECRET,ZEBRA_SECRET', manifest.required.join(','));
             assertEqual('OPTIONAL_SECRET', manifest.optional.join(','));
+            assertEqual(0, manifest.requiredOutsideDevelopment.length);
+        });
+
+        it('classifies entries marked @required-outside-development, mixed with @optional', () => {
+            const manifest = parseSecretsManifest([
+                '# @required-outside-development',
+                '# Explanation for the entry.',
+                'ZULU_HASH=replace-me',
+                '',
+                '# @optional',
+                'OPTIONAL_SECRET=replace-me',
+                '',
+                '    # @required-outside-development',
+                'ALPHA_HASH=replace-me',
+                'PLAIN_SECRET=replace-me',
+            ].join('\n'));
+
+            assertEqual('PLAIN_SECRET', manifest.required.join(','));
+            assertEqual('OPTIONAL_SECRET', manifest.optional.join(','));
+            assertEqual('ALPHA_HASH,ZULU_HASH', manifest.requiredOutsideDevelopment.join(','));
         });
 
         it('parses a manifest with comment blocks and an @optional entry', () => {
@@ -133,7 +153,43 @@ describe('secrets-manifest', ({ describe }) => {
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
             assertMatches('line 2', caught.message);
-            assertMatches('second @optional directive', caught.message);
+            assertMatches('second directive, @optional,', caught.message);
+        });
+
+        it('rejects a @required-outside-development directive followed by a blank line', () => {
+            const source = '# @required-outside-development\n# Comment\n\nNAME=value';
+            const caught = catchError(() => parseSecretsManifest(source));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertMatches('line 1', caught.message);
+            assertMatches('the @required-outside-development directive must be followed by an entry', caught.message);
+        });
+
+        it('rejects a @required-outside-development directive at the end of the file', () => {
+            const caught = catchError(() => parseSecretsManifest('NAME=value\n# @required-outside-development\n'));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('OperationalError', caught.name);
+            assertMatches('line 2', caught.message);
+            assertMatches('must be followed by an entry', caught.message);
+        });
+
+        it('rejects a second directive of either kind before an entry', () => {
+            const sources = [
+                '# @required-outside-development\n# @required-outside-development\nNAME=value',
+                '# @optional\n# @required-outside-development\nNAME=value',
+                '# @required-outside-development\n# @optional\nNAME=value',
+            ];
+
+            for (const source of sources) {
+                const caught = catchError(() => parseSecretsManifest(source));
+
+                assert(caught, `expected ${ JSON.stringify(source) } to be rejected`);
+                assertEqual('OperationalError', caught.name);
+                assertMatches('line 2', caught.message);
+                assertMatches('second directive', caught.message);
+            }
         });
 
         it('rejects an optional directive at the end of the file', () => {
@@ -152,8 +208,10 @@ describe('secrets-manifest', ({ describe }) => {
                 manifest: {
                     required: ['ZEBRA_SECRET', 'ALPHA_SECRET', 'PRESENT_SECRET'],
                     optional: ['OPTIONAL_SECRET'],
+                    requiredOutsideDevelopment: [],
                 },
                 liveNames: ['PRESENT_SECRET', 'EXTRA_Z', 'EXTRA_A', 'EXTRA_Z'],
+                environment: 'production',
             });
 
             assertEqual('ALPHA_SECRET,ZEBRA_SECRET', comparison.missing.join(','));
@@ -165,22 +223,69 @@ describe('secrets-manifest', ({ describe }) => {
                 manifest: {
                     required: [],
                     optional: ['OPTIONAL_SECRET'],
+                    requiredOutsideDevelopment: [],
                 },
                 liveNames: ['OPTIONAL_SECRET'],
+                environment: 'production',
             });
 
             assertEqual(0, comparison.missing.length);
             assertEqual(0, comparison.extra.length);
         });
+
+        it('reports a name required outside development as missing outside development only', () => {
+            const manifest = {
+                required: [ 'PLAIN_SECRET' ],
+                optional: [],
+                requiredOutsideDevelopment: [ 'OUTSIDE_HASH' ],
+            };
+
+            const production = compareSecretNames({ manifest, liveNames: [], environment: 'production' });
+            const development = compareSecretNames({ manifest, liveNames: [], environment: 'development' });
+
+            assertEqual('OUTSIDE_HASH,PLAIN_SECRET', production.missing.join(','));
+            assertEqual('PLAIN_SECRET', development.missing.join(','));
+        });
+
+        it('does not report a present name required outside development as extra', () => {
+            const comparison = compareSecretNames({
+                manifest: { required: [], optional: [], requiredOutsideDevelopment: [ 'OUTSIDE_HASH' ] },
+                liveNames: [ 'OUTSIDE_HASH' ],
+                environment: 'development',
+            });
+
+            assertEqual(0, comparison.missing.length);
+            assertEqual(0, comparison.extra.length);
+        });
+
+        it('throws an AssertionError without an environment or the third list', () => {
+            const manifest = { required: [], optional: [], requiredOutsideDevelopment: [] };
+            const cases = [
+                { manifest, liveNames: [] },
+                { manifest, liveNames: [], environment: '' },
+                { manifest: { required: [], optional: [] }, liveNames: [], environment: 'production' },
+            ];
+
+            for (const options of cases) {
+                const caught = catchError(() => compareSecretNames(options));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
     });
 
-    describe('assertDeclaredSecrets', ({ it }) => {
+    describe('assertDeclaredSecrets', ({ describe, it }) => {
         const MISSING_MESSAGE_SUFFIX = 'Every declared secret is listed in example.env.secrets.';
+
+        const IN_PRODUCTION = { environment: 'production' };
+        const IN_DEVELOPMENT = { environment: 'development' };
 
         function makeSecrets() {
             return {
                 required: [ 'ZEBRA_SECRET', 'ALPHA_SECRET', 'MIDDLE_SECRET' ],
                 optional: [ 'OPTIONAL_SECRET' ],
+                requiredOutsideDevelopment: [],
             };
         }
 
@@ -192,7 +297,7 @@ describe('secrets-manifest', ({ describe }) => {
                 OPTIONAL_SECRET: 'o-value',
             };
 
-            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets())));
+            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets(), IN_PRODUCTION)));
         });
 
         it('passes when an optional secret is absent', () => {
@@ -202,17 +307,17 @@ describe('secrets-manifest', ({ describe }) => {
                 MIDDLE_SECRET: 'm-value',
             };
 
-            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets())));
+            assertEqual(null, catchError(() => assertDeclaredSecrets(env, makeSecrets(), IN_PRODUCTION)));
         });
 
         it('passes when nothing is declared', () => {
-            const caught = catchError(() => assertDeclaredSecrets({}, { required: [], optional: [] }));
+            const caught = catchError(() => assertDeclaredSecrets({}, { required: [], optional: [], requiredOutsideDevelopment: [] }, IN_PRODUCTION));
 
             assertEqual(null, caught);
         });
 
         it('reports every missing required secret in one error, sorted by name', () => {
-            const caught = catchError(() => assertDeclaredSecrets({ MIDDLE_SECRET: 'm-value' }, makeSecrets()));
+            const caught = catchError(() => assertDeclaredSecrets({ MIDDLE_SECRET: 'm-value' }, makeSecrets(), IN_PRODUCTION));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('OperationalError', caught.name);
@@ -230,7 +335,7 @@ describe('secrets-manifest', ({ describe }) => {
                 MIDDLE_SECRET: 'm-value',
             };
 
-            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets(), IN_PRODUCTION));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual(`Missing required environment secrets: ALPHA_SECRET. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
@@ -243,7 +348,7 @@ describe('secrets-manifest', ({ describe }) => {
                 MIDDLE_SECRET: { get() {} },
             };
 
-            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets(), IN_PRODUCTION));
 
             assert(caught, 'expected an error to be thrown');
             assertEqual(`Missing required environment secrets: MIDDLE_SECRET. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
@@ -258,7 +363,7 @@ describe('secrets-manifest', ({ describe }) => {
                 UNDECLARED_SECRET: 'u-value-c0d1',
             };
 
-            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets()));
+            const caught = catchError(() => assertDeclaredSecrets(env, makeSecrets(), IN_PRODUCTION));
 
             assert(caught, 'expected an error to be thrown');
             assertMatches('ALPHA_SECRET', caught.message);
@@ -272,18 +377,91 @@ describe('secrets-manifest', ({ describe }) => {
         it('does not reorder the declared lists', () => {
             const secrets = makeSecrets();
 
-            catchError(() => assertDeclaredSecrets({}, secrets));
+            catchError(() => assertDeclaredSecrets({}, secrets, IN_PRODUCTION));
 
             assertEqual('ZEBRA_SECRET,ALPHA_SECRET,MIDDLE_SECRET', secrets.required.join(','));
         });
 
         it('throws an AssertionError when a declared list is not an Array', () => {
-            for (const secrets of [ undefined, {}, { required: [] }, { optional: [] } ]) {
-                const caught = catchError(() => assertDeclaredSecrets({}, secrets));
+            const cases = [
+                undefined,
+                {},
+                { required: [] },
+                { optional: [] },
+                { required: [], optional: [] },
+            ];
+
+            for (const secrets of cases) {
+                const caught = catchError(() => assertDeclaredSecrets({}, secrets, IN_PRODUCTION));
 
                 assert(caught, 'expected an error to be thrown');
                 assertEqual('AssertionError', caught.name);
             }
+        });
+
+        it('throws an AssertionError without an environment', () => {
+            for (const options of [ undefined, {}, { environment: '' }, { environment: 7 } ]) {
+                const caught = catchError(() => assertDeclaredSecrets({}, makeSecrets(), options));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+            }
+        });
+
+        describe('a secret required outside development', ({ it }) => {
+            const secrets = {
+                required: [ 'PLAIN_SECRET' ],
+                optional: [],
+                requiredOutsideDevelopment: [ 'OUTSIDE_HASH' ],
+            };
+
+            it('may be absent in development', () => {
+                const env = { PLAIN_SECRET: 'p-value' };
+
+                assertEqual(null, catchError(() => assertDeclaredSecrets(env, secrets, IN_DEVELOPMENT)));
+            });
+
+            it('is still required alongside the plain names in development', () => {
+                const caught = catchError(() => assertDeclaredSecrets({}, secrets, IN_DEVELOPMENT));
+
+                assertEqual(`Missing required environment secrets: PLAIN_SECRET. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
+            });
+
+            it('is missing outside development, named with the others and holding no value', () => {
+                const env = { PLAIN_SECRET: '', OTHER: 'o-value-8b1e' };
+
+                for (const environment of [ 'production', 'test', 'staging' ]) {
+                    const caught = catchError(() => assertDeclaredSecrets(env, secrets, { environment }));
+
+                    assert(caught, `expected ${ environment } to fail`);
+                    assertEqual('OperationalError', caught.name);
+                    assertEqual(
+                        `Missing required environment secrets: OUTSIDE_HASH, PLAIN_SECRET. ${ MISSING_MESSAGE_SUFFIX }`,
+                        caught.message,
+                    );
+                    assertNotMatches('o-value-8b1e', caught.message);
+                }
+            });
+
+            it('counts an empty string as missing outside development', () => {
+                const env = { PLAIN_SECRET: 'p-value', OUTSIDE_HASH: '' };
+                const caught = catchError(() => assertDeclaredSecrets(env, secrets, IN_PRODUCTION));
+
+                assertEqual(`Missing required environment secrets: OUTSIDE_HASH. ${ MISSING_MESSAGE_SUFFIX }`, caught.message);
+            });
+
+            it('passes outside development when present', () => {
+                const env = { PLAIN_SECRET: 'p-value', OUTSIDE_HASH: 'h-value' };
+
+                assertEqual(null, catchError(() => assertDeclaredSecrets(env, secrets, IN_PRODUCTION)));
+            });
+
+            it('does not reorder the declared lists', () => {
+                catchError(() => assertDeclaredSecrets({}, secrets, IN_PRODUCTION));
+
+                assertEqual('PLAIN_SECRET', secrets.required.join(','));
+                assertEqual('OUTSIDE_HASH', secrets.requiredOutsideDevelopment.join(','));
+            });
         });
     });
 });

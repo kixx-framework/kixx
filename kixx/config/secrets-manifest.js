@@ -12,15 +12,20 @@ import { OperationalError } from '../errors/mod.js';
 // also what every deploy target accepts as a binding name.
 const SECRET_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-// Marks the next entry as optional. Compared against the trimmed line so the
+// Each directive marks the next entry. Compared against the trimmed line so a
 // directive can be indented with the comment block it belongs to.
 const OPTIONAL_DIRECTIVE = '# @optional';
+const REQUIRED_OUTSIDE_DEVELOPMENT_DIRECTIVE = '# @required-outside-development';
+
+// The environment in which a secret required outside development may be absent.
+const DEVELOPMENT_ENVIRONMENT = 'development';
 
 
 /**
  * @typedef {Object} SecretsManifest
  * @property {string[]} required - Secret names every deployment must provide, sorted
  * @property {string[]} optional - Secret names a deployment may omit, sorted
+ * @property {string[]} requiredOutsideDevelopment - Secret names every deployment except development must provide, sorted
  */
 
 /**
@@ -30,8 +35,8 @@ const OPTIONAL_DIRECTIVE = '# @optional';
  */
 
 /**
- * Parses the text of a secrets manifest into the sets of required and optional
- * secret names.
+ * Parses the text of a secrets manifest into the lists of required, optional,
+ * and required-outside-development secret names.
  *
  * The manifest is `example.env.secrets`, a committed file generated from the
  * secrets that core, the installed plugins, and the app declare in their
@@ -40,15 +45,18 @@ const OPTIONAL_DIRECTIVE = '# @optional';
  * secret *names* an environment must provide. Only the names are meaningful
  * here; the value after `=` is a placeholder and is discarded.
  *
- * A comment line reading exactly `# @optional` marks the next entry optional.
- * Further comment lines may follow the directive, so it can be placed at the
- * top of an entry's explanatory comment block, but a blank line, a second
- * directive, or the end of the file may not: the directive must resolve to an
- * entry, because a directive that silently evaporated would reclassify a
- * required secret as optional and disarm the deploy guard.
+ * A comment line reading exactly `# @optional` marks the next entry optional,
+ * and one reading exactly `# @required-outside-development` marks the next
+ * entry required in every environment except development. An entry with no
+ * directive is required everywhere. Further comment lines may follow a
+ * directive, so it can be placed at the top of an entry's explanatory comment
+ * block, but a blank line, a second directive of either kind, or the end of
+ * the file may not: a directive must resolve to an entry, because one that
+ * silently evaporated or attached to the wrong entry would reclassify a
+ * secret and disarm the deploy guard.
  *
  * @param {string} text - The full text of the manifest file
- * @returns {SecretsManifest} The declared names, each list sorted and unique across both
+ * @returns {SecretsManifest} The declared names, each list sorted, with no name in two lists
  * @throws {OperationalError} When a line is malformed, a name is invalid or duplicated, or a directive has no entry to mark
  */
 export function parseSecretsManifest(text) {
@@ -56,11 +64,12 @@ export function parseSecretsManifest(text) {
 
     const required = [];
     const optional = [];
+    const requiredOutsideDevelopment = [];
     const declaredNames = new Set();
 
-    // Holds the line number of an unresolved `# @optional` directive, which is
-    // also what the error messages below report.
-    let optionalDirectiveLine = 0;
+    // The unresolved directive, if any: the list it sends the next entry to,
+    // its name for messages, and its line number, which the errors report.
+    let pending = null;
 
     const lines = text.split(/\r?\n/);
 
@@ -69,18 +78,20 @@ export function parseSecretsManifest(text) {
         const line = lines[index].trim();
 
         if (line === '') {
-            if (optionalDirectiveLine > 0) {
-                throw unresolvedDirectiveError(optionalDirectiveLine);
+            if (pending) {
+                throw unresolvedDirectiveError(pending);
             }
             continue;
         }
 
         if (line.startsWith('#')) {
-            if (line === OPTIONAL_DIRECTIVE) {
-                if (optionalDirectiveLine > 0) {
-                    throw manifestError(lineNumber, 'a second @optional directive before any entry');
+            const directive = readDirective(line, lineNumber, { optional, requiredOutsideDevelopment });
+
+            if (directive) {
+                if (pending) {
+                    throw manifestError(lineNumber, `a second directive, ${ directive.name }, before any entry`);
                 }
-                optionalDirectiveLine = lineNumber;
+                pending = directive;
             }
             continue;
         }
@@ -103,22 +114,23 @@ export function parseSecretsManifest(text) {
 
         declaredNames.add(name);
 
-        if (optionalDirectiveLine > 0) {
-            optional.push(name);
-            optionalDirectiveLine = 0;
+        if (pending) {
+            pending.list.push(name);
+            pending = null;
         } else {
             required.push(name);
         }
     }
 
-    if (optionalDirectiveLine > 0) {
-        throw unresolvedDirectiveError(optionalDirectiveLine);
+    if (pending) {
+        throw unresolvedDirectiveError(pending);
     }
 
     required.sort();
     optional.sort();
+    requiredOutsideDevelopment.sort();
 
-    return { required, optional };
+    return { required, optional, requiredOutsideDevelopment };
 }
 
 /**
@@ -127,25 +139,31 @@ export function parseSecretsManifest(text) {
  * The comparison is deliberately asymmetric in meaning, though not in shape:
  * a `missing` name is a required secret the deployment cannot run without,
  * while an `extra` name is only a leftover to clean up. Optional names appear
- * in neither list, since they are legitimate whether present or absent.
+ * in neither list, since they are legitimate whether present or absent. A
+ * name required outside development is missing when absent from any
+ * environment but development.
  *
  * @param {Object} options
  * @param {SecretsManifest} options.manifest - The parsed manifest
  * @param {string[]} options.liveNames - Secret names currently live on the deployment
+ * @param {string} options.environment - The deployment's environment name
  * @returns {SecretNameComparison} The two differences between the manifest and the live set
  */
 export function compareSecretNames(options) {
-    const { manifest, liveNames } = options ?? {};
-    const { required, optional } = manifest ?? {};
+    const { manifest, liveNames, environment } = options ?? {};
+    const { required, optional, requiredOutsideDevelopment } = manifest ?? {};
 
     assertArray(required, 'compareSecretNames: manifest.required');
     assertArray(optional, 'compareSecretNames: manifest.optional');
+    assertArray(requiredOutsideDevelopment, 'compareSecretNames: manifest.requiredOutsideDevelopment');
     assertArray(liveNames, 'compareSecretNames: liveNames');
+    assert(isNonEmptyString(environment), 'compareSecretNames: environment must be a non-empty string');
 
     const liveSet = new Set(liveNames);
-    const declaredSet = new Set(required.concat(optional));
+    const declaredSet = new Set([ ...required, ...optional, ...requiredOutsideDevelopment ]);
 
-    const missing = required.filter((name) => !liveSet.has(name));
+    const missing = namesRequiredIn(environment, { required, requiredOutsideDevelopment })
+        .filter((name) => !liveSet.has(name));
 
     // Iterate the deduplicated live set rather than the array, so a name
     // Cloudflare happens to report twice is reported once.
@@ -163,23 +181,30 @@ export function compareSecretNames(options) {
  * that lacks a secret fails at once, not on the first request that reads it.
  *
  * A required name is missing when its value in `env` is not a non-empty
- * string. Optional names are never checked. Every missing name is reported in
- * one error, and the message holds names only: never a value, and never the
- * name of a secret that is present.
+ * string. A name required outside development is checked the same way in
+ * every environment but development. Optional names are never checked. Every
+ * missing name is reported in one error, and the message holds names only:
+ * never a value, and never the name of a secret that is present.
  *
  * @param {Object} env - Environment variables, secrets, and platform bindings
  * @param {SecretsManifest} secrets - The declared secret names
+ * @param {Object} options
+ * @param {string} options.environment - The environment being booted
  * @returns {void}
  * @throws {OperationalError} When one or more required secrets are missing
  */
-export function assertDeclaredSecrets(env, secrets) {
-    const { required, optional } = secrets ?? {};
+export function assertDeclaredSecrets(env, secrets, options) {
+    const { required, optional, requiredOutsideDevelopment } = secrets ?? {};
+    const { environment } = options ?? {};
 
     assert(isObjectNotNull(env), 'assertDeclaredSecrets: env must be an object');
     assertArray(required, 'assertDeclaredSecrets: secrets.required');
     assertArray(optional, 'assertDeclaredSecrets: secrets.optional');
+    assertArray(requiredOutsideDevelopment, 'assertDeclaredSecrets: secrets.requiredOutsideDevelopment');
+    assert(isNonEmptyString(environment), 'assertDeclaredSecrets: options.environment must be a non-empty string');
 
-    const missing = required.filter((name) => !isNonEmptyString(env[name]));
+    const missing = namesRequiredIn(environment, { required, requiredOutsideDevelopment })
+        .filter((name) => !isNonEmptyString(env[name]));
 
     if (missing.length === 0) {
         return;
@@ -194,13 +219,34 @@ export function assertDeclaredSecrets(env, secrets) {
     );
 }
 
+// Returns a new array, so callers never reorder the declared lists.
+function namesRequiredIn(environment, { required, requiredOutsideDevelopment }) {
+    if (environment === DEVELOPMENT_ENVIRONMENT) {
+        return required.slice();
+    }
+
+    return required.concat(requiredOutsideDevelopment);
+}
+
+function readDirective(line, lineNumber, lists) {
+    if (line === OPTIONAL_DIRECTIVE) {
+        return { name: '@optional', list: lists.optional, lineNumber };
+    }
+
+    if (line === REQUIRED_OUTSIDE_DEVELOPMENT_DIRECTIVE) {
+        return { name: '@required-outside-development', list: lists.requiredOutsideDevelopment, lineNumber };
+    }
+
+    return null;
+}
+
 // A blank line and the end of the file are one condition, not two: a file
 // ending in the directive plus a newline reaches the blank-line branch, so
 // separate messages would only mislabel that case.
-function unresolvedDirectiveError(lineNumber) {
+function unresolvedDirectiveError(directive) {
     return manifestError(
-        lineNumber,
-        'the @optional directive must be followed by an entry, with only comment lines between them',
+        directive.lineNumber,
+        `the ${ directive.name } directive must be followed by an entry, with only comment lines between them`,
     );
 }
 

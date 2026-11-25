@@ -241,11 +241,15 @@ describe('plugin-manifest', ({ describe }) => {
                 secrets: [
                     { name: 'A_SECRET', description: 'First.' },
                     { name: '_b_secret', required: false, description: 'Second.' },
+                    { name: 'C_SECRET', required: true, description: 'Third.' },
+                    { name: 'D_SECRET', required: 'outsideDevelopment', description: 'Fourth.' },
                 ],
             }));
 
             assertEqual(true, result.secrets[0].required);
             assertEqual(false, result.secrets[1].required);
+            assertEqual(true, result.secrets[2].required);
+            assertEqual('outsideDevelopment', result.secrets[3].required);
         });
 
         it('accepts an unmounted route and leaves mount and name out of it', () => {
@@ -348,10 +352,17 @@ describe('plugin-manifest', ({ describe }) => {
             { rule: 'a secret name pattern', change: set('secrets.0.name', 'bad-name'), source: 'secrets[0].name', value: '"bad-name"' },
             { rule: 'BUILD_ID is not a secret name', change: set('secrets.0.name', 'BUILD_ID'), source: 'secrets[0].name', value: '"BUILD_ID"' },
             { rule: 'ENVIRONMENT is not a secret name', change: set('secrets.0.name', 'ENVIRONMENT'), source: 'secrets[0].name', value: '"ENVIRONMENT"' },
-            { rule: 'required is a boolean', change: set('secrets.0.required', 'yes'), source: 'secrets[0].required', value: '"yes"' },
+            { rule: 'required is a boolean', change: set('secrets.0.required', 'yes'), source: 'secrets[0].required', value: 'must be true, false, or "outsideDevelopment"' },
+            { rule: 'required is not another environment', change: set('secrets.0.required', 'outsideProduction'), source: 'secrets[0].required', value: '"outsideProduction"' },
             { rule: 'a secret description is required', change: unset('secrets.0.description'), source: 'secrets[0].description', value: 'is required' },
             { rule: 'a secret description has no line break', change: set('secrets.0.description', 'a\r\nb'), source: 'secrets[0].description', value: 'line break' },
             { rule: 'a secret description is not @optional', change: set('secrets.0.description', ' @optional '), source: 'secrets[0].description', value: '@optional' },
+            {
+                rule: 'a secret description is not @required-outside-development',
+                change: set('secrets.0.description', '@required-outside-development'),
+                source: 'secrets[0].description',
+                value: 'is reserved',
+            },
             {
                 rule: 'secret names are unique',
                 change: (m) => {
@@ -499,6 +510,14 @@ describe('plugin-manifest', ({ describe }) => {
             assert(Object.isFrozen(result.adapters.node));
         });
 
+        it('accepts a secret required outside development', () => {
+            const result = validateCore(makeCoreManifest({
+                secrets: [ { name: 'DEPLOY_KEY_HASH', required: 'outsideDevelopment', description: 'Hash.' } ],
+            }));
+
+            assertEqual('outsideDevelopment', result.secrets[0].required);
+        });
+
         it('rejects a manifest named kixx without isCore', () => {
             const caught = catchError(() => {
                 validatePluginManifest(makeMinimalManifest({ name: 'kixx' }), { file: CORE_FILE, directoryName: 'kixx' });
@@ -581,10 +600,13 @@ describe('plugin-manifest', ({ describe }) => {
                 secrets: [
                     { name: 'SUPPORT_TOKEN', required: false, description: 'Lets support staff sign in.' },
                     { name: 'MAIL_API_KEY', description: 'Sends mail.' },
+                    { name: 'BILLING_KEY', required: 'outsideDevelopment', description: 'Charges cards.' },
                 ],
             };
 
             const result = validateApp(manifest);
+
+            assertEqual('outsideDevelopment', result.secrets[2].required);
 
             assertEqual('SUPPORT_TOKEN', result.secrets[0].name);
             assertEqual(false, result.secrets[0].required);

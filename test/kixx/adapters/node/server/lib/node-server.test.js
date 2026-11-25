@@ -120,7 +120,7 @@ function makeStartOptions(options) {
             ServerRequest,
             plugins: new Map(),
             configDefaults: {},
-            secrets: { required: [ 'SESSION_SECRET' ], optional: [] },
+            secrets: { required: [ 'SESSION_SECRET' ], optional: [], requiredOutsideDevelopment: [] },
         }, registry),
         virtualHosts: [ { hostname: 'localhost', routes } ],
         app,
@@ -452,6 +452,7 @@ describe('node server', ({ describe }) => {
                     secrets: {
                         required: [ 'SESSION_SECRET', 'ZEBRA_SECRET', 'EMPTY_SECRET' ],
                         optional: [ 'OPTIONAL_SECRET' ],
+                        requiredOutsideDevelopment: [],
                     },
                 },
             });

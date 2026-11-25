@@ -59,7 +59,7 @@ function makeWorker(options) {
             ServerRequest,
             plugins: new Map(),
             configDefaults: {},
-            secrets: { required: [], optional: [] },
+            secrets: { required: [], optional: [], requiredOutsideDevelopment: [] },
         }, registry),
         virtualHosts: makeVirtualHosts([ { pattern: '/test', targets: [ makeTarget(handler) ] } ]),
         app,
@@ -214,7 +214,7 @@ describe('cloudflare worker', ({ describe }) => {
             const caught = catchError(() => makeWorker({
                 env: { SESSION_SECRET: 'value-that-must-not-leak', ENVIRONMENT: 'production' },
                 registry: {
-                    secrets: { required: [ 'SESSION_SECRET', 'SIGNING_SECRET', 'CURSOR_SECRET' ], optional: [ 'DEBUG_TOKEN' ] },
+                    secrets: { required: [ 'SESSION_SECRET', 'SIGNING_SECRET', 'CURSOR_SECRET' ], optional: [ 'DEBUG_TOKEN' ], requiredOutsideDevelopment: [] },
                 },
             }));
 
@@ -230,7 +230,7 @@ describe('cloudflare worker', ({ describe }) => {
         it('boots when every declared secret is in the module-scope environment', async () => {
             const { worker } = makeWorker({
                 env: { SIGNING_SECRET: 'a-secret' },
-                registry: { secrets: { required: [ 'SIGNING_SECRET' ], optional: [ 'DEBUG_TOKEN' ] } },
+                registry: { secrets: { required: [ 'SIGNING_SECRET' ], optional: [ 'DEBUG_TOKEN' ], requiredOutsideDevelopment: [] } },
             });
 
             assertEqual(200, (await fetchTest(worker)).status);
@@ -257,7 +257,7 @@ describe('cloudflare worker', ({ describe }) => {
         });
 
         it('requires an environment, a registry, and a wait function', () => {
-            const registry = { LoggerWriter: makeLoggerWriter([]), ServerRequest, plugins: new Map(), configDefaults: {}, secrets: { required: [], optional: [] } };
+            const registry = { LoggerWriter: makeLoggerWriter([]), ServerRequest, plugins: new Map(), configDefaults: {}, secrets: { required: [], optional: [], requiredOutsideDevelopment: [] } };
             const base = { env: {}, sourceConfig: SOURCE_CONFIG, registry, virtualHosts: makeVirtualHosts([]), app: {} };
 
             const cases = [

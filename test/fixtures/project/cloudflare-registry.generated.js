@@ -72,7 +72,8 @@ export const secrets = {
     ],
     "optional": [
         "VISITS_OPTIONAL_TOKEN"
-    ]
+    ],
+    "requiredOutsideDevelopment": []
 };
 
 // Where plugin content lives, as paths from the project root.
