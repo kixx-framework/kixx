@@ -6,3 +6,11 @@
  */
 export { validatePluginManifest, validateAppManifest } from './plugin-manifest.js';
 export { resolveInstallation } from './resolve-installation.js';
+export {
+    renderRegistryFiles,
+    NODE_REGISTRY_FILE_NAME,
+    CLOUDFLARE_REGISTRY_FILE_NAME,
+    DURABLE_OBJECT_REGISTRY_FILE_NAME,
+    ROUTES_REGISTRY_FILE_NAME,
+    SECRETS_MANIFEST_FILE_NAME,
+} from './render-registries.js';
