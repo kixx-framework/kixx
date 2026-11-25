@@ -3,40 +3,36 @@ import {
     ConflictError,
     NotFoundError,
     ValidationError,
-} from '../../../../kixx/errors/mod.js';
-import { validateReleaseManifest } from '../../../../kixx/content-addressable-store/release-manifest.js';
+} from '../errors/mod.js';
+import { isValidHash } from '../content-addressable-store/addressing.js';
+import { validateReleaseManifest } from '../content-addressable-store/release-manifest.js';
+import { HISTORY_LIMITS, validateReleaseProvenance } from '../content-addressable-store/publishing-history.js';
+import { deployKeyActor } from '../deploy-key/mod.js';
+import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
 import {
-    JSON_API_CONTENT_TYPE,
     assertJsonApiContentType,
     jsonApiResource,
     parseJsonApiResource,
-} from '../../lib/json-api.js';
+} from './json-api.js';
 import { MAX_MANIFEST_ENTRIES } from './constants.js';
 
 
 /**
  * Creates and fully verifies a Release.
- * @param {Object} context - Authenticated request context.
+ * @param {Object} context - Request context behind the deploy key.
  * @param {Object} request - JSON:API Release request.
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} Created JSON:API Release response.
  */
 export async function createRelease(context, request, response) {
-    const attributes = await parseReleaseRequest(request);
-    let manifest;
-    try {
-        manifest = enforceManifestEntryLimit(attributes.manifest);
-    } catch (cause) {
-        throw classifyReleaseError(cause);
-    }
-
+    const { manifest, provenance } = await parseReleaseRequest(request);
     const store = context.getService('ContentAddressableStore');
 
     let release;
     try {
         release = await store.createRelease(context, manifest, {
-            provenance: attributes.provenance ?? {},
-            createdBy: { type: 'deploy-key', id: context.user.id },
+            provenance,
+            createdBy: deployKeyActor(context),
         });
     } catch (cause) {
         throw classifyReleaseError(cause);
@@ -53,13 +49,7 @@ export async function createRelease(context, request, response) {
  * @returns {Promise<Object>} JSON:API ReleaseValidation response.
  */
 export async function validateRelease(context, request, response) {
-    const attributes = await parseReleaseRequest(request);
-    let manifest;
-    try {
-        manifest = enforceManifestEntryLimit(attributes.manifest);
-    } catch (cause) {
-        throw classifyReleaseError(cause);
-    }
+    const { manifest } = await parseReleaseRequest(request);
     const store = context.getService('ContentAddressableStore');
 
     let result;
@@ -81,10 +71,9 @@ export async function validateRelease(context, request, response) {
  * @param {Object} request - Request carrying pagination values.
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} Paginated JSON:API Release collection.
- * @throws {BadRequestError} When the cursor is invalid.
+ * @throws {BadRequestError} When a pagination parameter is invalid.
  */
 export async function listReleases(context, request, response) {
-    // An invalid cursor is already a BadRequestError from the service.
     const store = context.getService('ContentAddressableStore');
     const page = await store.listReleases(context, paginationParams(request));
 
@@ -105,9 +94,9 @@ export async function listReleases(context, request, response) {
 export async function getRelease(context, request, response) {
     const releaseId = request.pathnameParams.releaseId;
     const store = context.getService('ContentAddressableStore');
-    const release = await store.getRelease(context, releaseId);
+    const release = isValidHash(releaseId) ? await store.getRelease(context, releaseId) : null;
     if (!release) {
-        throw new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
+        throw releaseNotFound(releaseId);
     }
     return response.respondWithJSON(200, releaseDocument(release), { contentType: JSON_API_CONTENT_TYPE });
 }
@@ -123,9 +112,9 @@ export async function getRelease(context, request, response) {
 export async function getReleaseManifest(context, request, response) {
     const releaseId = request.pathnameParams.releaseId;
     const store = context.getService('ContentAddressableStore');
-    const manifest = await store.getReleaseManifest(context, releaseId);
+    const manifest = isValidHash(releaseId) ? await store.getReleaseManifest(context, releaseId) : null;
     if (!manifest) {
-        throw new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
+        throw releaseNotFound(releaseId);
     }
     return response.respondWithJSON(200, jsonApiResource({
         type: 'ReleaseManifest',
@@ -134,21 +123,35 @@ export async function getReleaseManifest(context, request, response) {
     }), { contentType: JSON_API_CONTENT_TYPE });
 }
 
+// The service treats malformed input as a programmer error, so everything a
+// client sends is checked here first: provenance, then the manifest.
 async function parseReleaseRequest(request) {
     assertJsonApiContentType(request);
     const { attributes } = await parseJsonApiResource(request, 'Release');
     if (!attributes.manifest || !Object.hasOwn(attributes, 'manifest')) {
         throw new BadRequestError('Release attributes.manifest is required.');
     }
-    return attributes;
-}
 
-function enforceManifestEntryLimit(manifest) {
-    const files = validateReleaseManifest(manifest);
+    const provenance = Object.hasOwn(attributes, 'provenance') ? attributes.provenance : {};
+    try {
+        validateReleaseProvenance(provenance);
+    } catch (cause) {
+        const error = new ValidationError(cause.message, { cause, code: 'InvalidProvenance' });
+        cause.errors.forEach((entry) => error.push(entry.message, entry.source));
+        throw error;
+    }
+
+    let files;
+    try {
+        files = validateReleaseManifest(attributes.manifest);
+    } catch (cause) {
+        throw classifyReleaseError(cause);
+    }
     if (files.length > MAX_MANIFEST_ENTRIES) {
         throw new BadRequestError(`A Release may contain at most ${ MAX_MANIFEST_ENTRIES } manifest entries.`);
     }
-    return manifest;
+
+    return { manifest: attributes.manifest, provenance };
 }
 
 function classifyReleaseError(cause) {
@@ -174,24 +177,57 @@ function releaseDocument(release) {
     return { data: releaseResource(release) };
 }
 
+// Attributes are copied by name, so a field the store adds later can't reach
+// the wire unannounced.
 function releaseResource(release) {
-    const { id, releaseId = id, type: _type, meta: _meta, ...attributes } = release;
-    return { type: 'Release', id: releaseId, attributes };
+    return {
+        type: 'Release',
+        id: release.releaseId,
+        attributes: {
+            createdAt: release.createdAt,
+            createdBy: actorAttributes(release.createdBy),
+            objectCount: release.objectCount,
+            totalBytes: release.totalBytes,
+            contractVersion: release.contractVersion,
+            provenance: release.provenance,
+        },
+    };
 }
 
+function actorAttributes(actor) {
+    return { type: actor.type, id: actor.id, name: actor.name };
+}
+
+function releaseNotFound(releaseId) {
+    return new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
+}
+
+// The service asserts its paging options, so every public value is checked
+// here. A malformed non-empty cursor is left to the service's own 400.
 function paginationParams(request) {
     const { cursor, limit } = request.queryParams ?? {};
     if (Array.isArray(cursor) || Array.isArray(limit)) {
         throw new BadRequestError('Pagination parameters may appear only once.');
     }
-    if (limit === undefined) {
-        return { cursor };
+
+    const params = {};
+
+    if (cursor !== undefined) {
+        if (cursor === '') {
+            throw new BadRequestError('The cursor is invalid.', { code: 'InvalidCursor' });
+        }
+        params.cursor = cursor;
     }
-    const parsedLimit = Number.parseInt(limit, 10);
-    if (!/^\d+$/.test(limit) || parsedLimit < 1 || parsedLimit > 100) {
-        throw new BadRequestError('limit must be an integer from 1 through 100.');
+
+    if (limit !== undefined) {
+        const parsedLimit = Number(limit);
+        if (!/^\d+$/.test(limit) || parsedLimit < 1 || parsedLimit > HISTORY_LIMITS.pageSize) {
+            throw new BadRequestError(`limit must be an integer from 1 through ${ HISTORY_LIMITS.pageSize }.`);
+        }
+        params.limit = parsedLimit;
     }
-    return { cursor, limit: parsedLimit };
+
+    return params;
 }
 
 export { paginationParams };

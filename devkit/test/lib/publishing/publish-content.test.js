@@ -100,7 +100,7 @@ function makeCapabilities(overrides) {
         runningBuildId: 'production',
         contentContractVersion: 2,
         addressingFormat: 4,
-        buildAssignmentProtocolVersion: 2,
+        buildAssignmentProtocolVersion: 3,
         limits: {
             maxObjectBytes: 26_214_400,
             maxObjectStatusIds: 100,

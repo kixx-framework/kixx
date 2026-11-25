@@ -1,10 +1,7 @@
-import { BadRequestError, OperationalError, PayloadTooLargeError, ValidationError } from '../../../../kixx/errors/mod.js';
-import { hashBlob, isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
-import {
-    JSON_API_CONTENT_TYPE,
-    assertJsonApiContentType,
-    parseJsonApiResource,
-} from '../../lib/json-api.js';
+import { BadRequestError, OperationalError, PayloadTooLargeError, ValidationError } from '../errors/mod.js';
+import { hashBlob, isValidHash } from '../content-addressable-store/addressing.js';
+import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
+import { assertJsonApiContentType, parseJsonApiResource } from './json-api.js';
 import { MAX_OBJECT_BYTES, MAX_OBJECT_STATUS_IDS } from './constants.js';
 
 
@@ -44,7 +41,8 @@ export async function getObjectStatus(context, request, response) {
  * @returns {Promise<Object>} JSON:API Object response.
  * @throws {ValidationError} When the route id does not match the payload bytes.
  * @throws {OperationalError} With status 411 when Content-Length is missing.
- * @throws {PayloadTooLargeError} When Content-Length exceeds the object size limit.
+ * @throws {BadRequestError} When Content-Length isn't a decimal integer.
+ * @throws {PayloadTooLargeError} When the declared or actual length exceeds the object size limit.
  */
 export async function putObject(context, request, response) {
     const objectId = request.pathnameParams.objectId;
@@ -61,13 +59,22 @@ export async function putObject(context, request, response) {
         });
     }
 
-    // Trust the declared length; body reading and storage enforce platform limits.
-    const declaredLength = Number.parseInt(request.headers.get('content-length'), 10);
-    if (declaredLength > MAX_OBJECT_BYTES) {
-        throw new PayloadTooLargeError(`Request body exceeds the maximum of ${ MAX_OBJECT_BYTES } bytes.`);
+    const contentLength = request.headers.get('content-length');
+    if (!/^\d+$/.test(contentLength)) {
+        throw new BadRequestError('Content-Length must be a decimal integer.');
+    }
+
+    // The declared length refuses an oversized upload before it is read. A
+    // declared length can understate the body, so the bytes read are checked too.
+    if (Number(contentLength) > MAX_OBJECT_BYTES) {
+        throw objectTooLarge();
     }
 
     const payload = await request.arrayBuffer();
+    if (payload.byteLength > MAX_OBJECT_BYTES) {
+        throw objectTooLarge();
+    }
+
     const actualObjectId = await hashBlob(payload);
 
     if (actualObjectId !== objectId) {
@@ -102,6 +109,10 @@ function validateObjectIds(value) {
         throw validationError('Every object id must be a valid content address', 'ObjectIdInvalid', 'attributes.objectIds');
     }
     return objectIds;
+}
+
+function objectTooLarge() {
+    return new PayloadTooLargeError(`Request body exceeds the maximum of ${ MAX_OBJECT_BYTES } bytes.`);
 }
 
 function validationError(message, code, source) {

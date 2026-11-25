@@ -1,6 +1,7 @@
-import { FORMAT } from '../../../../kixx/content-addressable-store/addressing.js';
-import { CONTENT_CONTRACT_VERSION } from '../../../../kixx/content-addressable-store/content-addressable-store.js';
-import { JSON_API_CONTENT_TYPE, jsonApiResource } from '../../lib/json-api.js';
+import { FORMAT } from '../content-addressable-store/addressing.js';
+import { CONTENT_CONTRACT_VERSION } from '../content-addressable-store/content-addressable-store.js';
+import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
+import { jsonApiResource } from './json-api.js';
 import {
     BUILD_ASSIGNMENT_PROTOCOL_VERSION,
     MAX_MANIFEST_ENTRIES,

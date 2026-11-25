@@ -13,3 +13,9 @@ export {
     putBuild,
     listBuildActivations,
 } from './builds.js';
+export {
+    BUILD_ASSIGNMENT_PROTOCOL_VERSION,
+    MAX_OBJECT_BYTES,
+    MAX_OBJECT_STATUS_IDS,
+    MAX_MANIFEST_ENTRIES,
+} from './constants.js';

@@ -23,7 +23,7 @@ export const CONTENT_CONTRACT_VERSION = 2;
  * @type {number}
  * @readonly
  */
-export const BUILD_ASSIGNMENT_PROTOCOL_VERSION = 2;
+export const BUILD_ASSIGNMENT_PROTOCOL_VERSION = 3;
 
 /**
  * An application environment this client cannot safely write to.

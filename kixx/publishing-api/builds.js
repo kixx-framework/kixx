@@ -4,16 +4,19 @@ import {
     OperationalError,
     PreconditionFailedError,
     ValidationError,
-} from '../../../../kixx/errors/mod.js';
-import { isValidAssignmentId } from '../../../../kixx/content-addressable-store/build-assignment.js';
-import { isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
-import { ACTIVATION_REASONS } from '../../../../kixx/content-addressable-store/publishing-history.js';
-import {
-    JSON_API_CONTENT_TYPE,
-    assertJsonApiContentType,
-    parseJsonApiResource,
-} from '../../lib/json-api.js';
+} from '../errors/mod.js';
+import { isValidAssignmentId } from '../content-addressable-store/build-assignment.js';
+import { isValidHash } from '../content-addressable-store/addressing.js';
+import { ACTIVATION_REASONS } from '../content-addressable-store/publishing-history.js';
+import { deployKeyActor } from '../deploy-key/mod.js';
+import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
+import { assertJsonApiContentType, parseJsonApiResource } from './json-api.js';
 import { paginationParams } from './releases.js';
+
+
+// Every other attribute is refused, so a field a later protocol adds is never
+// silently ignored by a server that doesn't know it.
+const BUILD_ATTRIBUTES = new Set([ 'releaseId', 'expectedAssignmentId', 'reason' ]);
 
 
 /**
@@ -27,7 +30,7 @@ export async function listBuilds(context, _request, response) {
     const store = context.getService('ContentAddressableStore');
     const builds = await store.listBuilds(context);
     return response.respondWithJSON(200, {
-        data: builds.map(buildResource),
+        data: builds.map((build) => buildFromPointer(build.buildId, build)),
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
@@ -47,16 +50,17 @@ export async function getBuild(context, request, response) {
         throw new NotFoundError(`Build "${ buildId }" was not found.`, { code: 'BuildNotFound' });
     }
     return response.respondWithJSON(200, {
-        data: buildResource({ buildId, ...pointer }),
+        data: buildFromPointer(buildId, pointer),
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
 /**
  * Assigns a Release using a mandatory JSON assignment identity.
- * @param {Object} context - Authenticated request context.
+ * @param {Object} context - Request context behind the deploy key.
  * @param {Object} request - JSON:API Build request with an expected assignment identity.
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} Resulting JSON:API Build response.
+ * @throws {ValidationError} With code `InvalidBuildAssignment` for a bad or unknown attribute.
  * @throws {PreconditionFailedError} When the pointer precondition is stale.
  */
 export async function putBuild(context, request, response) {
@@ -67,6 +71,11 @@ export async function putBuild(context, request, response) {
     const error = new ValidationError('Invalid Build assignment', { code: 'InvalidBuildAssignment' });
     if (id !== buildId) {
         error.push('Build resource id must match the route build id', 'data.id');
+    }
+    for (const name of Object.keys(attributes)) {
+        if (!BUILD_ATTRIBUTES.has(name)) {
+            error.push(`Build attributes.${ name } is not supported`, `attributes.${ name }`);
+        }
     }
     if (!isValidHash(releaseId)) {
         error.push('Build attributes.releaseId must be a valid Release id', 'attributes.releaseId');
@@ -101,7 +110,7 @@ export async function putBuild(context, request, response) {
             releaseId,
             expectedAssignmentId,
             reason,
-            actor: { type: 'deploy-key', id: context.user.id },
+            actor: deployKeyActor(context),
         });
     } catch (cause) {
         if (cause.code === 'BuildPointerConflict') {
@@ -114,12 +123,7 @@ export async function putBuild(context, request, response) {
     }
 
     return response.respondWithJSON(200, {
-        data: buildResource({
-            buildId: pointer.buildId,
-            rootHash: pointer.releaseId,
-            assignedAt: pointer.assignedAt,
-            assignmentId: pointer.assignmentId,
-        }),
+        data: buildResource(pointer),
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
@@ -130,42 +134,68 @@ export async function putBuild(context, request, response) {
  * @param {Object} response - Response to populate.
  * @returns {Promise<Object>} Paginated JSON:API Activation collection.
  * @throws {NotFoundError} When the build is unassigned.
- * @throws {BadRequestError} When the cursor is invalid.
+ * @throws {BadRequestError} When a pagination parameter is invalid.
  */
 export async function listBuildActivations(context, request, response) {
     const buildId = request.pathnameParams.buildId;
+    const page = paginationParams(request);
     const store = context.getService('ContentAddressableStore');
     const pointer = await store.getBuildPointer(context, buildId);
     if (!pointer) {
         throw new NotFoundError(`Build "${ buildId }" was not found.`, { code: 'BuildNotFound' });
     }
 
-    // An invalid cursor is already a BadRequestError from the service.
-    const page = await store.listActivations(context, {
-        buildId,
-        ...paginationParams(request),
-    });
+    const { items, cursor } = await store.listActivations(context, { buildId, ...page });
 
     return response.respondWithJSON(200, {
-        data: page.items.map(activationResource),
-        meta: { cursor: page.cursor },
+        data: items.map(activationResource),
+        meta: { cursor },
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
-function buildResource(build) {
-    const buildId = build.buildId ?? build.id;
+// A stored pointer names its Release `rootHash`; the wire calls it `releaseId`.
+function buildFromPointer(buildId, pointer) {
+    return buildResource({
+        buildId,
+        releaseId: pointer.rootHash,
+        assignedAt: pointer.assignedAt,
+        assignmentId: pointer.assignmentId,
+        code: pointer.code,
+    });
+}
+
+function buildResource({ buildId, releaseId, assignedAt, assignmentId, code }) {
     return {
         type: 'Build',
         id: buildId,
         attributes: {
-            releaseId: build.rootHash,
-            assignedAt: build.assignedAt,
-            assignmentId: build.assignmentId,
+            releaseId,
+            assignedAt,
+            assignmentId,
+            code: code ? { revision: code.revision, fingerprint: code.fingerprint } : null,
         },
     };
 }
 
+// Attributes are copied by name, so a field the store adds later can't reach
+// the wire unannounced.
 function activationResource(activation) {
-    const id = `${ activation.buildId }:${ activation.assignmentId }`;
-    return { type: 'Activation', id, attributes: { ...activation } };
+    const { actor } = activation;
+
+    return {
+        type: 'Activation',
+        id: `${ activation.buildId }:${ activation.assignmentId }`,
+        attributes: {
+            buildId: activation.buildId,
+            assignmentId: activation.assignmentId,
+            fromReleaseId: activation.fromReleaseId,
+            toReleaseId: activation.toReleaseId,
+            activatedAt: activation.activatedAt,
+            reason: activation.reason,
+            actor: { type: actor.type, id: actor.id, name: actor.name },
+            sourceRevision: activation.sourceRevision,
+            summary: activation.summary,
+            forceReason: activation.forceReason,
+        },
+    };
 }
