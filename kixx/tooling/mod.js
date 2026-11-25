@@ -5,3 +5,4 @@
  * @module tooling
  */
 export { validatePluginManifest, validateAppManifest } from './plugin-manifest.js';
+export { resolveInstallation } from './resolve-installation.js';
