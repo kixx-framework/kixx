@@ -14,16 +14,37 @@ import {
     isString,
 } from '../../../../assertions/mod.js';
 import { OperationalError } from '../../../../errors/mod.js';
-import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import {
+    BUILD_ASSIGNMENT_OUTCOME,
+    RELEASE_RECORD_OUTCOME,
+} from '../../../../content-addressable-store/content-store-interface.js';
 import { isValidAssignmentId } from '../../../../content-addressable-store/build-assignment.js';
+import {
+    decodeHistoryCursor,
+    encodeHistoryCursor,
+    normalizeActivation,
+    normalizeCodeInfo,
+    normalizeHistoryPage,
+    normalizeReleaseInput,
+} from '../../../../content-addressable-store/publishing-history.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const GET_FILE_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_TYPES = [ 'text' ];
 const BULK_FILE_LIMIT = 100;
 const STREAM_CHUNK_SIZE = 64 * 1024;
+
+const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint';
+const RELEASE_COLUMNS = `
+    sequence, release_id, created_at, created_by_type, created_by_id, created_by_name,
+    object_count, total_bytes, contract_version, provenance_json
+`;
+const ACTIVATION_COLUMNS = `
+    sequence, build_id, assignment_id, from_release_id, to_release_id, activated_at,
+    reason, actor_type, actor_id, actor_name, source_revision, summary, force_reason
+`;
 
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/; // eslint-disable-line no-control-regex
@@ -35,13 +56,15 @@ const textDecoder = new TextDecoder();
  * Node.js filesystem and SQLite-backed content store.
  *
  * Blob bytes are immutable files under `format-<format>/blobs`, while SQLite
- * stores immutable index closures and mutable build pointers. Publication uses
+ * stores immutable index closures, mutable build pointers, and the append-only
+ * publishing history. The index schema is created fresh at its current version;
+ * a store at any other version is refused, not upgraded. Publication uses
  * an atomic hard-link and directory synchronization, so this adapter requires
  * local storage that supports both operations. Network filesystems are not
  * supported. The process umask controls filesystem permissions.
  *
  * @implements {import('../../../../content-addressable-store/content-store-interface.js').ContentStoreInterface}
- * @see ContentStore in ../../cloudflare-content-store/lib/content-store.js for the Cloudflare implementation
+ * @see ContentStore in ../../../cloudflare/content-store/lib/content-store.js for the Cloudflare implementation
  */
 export default class ContentStore {
 
@@ -52,6 +75,8 @@ export default class ContentStore {
     #sqliteOptions;
     #database = null;
     #ownsDatabase;
+    #now;
+    #randomUUID;
     #initialized = false;
     #initialization = null;
     #closed = false;
@@ -64,6 +89,8 @@ export default class ContentStore {
      * @param {Object} [options.sqliteOptions] - Options forwarded when opening SQLite
      * @param {import('node:sqlite').DatabaseSync} [options.database] - Pre-opened SQLite connection
      * @param {boolean} [options.ownsDatabase] - Whether close() closes an injected connection
+     * @param {function(): number} [options.now] - Clock returning milliseconds, used to stamp pointers and history
+     * @param {function(): string} [options.randomUUID] - Source of assignment identities
      */
     constructor(options) {
         const {
@@ -73,6 +100,8 @@ export default class ContentStore {
             sqliteOptions,
             database,
             ownsDatabase,
+            now,
+            randomUUID: makeAssignmentId,
         } = options ?? {};
 
         assert(logger, 'NodeContentStore requires a logger');
@@ -85,6 +114,8 @@ export default class ContentStore {
         this.#sqliteOptions = sqliteOptions ?? {};
         this.#database = database ?? null;
         this.#ownsDatabase = isBoolean(ownsDatabase) ? ownsDatabase : !database;
+        this.#now = now ?? (() => Date.now());
+        this.#randomUUID = makeAssignmentId ?? (() => crypto.randomUUID());
         this.#logger = logger.createChild('NodeContentStore');
     }
 
@@ -149,7 +180,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentBuildPointer|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         this.#assertOpen();
@@ -158,9 +189,9 @@ export default class ContentStore {
         const trace = new TraceLogger(context.logger, 'content-store-get-build-pointer', { buildId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
-            const row = database.prepare('SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?').get(buildId);
+            const row = database.prepare(`SELECT ${ BUILD_POINTER_COLUMNS } FROM builds WHERE build_id = ?`).get(buildId);
             trace.ok();
-            return row ? { rootHash: row.root_hash, assignedAt: row.assigned_at, assignmentId: row.assignment_id } : null;
+            return row ? pointerFromRow(row) : null;
         } catch (cause) {
             trace.error();
             throw new OperationalError(`NodeContentStore failed to load build pointer "${ buildId }"`, { cause });
@@ -170,7 +201,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {Object} _context - Request context accepted for interface compatibility
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
+     * @returns {Promise<Array<import('../../../../content-addressable-store/content-store-interface.js').ListedContentBuildPointer>>} Registered build pointers
      */
     async listBuilds(context) {
         this.#assertOpen();
@@ -179,17 +210,12 @@ export default class ContentStore {
         const database = await this.#getTracedDatabase(context, trace);
         try {
             const rows = database.prepare(`
-                SELECT build_id, root_hash, assigned_at, assignment_id
+                SELECT build_id, ${ BUILD_POINTER_COLUMNS }
                 FROM builds
                 ORDER BY assigned_at DESC, build_id ASC
             `).all();
             trace.ok();
-            return rows.map((row) => ({
-                buildId: row.build_id,
-                rootHash: row.root_hash,
-                assignedAt: row.assigned_at,
-                assignmentId: row.assignment_id,
-            }));
+            return rows.map((row) => ({ buildId: row.build_id, ...pointerFromRow(row) }));
         } catch (cause) {
             trace.error();
             throw new OperationalError('NodeContentStore failed to list build pointers', { cause });
@@ -405,9 +431,10 @@ export default class ContentStore {
     /**
      * Atomically assigns a build to a previously saved closure, optionally
      * only when the build's stored assignment identity still equals `expectedAssignmentId`.
+     * A changed assignment and its Activation commit together or not at all.
      * @param {Object} _context - Request context accepted for interface compatibility
      * @param {string} buildId - Build identifier
-     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignment} assignment - Desired closure, optional pointer precondition, the Activation to record, and optional code info
      * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
      */
     async assignBuild(context, buildId, assignment) {
@@ -422,68 +449,268 @@ export default class ContentStore {
             assert(isValidAssignmentId(expectedAssignmentId), 'NodeContentStore#assignBuild: expectedAssignmentId');
         }
 
+        const activation = normalizeActivation(assignment.activation, 'NodeContentStore#assignBuild: assignment.activation');
+        const code = normalizeCodeInfo(assignment.code, 'NodeContentStore#assignBuild: assignment.code');
+
         const trace = new TraceLogger(context.logger, 'content-store-assign-build', { buildId, rootHash, expectedAssignmentId });
         const database = await this.#getTracedDatabase(context, trace);
         try {
-
-            const res = this.#assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId);
+            const res = this.#transact(database, () => {
+                return this.#assignBuildInTransaction(database, buildId, { rootHash, expectedAssignmentId, activation, code });
+            });
             trace.ok();
             return res;
-        } catch (err) {
+        } catch (cause) {
             trace.error();
-            throw err;
+            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
         }
     }
 
-    #assignBuildAtomically(database, buildId, rootHash, expectedAssignmentId) {
+    /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     * @param {Object} context - Request context
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult>}
+     */
+    async recordRelease(context, release) {
+        this.#assertOpen();
+        const input = normalizeReleaseInput(release, 'NodeContentStore#recordRelease: release');
+        const { releaseId } = input;
+
+        const trace = new TraceLogger(context.logger, 'content-store-record-release', { releaseId });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const res = this.#transact(database, () => this.#recordReleaseInTransaction(database, input));
+            trace.ok();
+            return res;
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError(`NodeContentStore failed to record release "${ releaseId }"`, { cause });
+        }
+    }
+
+    /**
+     * Reads one Release record.
+     * @param {Object} context - Request context
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)>} The record, or null when none was recorded
+     */
+    async getRelease(context, releaseId) {
+        this.#assertOpen();
+        assertNonEmptyString(releaseId, 'NodeContentStore#getRelease: releaseId');
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-release', { releaseId });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const row = database.prepare(`SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`).get(releaseId);
+            trace.ok();
+            return row ? releaseFromRow(row) : null;
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError(`NodeContentStore failed to load release "${ releaseId }"`, { cause });
+        }
+    }
+
+    /**
+     * Lists Release records newest first.
+     * @param {Object} context - Request context
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPageOptions} [options] - Page options
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     */
+    async listReleases(context, options) {
+        this.#assertOpen();
+        const { limit, cursor } = normalizeHistoryPage(options, 'NodeContentStore#listReleases: options');
+        const before = cursor === null ? Number.MAX_SAFE_INTEGER : decodeHistoryCursor(cursor);
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-releases', { limit });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const rows = database.prepare(`
+                SELECT ${ RELEASE_COLUMNS }
+                FROM releases
+                WHERE sequence < ?
+                ORDER BY sequence DESC
+                LIMIT ?
+            `).all(before, limit + 1);
+            trace.ok();
+            return pageFromRows(rows, limit, releaseFromRow);
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError('NodeContentStore failed to list releases', { cause });
+        }
+    }
+
+    /**
+     * Lists Activations newest first, for one build or across every build.
+     * @param {Object} context - Request context
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentActivationPageOptions} [options] - Page options and an optional buildId filter
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     */
+    async listActivations(context, options) {
+        this.#assertOpen();
+        assert(
+            options === undefined || options === null || isPlainObject(options),
+            'NodeContentStore#listActivations: options must be a plain object',
+        );
+
+        const { buildId, ...pageOptions } = options ?? {};
+        if (buildId !== undefined && buildId !== null) {
+            assertNonEmptyString(buildId, 'NodeContentStore#listActivations: options.buildId');
+        }
+        const { limit, cursor } = normalizeHistoryPage(pageOptions, 'NodeContentStore#listActivations: options');
+        const before = cursor === null ? Number.MAX_SAFE_INTEGER : decodeHistoryCursor(cursor);
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-activations', { buildId, limit });
+        const database = await this.#getTracedDatabase(context, trace);
+        try {
+            const filter = buildId ? 'AND build_id = ?' : '';
+            const bindings = buildId ? [ before, buildId, limit + 1 ] : [ before, limit + 1 ];
+            const rows = database.prepare(`
+                SELECT ${ ACTIVATION_COLUMNS }
+                FROM activations
+                WHERE sequence < ? ${ filter }
+                ORDER BY sequence DESC
+                LIMIT ?
+            `).all(...bindings);
+            trace.ok();
+            return pageFromRows(rows, limit, activationFromRow);
+        } catch (cause) {
+            trace.error();
+            throw new OperationalError('NodeContentStore failed to list activations', { cause });
+        }
+    }
+
+    // Runs inside a transaction. The pointer is written before the Activation,
+    // so a failed Activation insert undoes the pointer write it follows.
+    #assignBuildInTransaction(database, buildId, { rootHash, expectedAssignmentId, activation, code }) {
+        const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
+        if (!closure) {
+            return { outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
+        }
+
+        const current = database.prepare(`SELECT ${ BUILD_POINTER_COLUMNS } FROM builds WHERE build_id = ?`).get(buildId);
+        if (expectedAssignmentId !== undefined && expectedAssignmentId !== (current?.assignment_id ?? null)) {
+            return { outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
+        }
+
+        // A build's code info is set once: later assignments keep it, repeat
+        // it, or are refused.
+        const storedCode = current ? codeFromRow(current) : null;
+        if (code && storedCode && (code.revision !== storedCode.revision || code.fingerprint !== storedCode.fingerprint)) {
+            return { outcome: BUILD_ASSIGNMENT_OUTCOME.CODE_MISMATCH, code: storedCode };
+        }
+        const effectiveCode = storedCode ?? code;
+
+        if (current?.root_hash === rootHash) {
+            if (!storedCode && code) {
+                database.prepare('UPDATE builds SET code_revision = ?, code_fingerprint = ? WHERE build_id = ?')
+                    .run(code.revision, code.fingerprint, buildId);
+            }
+            return {
+                outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
+                pointer: { ...pointerFromRow(current), code: effectiveCode },
+                previousRootHash: rootHash,
+            };
+        }
+
+        const previousRootHash = current?.root_hash ?? null;
+        const assignmentId = this.#randomUUID();
+        const assignedAt = new Date(this.#now()).toISOString();
+
+        database.prepare(`
+            INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id, code_revision, code_fingerprint)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(build_id) DO UPDATE SET
+                root_hash = excluded.root_hash,
+                assigned_at = excluded.assigned_at,
+                assignment_id = excluded.assignment_id,
+                code_revision = excluded.code_revision,
+                code_fingerprint = excluded.code_fingerprint
+        `).run(
+            buildId,
+            rootHash,
+            assignedAt,
+            assignmentId,
+            effectiveCode?.revision ?? null,
+            effectiveCode?.fingerprint ?? null,
+        );
+
+        database.prepare(`
+            INSERT INTO activations (
+                build_id, assignment_id, from_release_id, to_release_id, activated_at,
+                reason, actor_type, actor_id, actor_name, source_revision, summary, force_reason
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            buildId,
+            assignmentId,
+            previousRootHash,
+            rootHash,
+            assignedAt,
+            activation.reason,
+            activation.actor.type,
+            activation.actor.id,
+            activation.actor.name,
+            activation.sourceRevision,
+            activation.summary,
+            activation.forceReason,
+        );
+
+        return {
+            outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
+            pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode },
+            previousRootHash,
+        };
+    }
+
+    // Runs inside a transaction, so the closure check, the existence check,
+    // and the insert are one operation.
+    #recordReleaseInTransaction(database, input) {
+        const { releaseId, createdBy } = input;
+
+        const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(releaseId);
+        if (!closure) {
+            return { outcome: RELEASE_RECORD_OUTCOME.MISSING_CLOSURE };
+        }
+
+        const select = database.prepare(`SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`);
+        const existing = select.get(releaseId);
+        if (existing) {
+            return { outcome: RELEASE_RECORD_OUTCOME.EXISTS, record: releaseFromRow(existing) };
+        }
+
+        database.prepare(`
+            INSERT INTO releases (
+                release_id, created_at, created_by_type, created_by_id, created_by_name,
+                object_count, total_bytes, contract_version, provenance_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            releaseId,
+            new Date(this.#now()).toISOString(),
+            createdBy.type,
+            createdBy.id,
+            createdBy.name,
+            input.objectCount,
+            input.totalBytes,
+            input.contractVersion,
+            JSON.stringify(input.provenance),
+        );
+
+        return { outcome: RELEASE_RECORD_OUTCOME.CREATED, record: releaseFromRow(select.get(releaseId)) };
+    }
+
+    // Commits what the callback wrote, or rolls all of it back when the
+    // callback or the commit throws. The callback must be synchronous.
+    #transact(database, callback) {
         let began = false;
         try {
             database.exec('BEGIN IMMEDIATE');
             began = true;
-
-            const closure = database.prepare('SELECT 1 FROM closures WHERE root_hash = ?').get(rootHash);
-            if (!closure) {
-                database.exec('COMMIT');
-                began = false;
-                return { outcome: BUILD_ASSIGNMENT_OUTCOME.MISSING_CLOSURE };
-            }
-
-            const current = database.prepare(
-                'SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?',
-            ).get(buildId);
-            const currentRootHash = current?.root_hash ?? null;
-            if (expectedAssignmentId !== undefined && expectedAssignmentId !== (current?.assignment_id ?? null)) {
-                database.exec('COMMIT');
-                began = false;
-                return { outcome: BUILD_ASSIGNMENT_OUTCOME.CONFLICT };
-            }
-
-            if (currentRootHash === rootHash) {
-                const pointer = { rootHash: current.root_hash, assignedAt: current.assigned_at, assignmentId: current.assignment_id };
-                database.exec('COMMIT');
-                began = false;
-                return {
-                    outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
-                    pointer,
-                    previousRootHash: pointer.rootHash,
-                };
-            }
-
-            const assignmentId = crypto.randomUUID();
-            const assignedAt = new Date().toISOString();
-            database.prepare(`
-                INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(build_id) DO UPDATE SET
-                    root_hash = excluded.root_hash,
-                    assigned_at = excluded.assigned_at,
-                    assignment_id = excluded.assignment_id
-            `).run(buildId, rootHash, assignedAt, assignmentId);
-            const result = {
-                outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
-                pointer: { rootHash, assignedAt, assignmentId },
-                previousRootHash: currentRootHash,
-            };
+            const result = callback();
             database.exec('COMMIT');
             began = false;
             return result;
@@ -495,7 +722,7 @@ export default class ContentStore {
                     // SQLite may have rolled the transaction back already.
                 }
             }
-            throw new OperationalError(`NodeContentStore failed to assign build "${ buildId }"`, { cause });
+            throw cause;
         }
     }
 
@@ -637,8 +864,38 @@ export default class ContentStore {
                         build_id   TEXT PRIMARY KEY,
                         root_hash  TEXT NOT NULL REFERENCES closures(root_hash),
                         assigned_at TEXT NOT NULL,
-                        assignment_id TEXT NOT NULL UNIQUE
+                        assignment_id TEXT NOT NULL UNIQUE,
+                        code_revision TEXT,
+                        code_fingerprint TEXT
                     );
+                    CREATE TABLE releases (
+                        sequence         INTEGER PRIMARY KEY,
+                        release_id       TEXT    NOT NULL UNIQUE REFERENCES closures(root_hash),
+                        created_at       TEXT    NOT NULL,
+                        created_by_type  TEXT    NOT NULL,
+                        created_by_id    TEXT    NOT NULL,
+                        created_by_name  TEXT,
+                        object_count     INTEGER NOT NULL,
+                        total_bytes      INTEGER NOT NULL,
+                        contract_version INTEGER NOT NULL,
+                        provenance_json  TEXT    NOT NULL
+                    );
+                    CREATE TABLE activations (
+                        sequence        INTEGER PRIMARY KEY,
+                        build_id        TEXT NOT NULL,
+                        assignment_id   TEXT NOT NULL UNIQUE,
+                        from_release_id TEXT,
+                        to_release_id   TEXT NOT NULL,
+                        activated_at    TEXT NOT NULL,
+                        reason          TEXT NOT NULL,
+                        actor_type      TEXT NOT NULL,
+                        actor_id        TEXT NOT NULL,
+                        actor_name      TEXT,
+                        source_revision TEXT,
+                        summary         TEXT,
+                        force_reason    TEXT
+                    );
+                    CREATE INDEX activations_build ON activations (build_id, sequence);
                     PRAGMA user_version = ${ SCHEMA_VERSION };
                 `);
                 this.#logger.info('migrated content store database', { version: SCHEMA_VERSION });
@@ -746,6 +1003,57 @@ export default class ContentStore {
             },
         });
     }
+}
+
+function codeFromRow(row) {
+    if (row.code_revision === null || row.code_fingerprint === null) {
+        return null;
+    }
+    return { revision: row.code_revision, fingerprint: row.code_fingerprint };
+}
+
+function pointerFromRow(row) {
+    return {
+        rootHash: row.root_hash,
+        assignedAt: row.assigned_at,
+        assignmentId: row.assignment_id,
+        code: codeFromRow(row),
+    };
+}
+
+function releaseFromRow(row) {
+    return {
+        releaseId: row.release_id,
+        createdAt: row.created_at,
+        createdBy: { type: row.created_by_type, id: row.created_by_id, name: row.created_by_name },
+        objectCount: row.object_count,
+        totalBytes: row.total_bytes,
+        contractVersion: row.contract_version,
+        provenance: JSON.parse(row.provenance_json),
+    };
+}
+
+function activationFromRow(row) {
+    return {
+        buildId: row.build_id,
+        assignmentId: row.assignment_id,
+        fromReleaseId: row.from_release_id,
+        toReleaseId: row.to_release_id,
+        activatedAt: row.activated_at,
+        reason: row.reason,
+        actor: { type: row.actor_type, id: row.actor_id, name: row.actor_name },
+        sourceRevision: row.source_revision,
+        summary: row.summary,
+        forceReason: row.force_reason,
+    };
+}
+
+// The query asked for one row more than the page holds. When it came back,
+// another page follows, and the cursor is the position of the last row kept.
+function pageFromRows(rows, limit, mapRow) {
+    const kept = rows.slice(0, limit);
+    const cursor = rows.length > limit ? encodeHistoryCursor(kept.at(-1).sequence) : null;
+    return { items: kept.map(mapRow), cursor };
 }
 
 function assertValidType(type, method, acceptedTypes) {

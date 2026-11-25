@@ -82,6 +82,45 @@ function makeConformanceStore() {
     };
 }
 
+// Every assignment needs an Activation; most tests do not care what it says.
+function assignment(fields) {
+    return {
+        activation: { reason: 'publish', actor: { type: 'deploy-key', id: 'test-key' } },
+        ...fields,
+    };
+}
+
+// A Durable Object stub with one method, which records each call's arguments
+// and answers with what `respond` returns or throws.
+function makeScriptedDurableObject(methodName, respond) {
+    const calls = [];
+    return {
+        calls,
+        async [methodName](...args) {
+            calls.push(args);
+            return respond(...args);
+        },
+    };
+}
+
+function throwOverloaded() {
+    const error = new Error('too many requests');
+    error.overloaded = true;
+    throw error;
+}
+
+function releaseInput(fields) {
+    return {
+        releaseId: 'release-hash',
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 1,
+        totalBytes: 10,
+        contractVersion: 2,
+        provenance: {},
+        ...fields,
+    };
+}
+
 function makeDeferredPromise() {
     let resolve;
     let reject;
@@ -356,7 +395,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObject });
 
             await store.getBuild(context, 'build-1');
-            const outcome = await store.assignBuild(context, 'build-1', { rootHash: 'missing-hash' });
+            const outcome = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'missing-hash' }));
             const build = await store.getBuild(context, 'build-1');
 
             assertEqual('missingClosure', outcome.outcome);
@@ -372,10 +411,10 @@ describe('CloudflareContentStore', ({ describe }) => {
             };
             const store = makeStore();
 
-            const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', {
+            const outcome = await store.assignBuild(makeContext({ durableObject }), 'build-1', assignment({
                 rootHash: 'root-hash',
                 expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
-            });
+            }));
 
             assertEqual('conflict', outcome.outcome);
         });
@@ -383,21 +422,107 @@ describe('CloudflareContentStore', ({ describe }) => {
         it('passes rootHash and expectedAssignmentId through to the Durable Object', async () => {
             let received = null;
             const durableObject = {
-                async assignBuild(buildId, assignment) {
-                    received = { buildId, assignment };
+                async assignBuild(buildId, forwarded) {
+                    received = { buildId, forwarded };
                     return { success: true, outcome: 'assigned' };
                 },
             };
             const store = makeStore();
 
-            await store.assignBuild(makeContext({ durableObject }), 'build-1', {
+            await store.assignBuild(makeContext({ durableObject }), 'build-1', assignment({
                 rootHash: 'root-hash',
                 expectedAssignmentId: '00000000-0000-4000-8000-000000000001',
-            });
+            }));
 
             assertEqual('build-1', received.buildId);
-            assertEqual('root-hash', received.assignment.rootHash);
-            assertEqual('00000000-0000-4000-8000-000000000001', received.assignment.expectedAssignmentId);
+            assertEqual('root-hash', received.forwarded.rootHash);
+            assertEqual('00000000-0000-4000-8000-000000000001', received.forwarded.expectedAssignmentId);
+        });
+
+        it('passes the normalized Activation and code info to the Durable Object', async () => {
+            let received = null;
+            const durableObject = {
+                async assignBuild(_buildId, forwarded) {
+                    received = forwarded;
+                    return { success: true, outcome: 'assigned' };
+                },
+            };
+            const store = makeStore();
+
+            await store.assignBuild(makeContext({ durableObject }), 'build-2', assignment({ rootHash: 'root-hash' }));
+            const withoutCode = received;
+            await store.assignBuild(makeContext({ durableObject }), 'build-1', {
+                rootHash: 'root-hash',
+                activation: { reason: 'rollback', actor: { type: 'user', id: 'user-1' }, summary: 'Undo' },
+                code: { revision: 'revision-1', fingerprint: 'fingerprint-1' },
+                ignored: true,
+            });
+
+            assertEqual('activation,code,expectedAssignmentId,rootHash', Object.keys(received).sort().join(','));
+            assertEqual(
+                '{"reason":"rollback","actor":{"type":"user","id":"user-1","name":null},"sourceRevision":null,"summary":"Undo","forceReason":null}',
+                JSON.stringify(received.activation),
+            );
+            assertEqual('{"revision":"revision-1","fingerprint":"fingerprint-1"}', JSON.stringify(received.code));
+            assertEqual(null, withoutCode.code);
+        });
+
+        it('rejects a malformed Activation or code info before calling the Durable Object', async () => {
+            let calls = 0;
+            const durableObject = {
+                async assignBuild() {
+                    calls += 1;
+                    return { success: true, outcome: 'assigned' };
+                },
+            };
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+            const actor = { type: 'deploy-key', id: 'key-1' };
+
+            for (const badAssignment of [
+                { rootHash: 'root-hash' },
+                { rootHash: 'root-hash', activation: { reason: 'deploy', actor } },
+                { rootHash: 'root-hash', activation: { reason: 'publish', actor, forceReson: 'misspelled' } },
+                assignment({ rootHash: 'root-hash', code: { revision: 'revision-1' } }),
+                assignment({ rootHash: 'root-hash', code: { revision: 'revision-1', fingerprint: 'f'.repeat(257) } }),
+            ]) {
+                const caught = await catchAsyncError(() => store.assignBuild(context, 'build-1', badAssignment));
+
+                assertEqual('AssertionError', caught?.name);
+                assertMatches('ContentStore#assignBuild: assignment.', caught.message);
+            }
+            assertEqual(0, calls);
+        });
+
+        it('does not invalidate the isolate cache on a code mismatch', async () => {
+            let getBuildCalls = 0;
+            const durableObject = {
+                async getBuild() {
+                    getBuildCalls += 1;
+                    return { success: true, rootHash: 'hash-new', entries: makeEntries('hash-new') };
+                },
+                async assignBuild() {
+                    return {
+                        success: true,
+                        outcome: 'codeMismatch',
+                        code: { revision: 'revision-1', fingerprint: 'fingerprint-1' },
+                    };
+                },
+            };
+            const store = makeStore({ indexCacheTtlSeconds: 600 });
+            const context = makeContext({ durableObject });
+
+            await store.getBuild(context, 'build-1');
+            const result = await store.assignBuild(context, 'build-1', assignment({
+                rootHash: 'hash-old',
+                code: { revision: 'revision-2', fingerprint: 'fingerprint-1' },
+            }));
+            await store.getBuild(context, 'build-1');
+
+            assertEqual('codeMismatch', result.outcome);
+            assertEqual('code,outcome', Object.keys(result).sort().join(','));
+            assertEqual('revision-1', result.code.revision);
+            assertEqual(1, getBuildCalls);
         });
 
         it('uses the stable Durable Object name scoped by wire format', async () => {
@@ -419,7 +544,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             };
             const store = makeStore({ wireFormat: 'format-2' });
 
-            await store.assignBuild(context, 'build-1', { rootHash: 'root-hash' });
+            await store.assignBuild(context, 'build-1', assignment({ rootHash: 'root-hash' }));
 
             assertEqual('ContentAddressableStore#format-2', receivedName);
         });
@@ -443,7 +568,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const before = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', before.entries['/a.txt'][1]);
 
-            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old' });
+            await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-old' }));
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-old', after.entries['/a.txt'][1]);
@@ -466,7 +591,7 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             await store.getBuild(context, 'build-1');
 
-            await store.assignBuild(context, 'build-1', { rootHash: 'hash-old', expectedAssignmentId: '00000000-0000-4000-8000-000000000001' });
+            await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-old', expectedAssignmentId: '00000000-0000-4000-8000-000000000001' }));
 
             const after = await store.getBuild(context, 'build-1');
             assertEqual('hash-new', after.entries['/a.txt'][1]);
@@ -493,7 +618,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const context = makeContext({ durableObject });
 
             await store.getBuild(context, 'build-1');
-            const result = await store.assignBuild(context, 'build-1', { rootHash: 'hash-new' });
+            const result = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-new' }));
             await store.getBuild(context, 'build-1');
 
             assertEqual('unchanged', result.outcome);
@@ -509,7 +634,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash' }),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', assignment({ rootHash: 'root-hash' })),
             );
 
             assert(caught, 'expected an error to be thrown');
@@ -528,7 +653,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), '', { rootHash: 'root-hash' }),
+                () => store.assignBuild(makeContext({ durableObject }), '', assignment({ rootHash: 'root-hash' })),
             );
 
             assertEqual('AssertionError', caught.name);
@@ -546,7 +671,7 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: '' }),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', assignment({ rootHash: '' })),
             );
 
             assertEqual('AssertionError', caught.name);
@@ -564,11 +689,213 @@ describe('CloudflareContentStore', ({ describe }) => {
             const store = makeStore();
 
             const caught = await catchAsyncError(
-                () => store.assignBuild(makeContext({ durableObject }), 'build-1', { rootHash: 'root-hash', expectedAssignmentId: '' }),
+                () => store.assignBuild(makeContext({ durableObject }), 'build-1', assignment({ rootHash: 'root-hash', expectedAssignmentId: '' })),
             );
 
             assertEqual('AssertionError', caught.name);
             assertEqual(0, calls);
+        });
+    });
+
+    describe('recordRelease()', ({ it }) => {
+        it('sends the normalized record and returns the outcome without the envelope', async () => {
+            const record = { releaseId: 'release-hash' };
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: true, outcome: 'created', record }));
+            const store = makeStore();
+
+            const result = await store.recordRelease(makeContext({ durableObject }), releaseInput());
+
+            assertEqual('outcome,record', Object.keys(result).sort().join(','));
+            assertEqual('created', result.outcome);
+            assertEqual('release-hash', result.record.releaseId);
+            assertEqual(null, durableObject.calls[0][0].createdBy.name);
+        });
+
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: true, outcome: 'created' }));
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            for (const badRelease of [ undefined, releaseInput({ releaseId: '' }), releaseInput({ provenance: { branch: 'main' } }) ]) {
+                const caught = await catchAsyncError(() => store.recordRelease(context, badRelease));
+
+                assertEqual('AssertionError', caught?.name);
+                assertMatches('ContentStore#recordRelease: release', caught.message);
+            }
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.recordRelease(makeContext({ durableObject }), releaseInput()));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.recordRelease(makeContext({ durableObject }), releaseInput()));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
+        });
+    });
+
+    describe('getRelease()', ({ it }) => {
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', () => ({ success: true, record: null }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), ''));
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), 'release-hash'));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), 'release-hash'));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
+        });
+    });
+
+    describe('listReleases()', ({ it }) => {
+        it('sends the decoded cursor and returns the next position as a cursor', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', (page) => {
+                return { success: true, items: [ { releaseId: 'a' } ], nextSequence: page.before === null ? 7 : null };
+            });
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const first = await store.listReleases(context, { limit: 1 });
+            const second = await store.listReleases(context, { limit: 1, cursor: first.cursor });
+
+            assertEqual('{"limit":1,"before":null}', JSON.stringify(durableObject.calls[0][0]));
+            assertEqual('{"limit":1,"before":7}', JSON.stringify(durableObject.calls[1][0]));
+            assertEqual('7', first.cursor);
+            assertEqual(null, second.cursor);
+            assertEqual('cursor,items', Object.keys(first).sort().join(','));
+        });
+
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', () => ({ success: true, items: [], nextSequence: null }));
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const badCursor = await catchAsyncError(() => store.listReleases(context, { cursor: '01' }));
+            const badLimit = await catchAsyncError(() => store.listReleases(context, { limit: 0 }));
+            const badKey = await catchAsyncError(() => store.listReleases(context, { buildId: 'build-1' }));
+
+            assertEqual('BadRequestError', badCursor.name);
+            assertEqual('InvalidCursor', badCursor.code);
+            assertEqual('AssertionError', badLimit.name);
+            assertEqual('AssertionError', badKey.name);
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listReleases(makeContext({ durableObject })));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listReleases(makeContext({ durableObject })));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
+        });
+    });
+
+    describe('listActivations()', ({ it }) => {
+        it('sends the decoded cursor and returns the next position as a cursor', async () => {
+            const received = [];
+            const durableObject = {
+                async listActivations(page) {
+                    received.push(page);
+                    return { success: true, items: [ { assignmentId: 'a' } ], nextSequence: received.length === 1 ? 41 : null };
+                },
+            };
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const first = await store.listActivations(context);
+            const second = await store.listActivations(context, { buildId: 'build-1', limit: 2, cursor: first.cursor });
+
+            assertEqual('{"buildId":null,"limit":100,"before":null}', JSON.stringify(received[0]));
+            assertEqual('{"buildId":"build-1","limit":2,"before":41}', JSON.stringify(received[1]));
+            assertEqual('41', first.cursor);
+            assertEqual(null, second.cursor);
+            assertEqual('cursor,items', Object.keys(first).sort().join(','));
+            assertEqual('a', first.items[0].assignmentId);
+        });
+
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('listActivations', () => ({ success: true, items: [], nextSequence: null }));
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const badCursor = await catchAsyncError(() => store.listActivations(context, { cursor: 'abc' }));
+            const badLimit = await catchAsyncError(() => store.listActivations(context, { limit: 101 }));
+            const badBuildId = await catchAsyncError(() => store.listActivations(context, { buildId: '' }));
+            const badOptions = await catchAsyncError(() => store.listActivations(context, 'build-1'));
+
+            assertEqual('BadRequestError', badCursor.name);
+            assertEqual('InvalidCursor', badCursor.code);
+            assertEqual('AssertionError', badLimit.name);
+            assertEqual('AssertionError', badBuildId.name);
+            assertEqual('AssertionError', badOptions.name);
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('listActivations', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listActivations(makeContext({ durableObject })));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('listActivations', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listActivations(makeContext({ durableObject })));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
         });
     });
 
@@ -1084,8 +1411,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('leaves a blob unregistered after registry failure and repairs it on repeat upload', async () => {
-            let nowMilliseconds = 1_800_000_000_000;
-            const kvStore = createFakeKVNamespace({ now: () => nowMilliseconds });
+            const kvStore = createFakeKVNamespace({ now: () => 1_800_000_000_000 });
             const files = new Map();
             let registerCalls = 0;
             const durableObject = {
@@ -1108,9 +1434,8 @@ describe('CloudflareContentStore', ({ describe }) => {
                 () => store.putFile(context, '/a.txt', 'hash-a', 'bytes'),
             );
             const missing = await store.statFiles(context, [ 'hash-a' ]);
-            // KV accepts one write per second to a key, so the repeat upload
-            // comes a second later.
-            nowMilliseconds += 1000;
+            // The repeat upload comes within the second in which KV refuses a
+            // second write to the key.
             const size = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
             const repaired = await store.statFiles(context, [ 'hash-a' ]);
 
@@ -1119,6 +1444,67 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(5, size);
             assertEqual(5, repaired[0].size);
             assertEqual(2, kvStore.calls.length);
+        });
+
+        it('accepts a repeat upload KV refuses for its write rate, and registers it again', async () => {
+            const kvStore = createFakeKVNamespace();
+            const registered = [];
+            const durableObject = {
+                async registerFile(hash, size) {
+                    registered.push({ hash, size });
+                    return { success: true };
+                },
+            };
+            const context = makeContext({ durableObject, kvStore });
+            const store = makeStore();
+
+            const first = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
+            const second = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
+
+            assertEqual(5, first);
+            assertEqual(5, second);
+            assertEqual(2, registered.length);
+            assertEqual('hash-a', registered[1].hash);
+            assertEqual(5, registered[1].size);
+            assertEqual('put,put', kvStore.calls.map((call) => call.method).join(','));
+            assertEqual('bytes', await kvStore.get('hash-a#1'));
+        });
+
+        it('rethrows any other KV write failure without registering the file', async () => {
+            const failure = new Error('KV PUT failed: 500 Internal Server Error');
+            const kvStore = {
+                async put() {
+                    throw failure;
+                },
+            };
+            let registerCalls = 0;
+            const durableObject = {
+                async registerFile() {
+                    registerCalls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.putFile(makeContext({ durableObject, kvStore }), '/a.txt', 'hash-a', 'bytes'),
+            );
+
+            assertEqual(failure, caught);
+            assertEqual(0, registerCalls);
+        });
+
+        it('answers an empty bulk read without calling KV', async () => {
+            const kvStore = createFakeKVNamespace();
+            const store = makeStore();
+            const context = makeContext({ kvStore });
+
+            const results = await store.getFiles(context, 'text', []);
+            const caught = await catchAsyncError(() => store.getFiles(context, 'arrayBuffer', []));
+
+            assertEqual(0, results.length);
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, kvStore.calls.length);
         });
 
         it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {

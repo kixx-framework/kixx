@@ -285,7 +285,7 @@ So a suite must also work where storage outlives the test and every call is a ne
 - Call the factory inside each `it`, never while registering tests. Each test runs in its own request, so tests share no state. The probe also lists tests with a factory that throws.
 - Build every key from a value unique to the test, such as `crypto.randomUUID()`, wherever storage persists.
 - Never wait for an expiry to pass.
-- Never write one key twice within a second, or read, delete, or rewrite a key just written, unless the factory's `afterWrite()` hook runs in between. Workers KV allows one write per second to a key. `afterWrite()` hides the difference between stores: over the KV fake it moves the clock on a second, over the Node.js adapter it does nothing, and over real KV it waits the second out.
+- Never write one key twice within a second, or read, delete, or rewrite a key just written, unless the factory's `afterWrite()` hook runs in between. Workers KV allows one write per second to a key. `afterWrite()` hides the difference between stores: over the KV fake it moves the clock on a second, over the Node.js adapter it does nothing, and over real KV it waits the second out. One exception: the content store suite uploads one hash twice on purpose, with no hook, because that adapter absorbs KV's write rate. The rule holds for every other suite.
 - Keep each test to a few storage calls, under about 20. A Worker limits the calls one request can make.
 - Never patch a global. Inside a live server that would change the server, for example by swallowing its logs.
 - Never put a secret in an assertion message.

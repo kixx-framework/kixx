@@ -12,6 +12,14 @@ import {
     isPlainObject,
 } from '../../../../assertions/mod.js';
 import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import {
+    decodeHistoryCursor,
+    encodeHistoryCursor,
+    normalizeActivation,
+    normalizeCodeInfo,
+    normalizeHistoryPage,
+    normalizeReleaseInput,
+} from '../../../../content-addressable-store/publishing-history.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
 
 
@@ -74,10 +82,14 @@ const DURABLE_OBJECT_OVERLOADED_RETRY_AFTER_SECONDS = 5;
 // a programmer error here and must not be retried or wrapped.
 const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
 
+// Workers KV allows one write per second to a key and rejects a faster one
+// with this message.
+const KV_WRITE_RATE_LIMIT_MESSAGE = 'KV PUT failed: 429 Too Many Requests';
+
 
 /**
- * Stores content-addressed blobs in Cloudflare KV and build indexes in a
- * Durable Object.
+ * Stores content-addressed blobs in Cloudflare KV, and build indexes and
+ * publishing history in a Durable Object.
  *
  * Blob and index keys include the configured wire format, isolating data
  * written by format. Build reads use a bounded isolate-local promise cache.
@@ -313,7 +325,7 @@ export default class ContentStore {
      * Retrieves build pointer metadata without loading closure entries.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<({rootHash: string, assignedAt: string, assignmentId: string}|null)>} Pointer metadata, or null when unassigned
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentBuildPointer|null)>} Pointer metadata, or null when unassigned
      */
     async getBuildPointer(context, buildId) {
         assertNonEmptyString(buildId, 'ContentStore#getBuildPointer: buildId');
@@ -342,7 +354,7 @@ export default class ContentStore {
     /**
      * Lists every build pointer newest assignment first.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
-     * @returns {Promise<Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>>} Registered build pointers
+     * @returns {Promise<Array<import('../../../../content-addressable-store/content-store-interface.js').ListedContentBuildPointer>>} Registered build pointers
      */
     async listBuilds(context) {
         const trace = new TraceLogger(context.logger, 'content-store-list-builds');
@@ -404,12 +416,16 @@ export default class ContentStore {
      *
      * Unlike the read methods, this takes no type: a write carries its own
      * representation, so the blob itself is the only thing worth checking.
+     *
+     * Idempotent: uploading one hash again resolves the same size, even
+     * within the second in which KV refuses a second write to the key.
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} _pathname - Logical pathname retained for store interface compatibility
      * @param {string} hash - Content hash identifying the blob
      * @param {string|ArrayBuffer} blob - Blob to store
      * @returns {Promise<number>} Stored blob size in bytes
      * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
+     * @throws {Error} When KV rejects the write for any reason but its per-key write rate
      */
     async putFile(context, pathname, hash, blob) {
         assertNonEmptyString(hash, 'ContentStore#putFile: hash');
@@ -419,7 +435,18 @@ export default class ContentStore {
         );
         const kv = this.#resolveKvStore(context);
         const key = this.#buildFileKey(hash);
-        await kv.put(key, blob);
+
+        try {
+            await kv.put(key, blob);
+        } catch (err) {
+            if (!isKvWriteRateLimitError(err)) {
+                throw err;
+            }
+            // The key is the content hash, so the bytes already stored under
+            // it are these bytes.
+            this.#logger.debug('blob already written within the last second', { hash });
+        }
+
         const size = isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
 
         const trace = new TraceLogger(context.logger, 'content-store-put-file', { pathname, hash });
@@ -489,6 +516,7 @@ export default class ContentStore {
      *
      * At most `KV_BULK_MAX_KEYS` blobs may be requested per call; a longer
      * `files` list is a programmer error, not a read this store will split.
+     * An empty `files` list resolves an empty array without reading KV.
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {'text'} type - Representation to return for every blob
      * @param {Array<{hash: string}>} files - Blob descriptors to retrieve
@@ -506,6 +534,11 @@ export default class ContentStore {
             files.length <= KV_BULK_MAX_KEYS,
             `ContentStore#getFiles() accepts at most ${ KV_BULK_MAX_KEYS } files per call; received ${ files.length }`,
         );
+
+        // KV rejects a bulk get() with no keys.
+        if (files.length === 0) {
+            return [];
+        }
 
         const kv = this.#resolveKvStore(context);
 
@@ -564,11 +597,13 @@ export default class ContentStore {
     /**
      * Points a build at a previously persisted index closure, optionally only
      * when the build's current assignment identity still equals
-     * `expectedAssignmentId`.
+     * `expectedAssignmentId`. A changed assignment and its Activation are
+     * written together or not at all.
      * @param {RequestContext} context - Request context exposing the configured Durable Object binding
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignment} assignment - Desired closure, optional pointer precondition, the Activation to record, and optional code info
      * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult>}
+     * @throws {AssertionError} When the assignment is malformed; no Durable Object call is made
      * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
      * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
      */
@@ -583,13 +618,19 @@ export default class ContentStore {
             assert(isValidAssignmentId(expectedAssignmentId), 'ContentStore#assignBuild: expectedAssignmentId');
         }
 
+        // An error thrown inside the Durable Object arrives as a plain remote
+        // Error, so input is validated on this side of the call.
+        const activation = normalizeActivation(assignment.activation, 'ContentStore#assignBuild: assignment.activation');
+        const code = normalizeCodeInfo(assignment.code, 'ContentStore#assignBuild: assignment.code');
+        const forwarded = { rootHash, expectedAssignmentId, activation, code };
+
         const trace = new TraceLogger(context.logger, 'content-assign-build', { buildId, rootHash, expectedAssignmentId });
         let result;
         try {
             result = await this.#callDurableObject(
                 context,
                 'assignBuild',
-                (durableObject) => durableObject.assignBuild(buildId, { rootHash, expectedAssignmentId }),
+                (durableObject) => durableObject.assignBuild(buildId, forwarded),
             );
             trace.ok();
         } catch (err) {
@@ -605,8 +646,8 @@ export default class ContentStore {
         // A concurrent read can still repopulate the cache, and other isolates
         // retain their entries until the configured TTL. Invalidating before
         // assignment would be worse: a failed assignment leaves the old closure
-        // correct and would only force a redundant read. A conflict or missing-
-        // closure outcome left the pointer untouched, so its cache stays valid.
+        // correct and would only force a redundant read. Every other outcome
+        // left the pointer's closure untouched, so its cache stays valid.
         if (result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED) {
             this.#buildCache.delete(buildId);
         }
@@ -614,12 +655,175 @@ export default class ContentStore {
         const { success: _success, ...assignmentResult } = result;
         return assignmentResult;
     }
+
+    /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult>}
+     * @throws {AssertionError} When the record is malformed; no Durable Object call is made
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async recordRelease(context, release) {
+        const input = normalizeReleaseInput(release, 'ContentStore#recordRelease: release');
+
+        const trace = new TraceLogger(context.logger, 'content-store-record-release', { releaseId: input.releaseId });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'recordRelease',
+                (durableObject) => durableObject.recordRelease(input),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#recordRelease() was unsuccessful: ${ result.message }`);
+        }
+
+        const { success: _success, ...recordResult } = result;
+        return recordResult;
+    }
+
+    /**
+     * Reads one Release record. Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)>} The record, or null when none was recorded
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async getRelease(context, releaseId) {
+        assertNonEmptyString(releaseId, 'ContentStore#getRelease: releaseId');
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-release', { releaseId });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'getRelease',
+                (durableObject) => durableObject.getRelease(releaseId),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#getRelease() was unsuccessful: ${ result.message }`);
+        }
+
+        return result.record;
+    }
+
+    /**
+     * Lists Release records newest first. Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPageOptions} [options] - Page options
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async listReleases(context, options) {
+        const { limit, cursor } = normalizeHistoryPage(options, 'ContentStore#listReleases: options');
+        const page = { limit, before: cursor === null ? null : decodeHistoryCursor(cursor) };
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-releases', { limit });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'listReleases',
+                (durableObject) => durableObject.listReleases(page),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#listReleases() was unsuccessful: ${ result.message }`);
+        }
+
+        return historyPageFromResult(result);
+    }
+
+    /**
+     * Lists Activations newest first, for one build or across every build.
+     * Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentActivationPageOptions} [options] - Page options and an optional buildId filter
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async listActivations(context, options) {
+        assert(
+            options === undefined || options === null || isPlainObject(options),
+            'ContentStore#listActivations: options must be a plain object',
+        );
+
+        const { buildId, ...pageOptions } = options ?? {};
+        if (buildId !== undefined && buildId !== null) {
+            assertNonEmptyString(buildId, 'ContentStore#listActivations: options.buildId');
+        }
+        const { limit, cursor } = normalizeHistoryPage(pageOptions, 'ContentStore#listActivations: options');
+        const page = {
+            buildId: buildId ?? null,
+            limit,
+            before: cursor === null ? null : decodeHistoryCursor(cursor),
+        };
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-activations', { buildId, limit });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'listActivations',
+                (durableObject) => durableObject.listActivations(page),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#listActivations() was unsuccessful: ${ result.message }`);
+        }
+
+        return historyPageFromResult(result);
+    }
 }
 
 function assertValidType(value, method, acceptedTypes) {
     if (!acceptedTypes.includes(value)) {
         throw new AssertionError(`Invalid type "${ value }" passed into ContentStore#${ method }`);
     }
+}
+
+// KV documents this message for a write that breaks its per-key rate, and no
+// error class, status, or code to test instead. A 429 raised for any other
+// reason carries the same message, and is reported as stored too.
+function isKvWriteRateLimitError(err) {
+    return isString(err?.message) && err.message.includes(KV_WRITE_RATE_LIMIT_MESSAGE);
+}
+
+// The Durable Object reports where the next page starts; callers get that
+// position as an opaque cursor.
+function historyPageFromResult(result) {
+    const { items, nextSequence } = result;
+    return { items, cursor: nextSequence === null ? null : encodeHistoryCursor(nextSequence) };
 }
 
 function assertValidTupleArity(entries) {

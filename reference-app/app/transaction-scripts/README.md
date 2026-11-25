@@ -6,7 +6,7 @@ Domain logic uses Fowler's Transaction Script pattern: one async function per us
 
 A script must add something: cross-field validation, business rules, orchestration across Collections or services, or a decision about what an error means to the application. A script that only calls one service method and returns its result is an extra hop.
 
-Presentation code may call a framework service directly via `context.getService(name)` when the service owns the complete operation and no business policy applies. Example: `objects.js` in `app/presentation/request-handlers/publishing-api/` calls `ContentAddressableStore` directly, while `releases.js` and `builds.js` go through `app/transaction-scripts/publishing/` because they coordinate it with the `Release` and `Activation` Collections.
+Presentation code may call a framework service directly via `context.getService(name)` when the service owns the complete operation and no business policy applies. Example: the handlers in `app/presentation/request-handlers/publishing-api/` (`objects.js`, `releases.js`, and `builds.js`) call `ContentAddressableStore` directly, because the service owns each complete operation: creating a Release with its record, and assigning one with its history entry.
 
 This exception is narrow. Anything that touches a Collection, enforces a business rule, or must classify errors belongs in a script.
 

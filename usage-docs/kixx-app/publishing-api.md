@@ -353,8 +353,9 @@ one page publish more than one template.
 
 `attributes.provenance` is optional, immutable, non-binding metadata. Its only
 fields are `sourceRevision`, `message`, `client`, and `intendedForBuildId`, each
-a non-empty string. `intendedForBuildId` is a hint for audits; nothing stops
-assigning the Release to a different build.
+a non-empty string. `sourceRevision`, `client`, and `intendedForBuildId` may be
+at most 256 characters, and `message` at most 2,000. `intendedForBuildId` is a
+hint for audits; nothing stops assigning the Release to a different build.
 
 Creation persists nothing if any check fails:
 
@@ -623,14 +624,13 @@ same-target no-op creates no entry. Returns
 }
 ```
 
-Entry `id` is `<buildId>:<assignmentId>`, so one assignment has at most one
-entry; appending it twice rewrites that entry.
+Entry `id` is `<buildId>:<assignmentId>`. Each changed assignment has exactly
+one entry, identified by its `assignmentId`.
 
-**History is best-effort, not an audit guarantee.** The pointer commits
-first, then the server makes one attempt to append the Activation. A crash,
-timeout, or storage failure between the two leaves a permanent gap: nothing
-retries the append. The pointer is authoritative; a missing entry never
-blocks the next publish.
+**The pointer and its history entry are written together.** Every changed
+assignment has an entry, and an assignment that fails writes neither: the
+pointer does not move and no entry is added. Entries are never changed or
+deleted.
 
 ## Workflows
 

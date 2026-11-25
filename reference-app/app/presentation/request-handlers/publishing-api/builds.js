@@ -7,15 +7,12 @@ import {
 } from '../../../../kixx/errors/mod.js';
 import { isValidAssignmentId } from '../../../../kixx/content-addressable-store/build-assignment.js';
 import { isValidHash } from '../../../../kixx/content-addressable-store/addressing.js';
-import { ACTIVATION_REASONS } from '../../../collections/activation-record.js';
-import { assignRelease as assignReleaseScript } from '../../../transaction-scripts/publishing/assign-release.js';
-import { listActivations as listActivationsScript } from '../../../transaction-scripts/publishing/list-activations.js';
+import { ACTIVATION_REASONS } from '../../../../kixx/content-addressable-store/publishing-history.js';
 import {
     JSON_API_CONTENT_TYPE,
     assertJsonApiContentType,
     parseJsonApiResource,
 } from '../../lib/json-api.js';
-import { rethrowInvalidCursorAsBadRequest } from '../../lib/pagination.js';
 import { paginationParams } from './releases.js';
 
 
@@ -96,14 +93,15 @@ export async function putBuild(context, request, response) {
         throw new BadRequestError('Build write preconditions belong in JSON attributes.expectedAssignmentId; omit If-Match and If-None-Match.');
     }
 
+    const store = context.getService('ContentAddressableStore');
+
     let pointer;
     try {
-        pointer = await assignReleaseScript(context, {
-            buildId,
+        pointer = await store.assignRelease(context, buildId, {
             releaseId,
             expectedAssignmentId,
             reason,
-            activatedBy: context.user.id,
+            actor: { type: 'deploy-key', id: context.user.id },
         });
     } catch (cause) {
         if (cause.code === 'BuildPointerConflict') {
@@ -142,16 +140,11 @@ export async function listBuildActivations(context, request, response) {
         throw new NotFoundError(`Build "${ buildId }" was not found.`, { code: 'BuildNotFound' });
     }
 
-    let page;
-    try {
-        page = await listActivationsScript(context, {
-            buildId,
-            ...paginationParams(request),
-        });
-    } catch (cause) {
-        // Never returns: translates InvalidCursorError to a 400 or rethrows.
-        rethrowInvalidCursorAsBadRequest(cause);
-    }
+    // An invalid cursor is already a BadRequestError from the service.
+    const page = await store.listActivations(context, {
+        buildId,
+        ...paginationParams(request),
+    });
 
     return response.respondWithJSON(200, {
         data: page.items.map(activationResource),
@@ -173,6 +166,6 @@ function buildResource(build) {
 }
 
 function activationResource(activation) {
-    const { id, type: _type, meta: _meta, buildActivationKey: _key, ...attributes } = activation;
-    return { type: 'Activation', id, attributes };
+    const id = `${ activation.buildId }:${ activation.assignmentId }`;
+    return { type: 'Activation', id, attributes: { ...activation } };
 }

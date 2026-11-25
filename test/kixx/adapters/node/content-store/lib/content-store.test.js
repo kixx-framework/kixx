@@ -37,6 +37,35 @@ function makeStore(rootDirectory, options = {}) {
     });
 }
 
+function releaseInput(releaseId) {
+    return {
+        releaseId,
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 1,
+        totalBytes: 10,
+        contractVersion: 2,
+        provenance: {},
+    };
+}
+
+// Every assignment needs an Activation; most tests do not care what it says.
+function assignment(fields) {
+    return {
+        activation: { reason: 'publish', actor: { type: 'deploy-key', id: 'test-key' } },
+        ...fields,
+    };
+}
+
+function makeConformanceStore() {
+    const rootDirectory = path.join(os.tmpdir(), `kixx-content-store-contract-${ randomUUID() }`);
+    temporaryDirectories.push(rootDirectory);
+    return {
+        store: makeStore(rootDirectory),
+        context: makeContext(),
+        createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 4 }),
+    };
+}
+
 async function catchAsyncError(fn) {
     try {
         await fn();
@@ -64,15 +93,7 @@ describe('Node ContentStore', ({ after, describe }) => {
         }
     });
 
-    contentStoreConformance(describe, () => {
-        const rootDirectory = path.join(os.tmpdir(), `kixx-content-store-contract-${ randomUUID() }`);
-        temporaryDirectories.push(rootDirectory);
-        return {
-            store: makeStore(rootDirectory),
-            context: makeContext(),
-            createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 4 }),
-        };
-    });
+    contentStoreConformance(describe, makeConformanceStore);
 
     describe('construction', ({ it }) => {
         it('requires a logger, root directory, and positive format', () => {
@@ -91,12 +112,19 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const recorded = await store.recordRelease(makeContext(), releaseInput('root'));
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             store.close();
 
             const reopened = makeStore(rootDirectory);
             const pointer = await reopened.getBuildPointer(makeContext(), 'build');
             assertEqual(JSON.stringify(assigned.pointer), JSON.stringify(pointer));
+            assertEqual(JSON.stringify(recorded.record), JSON.stringify(await reopened.getRelease(makeContext(), 'root')));
+            assertEqual(1, (await reopened.listReleases(makeContext())).items.length);
+            const { items } = await reopened.listActivations(makeContext(), { buildId: 'build' });
+            assertEqual(1, items.length);
+            assertEqual(assigned.pointer.assignmentId, items[0].assignmentId);
+            assertEqual('root', items[0].toReleaseId);
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             assertEqual(0, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'pending_build_assignments%'").get().count);
             database.close();
@@ -107,7 +135,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             store.close();
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
@@ -165,8 +193,8 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex(makeContext(), 'first', firstEntries);
             await first.saveIndex(makeContext(), 'second', secondEntries);
-            await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
-            await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
+            await first.assignBuild(makeContext(), 'current', assignment({ rootHash: 'first' }));
+            await second.assignBuild(makeContext(), 'current', assignment({ rootHash: 'second' }));
 
             const build = await first.getBuild(makeContext(), 'current');
             assertEqual('second', build.rootHash);
@@ -182,24 +210,24 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
             await first.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
-            const original = await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
+            const original = await first.assignBuild(makeContext(), 'current', assignment({ rootHash: 'first' }));
 
             // A second instance moves the pointer between when a caller could
             // have observed "first" and when it tries to restore it, the same
             // way a concurrent deploy or test run would.
-            const replacement = await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
+            const replacement = await second.assignBuild(makeContext(), 'current', assignment({ rootHash: 'second' }));
 
-            const conflicted = await first.assignBuild(makeContext(), 'current', {
+            const conflicted = await first.assignBuild(makeContext(), 'current', assignment({
                 rootHash: 'first',
                 expectedAssignmentId: original.pointer.assignmentId,
-            });
+            }));
             assertEqual('conflict', conflicted.outcome);
             assertEqual('second', (await first.getBuild(makeContext(), 'current')).rootHash);
 
-            const assigned = await first.assignBuild(makeContext(), 'current', {
+            const assigned = await first.assignBuild(makeContext(), 'current', assignment({
                 rootHash: 'first',
                 expectedAssignmentId: replacement.pointer.assignmentId,
-            });
+            }));
             assertEqual('assigned', assigned.outcome);
             assertEqual('first', (await second.getBuild(makeContext(), 'current')).rootHash);
 
@@ -211,16 +239,16 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             database.prepare('UPDATE builds SET assigned_at = ? WHERE build_id = ?').run('2000-01-01T00:00:00.000Z', 'build');
             database.close();
 
-            const result = await store.assignBuild(makeContext(), 'build', {
+            const result = await store.assignBuild(makeContext(), 'build', assignment({
                 rootHash: 'root',
                 expectedAssignmentId: (await store.getBuildPointer(makeContext(), 'build')).assignmentId,
-            });
+            }));
 
             assertEqual('unchanged', result.outcome);
             assertEqual('2000-01-01T00:00:00.000Z', result.pointer.assignedAt);
@@ -248,9 +276,9 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
             failCommit = true;
-            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', { rootHash: 'root' }));
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' })));
             assertEqual(null, await store.getBuildPointer(makeContext(), 'build'));
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
 
             assertEqual('OperationalError', failed.name);
             assertEqual('assigned', assigned.outcome);
@@ -258,16 +286,70 @@ describe('Node ContentStore', ({ after, describe }) => {
             database.close();
         });
 
-        it('initializes schema version three with required SQLite pragmas', async () => {
+        it('rolls back the pointer when its Activation cannot be written', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            // activations.assignment_id is unique, so a repeated identity
+            // fails the Activation insert after the pointer was written.
+            const store = makeStore(rootDirectory, { randomUUID: () => '11111111-1111-4111-8111-111111111111' });
+            await store.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
+            await store.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
+            const first = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'first' }));
+
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'second' })));
+
+            const pointer = await store.getBuildPointer(makeContext(), 'build');
+            const { items } = await store.listActivations(makeContext());
+            assertEqual('OperationalError', failed.name);
+            assert(failed.cause);
+            assertEqual('first', pointer.rootHash);
+            assertEqual(first.pointer.assignedAt, pointer.assignedAt);
+            assertEqual(first.pointer.assignmentId, pointer.assignmentId);
+            assertEqual(1, items.length);
+            assertEqual('first', items[0].toReleaseId);
+            store.close();
+        });
+
+        it('stamps history from the injected clock and lists same-instant rows in reverse insertion order', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const instant = Date.UTC(2027, 0, 15, 12, 30, 0);
+            const store = makeStore(rootDirectory, { now: () => instant });
+            for (const rootHash of [ 'first', 'second', 'third' ]) {
+                await store.saveIndex(makeContext(), rootHash, { '/': [ 'tree', rootHash ] });
+                await store.recordRelease(makeContext(), releaseInput(rootHash));
+            }
+
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'first' }));
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'second' }));
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'third' }));
+
+            const { items } = await store.listActivations(makeContext());
+            assertEqual('2027-01-15T12:30:00.000Z', assigned.pointer.assignedAt);
+            assertEqual('third,second,first', items.map((item) => item.toReleaseId).join(','));
+            for (const item of items) {
+                assertEqual('2027-01-15T12:30:00.000Z', item.activatedAt);
+            }
+
+            const releases = await store.listReleases(makeContext());
+            assertEqual('third,second,first', releases.items.map((item) => item.releaseId).join(','));
+            for (const item of releases.items) {
+                assertEqual('2027-01-15T12:30:00.000Z', item.createdAt);
+            }
+            store.close();
+        });
+
+        it('initializes schema version four with required SQLite pragmas', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
             await store.getFile(makeContext(), 'text', '/', 'missing');
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
-            assertEqual(3, database.prepare('PRAGMA user_version').get().user_version);
+            const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
+            assertEqual(4, database.prepare('PRAGMA user_version').get().user_version);
             assertEqual(1, database.prepare('PRAGMA foreign_keys').get().foreign_keys);
             assertEqual('wal', database.prepare('PRAGMA journal_mode').get().journal_mode);
+            assertEqual('activations,builds,closures,releases', tables.map(({ name }) => name).join(','));
+            assertEqual(1, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' AND name = 'activations_build'").get().count);
             database.close();
             store.close();
         });
@@ -302,7 +384,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const store = makeStore(rootDirectory);
 
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             database.prepare('UPDATE closures SET entries_json = ? WHERE root_hash = ?').run('{', 'root');
             database.close();
@@ -313,27 +395,34 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
 
             const newerDatabase = new DatabaseSync(':memory:');
-            newerDatabase.exec('PRAGMA user_version = 4');
+            newerDatabase.exec('PRAGMA user_version = 5');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
             const newer = await catchAsyncError(() => newerStore.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', newer.name);
-            assertMatches('newer than supported', newer.message);
+            assertMatches('schema version 5 is newer than supported version 4', newer.message);
+            assertEqual(5, newerDatabase.prepare('PRAGMA user_version').get().user_version);
+            assertEqual(0, newerDatabase.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
             newerStore.close();
             newerDatabase.close();
         });
 
-        it('rejects an older schema instead of using columns it does not have', async () => {
+        it('rejects every older schema instead of upgrading it', async () => {
             const rootDirectory = await makeTemporaryDirectory();
-            const database = new DatabaseSync(':memory:');
-            database.exec('PRAGMA user_version = 1');
-            const store = makeStore(rootDirectory, { database });
 
-            const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
+            for (const version of [ 1, 2, 3 ]) {
+                const database = new DatabaseSync(':memory:');
+                database.exec(`PRAGMA user_version = ${ version }`);
+                const store = makeStore(rootDirectory, { database });
 
-            assertEqual('AssertionError', caught.name);
-            assertMatches('does not migrate schema version 1 to 3', caught.message);
-            store.close();
-            database.close();
+                const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
+
+                assertEqual('AssertionError', caught.name);
+                assertMatches(`does not migrate schema version ${ version } to 4`, caught.message);
+                assertEqual(version, database.prepare('PRAGMA user_version').get().user_version);
+                assertEqual(0, database.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
+                store.close();
+                database.close();
+            }
         });
 
         it('translates thrown index serialization failures to assertion errors', async () => {

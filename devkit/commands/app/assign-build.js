@@ -6,7 +6,7 @@ import resolvePublishingEnvironment from '../../lib/publishing/resolve-publishin
 import { wrapText } from '../../lib/text-wrap.js';
 import UsageError from '../../lib/usage-error.js';
 
-// The server's activation reasons (lib/app/collections/activation-record.js).
+// The server's activation reasons (kixx/content-addressable-store/publishing-history.js).
 const REASONS = [ 'publish', 'rollback', 'carry-forward', 'restore' ];
 
 export default class AppAssignBuildCommand {

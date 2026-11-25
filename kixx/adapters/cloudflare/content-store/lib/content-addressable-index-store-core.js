@@ -1,5 +1,7 @@
 import { assert, assertNonEmptyString, isPlainObject } from '../../../../assertions/mod.js';
-import assignBuild from './assign-build.js';
+import { RELEASE_RECORD_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import { HISTORY_LIMITS, normalizeReleaseInput } from '../../../../content-addressable-store/publishing-history.js';
+import assignBuild, { BUILD_POINTER_COLUMNS, pointerFromRow } from './assign-build.js';
 import initializeSchema from './initialize-schema.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 
@@ -9,17 +11,27 @@ import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 // (the current build plus recent rollback targets) resident.
 const CLOSURE_CACHE_MAX_SIZE = 10;
 
+const RELEASE_COLUMNS = `
+    sequence, release_id, created_at, created_by_type, created_by_id, created_by_name,
+    object_count, total_bytes, contract_version, provenance_json
+`;
+
+const ACTIVATION_COLUMNS = `
+    sequence, build_id, assignment_id, from_release_id, to_release_id, activated_at,
+    reason, actor_type, actor_id, actor_name, source_revision, summary, force_reason
+`;
+
 /**
  * @typedef {import('./index-entry-codec.js').IndexEntryTuple} IndexEntryTuple
  */
 
 /**
- * Persists immutable content-addressable index closures and the build
- * pointers that select them.
+ * Persists immutable content-addressable index closures, the build pointers
+ * that select them, and publishing history: Release records and Activations.
  *
  * A closure is identified by its root hash and is independent of any build.
  * Assigning or rolling back a build updates only its pointer; it does not
- * rewrite closure entries.
+ * rewrite closure entries. History is append-only.
  *
  * This class holds all the behavior of the ContentAddressableIndexStore
  * Durable Object. It imports no platform module and takes the Durable Object
@@ -31,6 +43,10 @@ export default class ContentAddressableIndexStoreCore {
 
     #sql;
 
+    #now;
+
+    #randomUUID;
+
     // LRU cache keyed by root hash, bounded to CLOSURE_CACHE_MAX_SIZE entries.
     // Individual entries are safe to cache indefinitely because a closure's
     // entries never change once committed; the bound exists only to cap
@@ -41,12 +57,16 @@ export default class ContentAddressableIndexStoreCore {
      * @param {Object} options
      * @param {DurableObjectState} options.ctx - Durable Object state, provided by the runtime.
      * @param {Object} [options.env] - Worker environment bindings, provided by the runtime. Accepted for the Durable Object's constructor shape; nothing reads it today.
+     * @param {function(): number} [options.now] - Clock returning milliseconds; stamps assignments and Release records; helpful for testing
+     * @param {function(): string} [options.randomUUID] - Source of assignment identities; helpful for testing
      */
     constructor(options) {
         const { ctx } = options;
 
         this.#ctx = ctx;
         this.#sql = ctx.storage.sql;
+        this.#now = options.now ?? (() => Date.now());
+        this.#randomUUID = options.randomUUID ?? (() => crypto.randomUUID());
 
         /**
          * Settles when the schema is initialized. Rejects when the storage
@@ -138,34 +158,28 @@ export default class ContentAddressableIndexStoreCore {
     /**
      * Retrieves pointer metadata without loading closure entries.
      * @param {string} buildId - Build identifier to resolve
-     * @returns {Promise<{success: true, pointer: ({rootHash: string, assignedAt: string, assignmentId: string}|null)}>} Pointer result
+     * @returns {Promise<{success: true, pointer: (import('../../../../content-addressable-store/content-store-interface.js').ContentBuildPointer|null)}>} Pointer result
      */
     async getBuildPointer(buildId) {
         assertNonEmptyString(buildId, 'ContentAddressableIndexStore#getBuildPointer: buildId');
         const [ row ] = this.#sql.exec(
-            'SELECT root_hash, assigned_at, assignment_id FROM builds WHERE build_id = ?',
+            `SELECT ${ BUILD_POINTER_COLUMNS } FROM builds WHERE build_id = ?`,
             buildId,
         ).toArray();
-        const pointer = row ? { rootHash: row.root_hash, assignedAt: row.assigned_at, assignmentId: row.assignment_id } : null;
-        return { success: true, pointer };
+        return { success: true, pointer: row ? pointerFromRow(row) : null };
     }
 
     /**
      * Lists every build pointer newest assignment first.
-     * @returns {Promise<{success: true, builds: Array<{buildId: string, rootHash: string, assignedAt: string, assignmentId: string}>}>}
+     * @returns {Promise<{success: true, builds: Array<import('../../../../content-addressable-store/content-store-interface.js').ListedContentBuildPointer>}>}
      */
     async listBuilds() {
         const cursor = this.#sql.exec(`
-            SELECT build_id, root_hash, assigned_at, assignment_id
+            SELECT build_id, ${ BUILD_POINTER_COLUMNS }
             FROM builds
             ORDER BY assigned_at DESC, build_id ASC
         `);
-        const builds = Array.from(cursor, (row) => ({
-            buildId: row.build_id,
-            rootHash: row.root_hash,
-            assignedAt: row.assigned_at,
-            assignmentId: row.assignment_id,
-        }));
+        const builds = Array.from(cursor, (row) => ({ buildId: row.build_id, ...pointerFromRow(row) }));
         return { success: true, builds };
     }
 
@@ -246,13 +260,198 @@ export default class ContentAddressableIndexStoreCore {
      * optionally only when the build's current assignment identity still equals
      * `expectedAssignmentId`.
      *
-     * All checks and the write run synchronously before yielding, so another
-     * call cannot interleave the read-compare-write sequence.
+     * The checks, the pointer write, and the Activation insert run in one
+     * synchronous transaction: another call cannot interleave them, and a
+     * failure at any step undoes every write.
      * @param {string} buildId - Build identifier to assign
-     * @param {{rootHash: string, expectedAssignmentId?: (string|null)}} assignment - Desired closure and optional pointer precondition
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignment} assignment - Desired closure, optional pointer precondition, the Activation to record, and optional code info
      * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentBuildAssignmentResult & {success: true}>}
      */
     async assignBuild(buildId, assignment) {
-        return { success: true, ...assignBuild(this.#sql, buildId, assignment) };
+        const stamps = { now: this.#now, randomUUID: this.#randomUUID };
+        const result = this.#ctx.storage.transactionSync(() => assignBuild(this.#sql, buildId, assignment, stamps));
+        return { success: true, ...result };
     }
+
+    /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     *
+     * The closure check, the existence check, and the insert run in one
+     * synchronous transaction.
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult & {success: true}>}
+     */
+    async recordRelease(release) {
+        const input = normalizeReleaseInput(release, 'ContentAddressableIndexStore#recordRelease: release');
+        const result = this.#ctx.storage.transactionSync(() => this.#recordReleaseInTransaction(input));
+        return { success: true, ...result };
+    }
+
+    #recordReleaseInTransaction(input) {
+        const { releaseId, createdBy } = input;
+
+        const closureRows = this.#sql.exec(
+            'SELECT 1 FROM closure_entries WHERE root_hash = ? LIMIT 1',
+            releaseId,
+        ).toArray();
+        if (closureRows.length === 0) {
+            return { outcome: RELEASE_RECORD_OUTCOME.MISSING_CLOSURE };
+        }
+
+        const existing = this.#getReleaseRecord(releaseId);
+        if (existing) {
+            return { outcome: RELEASE_RECORD_OUTCOME.EXISTS, record: existing };
+        }
+
+        this.#sql.exec(
+            `
+            INSERT INTO releases (
+                release_id, created_at, created_by_type, created_by_id, created_by_name,
+                object_count, total_bytes, contract_version, provenance_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            releaseId,
+            new Date(this.#now()).toISOString(),
+            createdBy.type,
+            createdBy.id,
+            createdBy.name,
+            input.objectCount,
+            input.totalBytes,
+            input.contractVersion,
+            JSON.stringify(input.provenance),
+        );
+
+        return { outcome: RELEASE_RECORD_OUTCOME.CREATED, record: this.#getReleaseRecord(releaseId) };
+    }
+
+    #getReleaseRecord(releaseId) {
+        const [ row ] = this.#sql.exec(
+            `SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`,
+            releaseId,
+        ).toArray();
+        return row ? releaseFromRow(row) : null;
+    }
+
+    /**
+     * Reads one Release record.
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<{success: true, record: (import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)}>} The record, null when none was recorded
+     */
+    async getRelease(releaseId) {
+        assertNonEmptyString(releaseId, 'ContentAddressableIndexStore#getRelease: releaseId');
+        return { success: true, record: this.#getReleaseRecord(releaseId) };
+    }
+
+    /**
+     * Lists Release records newest first.
+     * @param {Object} page
+     * @param {number} page.limit - Page size, 1 to 100
+     * @param {(number|null)} [page.before] - Sequence to continue after; the newest row when null
+     * @returns {Promise<{success: true, items: Array<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord>, nextSequence: (number|null)}>}
+     */
+    async listReleases(page) {
+        const { limit, before } = assertHistoryPage(page, 'ContentAddressableIndexStore#listReleases: page');
+
+        const where = before === null ? '' : 'WHERE sequence < ?';
+        const bindings = before === null ? [] : [ before ];
+
+        const rows = this.#sql.exec(
+            `SELECT ${ RELEASE_COLUMNS } FROM releases ${ where } ORDER BY sequence DESC LIMIT ?`,
+            ...bindings,
+            limit + 1,
+        ).toArray();
+
+        return { success: true, ...pageFromRows(rows, limit, releaseFromRow) };
+    }
+
+    /**
+     * Lists Activations newest first, for one build or across every build.
+     * @param {Object} page
+     * @param {(string|null)} [page.buildId] - Only this build's Activations; every build's when null
+     * @param {number} page.limit - Page size, 1 to 100
+     * @param {(number|null)} [page.before] - Sequence to continue after; the newest row when null
+     * @returns {Promise<{success: true, items: Array<import('../../../../content-addressable-store/content-store-interface.js').ContentActivation>, nextSequence: (number|null)}>}
+     */
+    async listActivations(page) {
+        const label = 'ContentAddressableIndexStore#listActivations: page';
+        const { limit, before } = assertHistoryPage(page, label);
+        const buildId = page.buildId ?? null;
+        if (buildId !== null) {
+            assertNonEmptyString(buildId, `${ label }.buildId`);
+        }
+
+        const conditions = [];
+        const bindings = [];
+        if (before !== null) {
+            conditions.push('sequence < ?');
+            bindings.push(before);
+        }
+        if (buildId !== null) {
+            conditions.push('build_id = ?');
+            bindings.push(buildId);
+        }
+        const where = conditions.length ? `WHERE ${ conditions.join(' AND ') }` : '';
+
+        const rows = this.#sql.exec(
+            `SELECT ${ ACTIVATION_COLUMNS } FROM activations ${ where } ORDER BY sequence DESC LIMIT ?`,
+            ...bindings,
+            limit + 1,
+        ).toArray();
+
+        return { success: true, ...pageFromRows(rows, limit, activationFromRow) };
+    }
+}
+
+function assertHistoryPage(page, label) {
+    assert(isPlainObject(page), `${ label } must be a plain object`);
+
+    const { limit } = page;
+    const before = page.before ?? null;
+    assert(
+        Number.isInteger(limit) && limit >= 1 && limit <= HISTORY_LIMITS.pageSize,
+        `${ label }.limit must be an integer from 1 to ${ HISTORY_LIMITS.pageSize }`,
+    );
+    assert(
+        before === null || (Number.isSafeInteger(before) && before >= 1),
+        `${ label }.before must be a positive integer`,
+    );
+
+    return { limit, before };
+}
+
+// The query asked for one row more than the page holds. When it came back,
+// another page follows, and it continues after the last row kept.
+function pageFromRows(rows, limit, mapRow) {
+    const kept = rows.slice(0, limit);
+    const nextSequence = rows.length > limit ? kept.at(-1).sequence : null;
+    return { items: kept.map(mapRow), nextSequence };
+}
+
+function releaseFromRow(row) {
+    return {
+        releaseId: row.release_id,
+        createdAt: row.created_at,
+        createdBy: { type: row.created_by_type, id: row.created_by_id, name: row.created_by_name },
+        objectCount: row.object_count,
+        totalBytes: row.total_bytes,
+        contractVersion: row.contract_version,
+        provenance: JSON.parse(row.provenance_json),
+    };
+}
+
+function activationFromRow(row) {
+    return {
+        buildId: row.build_id,
+        assignmentId: row.assignment_id,
+        fromReleaseId: row.from_release_id,
+        toReleaseId: row.to_release_id,
+        activatedAt: row.activated_at,
+        reason: row.reason,
+        actor: { type: row.actor_type, id: row.actor_id, name: row.actor_name },
+        sourceRevision: row.source_revision,
+        summary: row.summary,
+        forceReason: row.force_reason,
+    };
 }

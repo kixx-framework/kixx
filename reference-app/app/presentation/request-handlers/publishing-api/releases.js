@@ -5,16 +5,12 @@ import {
     ValidationError,
 } from '../../../../kixx/errors/mod.js';
 import { validateReleaseManifest } from '../../../../kixx/content-addressable-store/release-manifest.js';
-import { createRelease as createReleaseScript } from '../../../transaction-scripts/publishing/create-release.js';
-import { getRelease as getReleaseScript } from '../../../transaction-scripts/publishing/get-release.js';
-import { listReleases as listReleasesScript } from '../../../transaction-scripts/publishing/list-releases.js';
 import {
     JSON_API_CONTENT_TYPE,
     assertJsonApiContentType,
     jsonApiResource,
     parseJsonApiResource,
 } from '../../lib/json-api.js';
-import { rethrowInvalidCursorAsBadRequest } from '../../lib/pagination.js';
 import { MAX_MANIFEST_ENTRIES } from './constants.js';
 
 
@@ -34,12 +30,13 @@ export async function createRelease(context, request, response) {
         throw classifyReleaseError(cause);
     }
 
+    const store = context.getService('ContentAddressableStore');
+
     let release;
     try {
-        release = await createReleaseScript(context, {
-            manifest,
+        release = await store.createRelease(context, manifest, {
             provenance: attributes.provenance ?? {},
-            createdBy: context.user.id,
+            createdBy: { type: 'deploy-key', id: context.user.id },
         });
     } catch (cause) {
         throw classifyReleaseError(cause);
@@ -87,13 +84,9 @@ export async function validateRelease(context, request, response) {
  * @throws {BadRequestError} When the cursor is invalid.
  */
 export async function listReleases(context, request, response) {
-    let page;
-    try {
-        page = await listReleasesScript(context, paginationParams(request));
-    } catch (cause) {
-        // Never returns: translates InvalidCursorError to a 400 or rethrows.
-        rethrowInvalidCursorAsBadRequest(cause);
-    }
+    // An invalid cursor is already a BadRequestError from the service.
+    const store = context.getService('ContentAddressableStore');
+    const page = await store.listReleases(context, paginationParams(request));
 
     return response.respondWithJSON(200, {
         data: page.items.map(releaseResource),
@@ -111,7 +104,8 @@ export async function listReleases(context, request, response) {
  */
 export async function getRelease(context, request, response) {
     const releaseId = request.pathnameParams.releaseId;
-    const release = await getReleaseScript(context, releaseId);
+    const store = context.getService('ContentAddressableStore');
+    const release = await store.getRelease(context, releaseId);
     if (!release) {
         throw new NotFoundError(`Release "${ releaseId }" was not found.`, { code: 'ReleaseNotFound' });
     }

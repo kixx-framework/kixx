@@ -179,8 +179,8 @@ For prefix matches on a sort key or index, spread `sortKeyPrefixRange(prefix)` f
 
 ```js
 const { items } = await this.query(context, {
-    index: ACTIVATION_BUILD_INDEX,
-    ...sortKeyPrefixRange(`${ buildId }:`),
+    index: ORDER_CUSTOMER_INDEX,
+    ...sortKeyPrefixRange(`${ customerId }:`),
 });
 ```
 
