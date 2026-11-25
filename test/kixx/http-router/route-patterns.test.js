@@ -2,6 +2,7 @@ import { describe } from 'kixx-test';
 import {
     assert,
     assertEqual,
+    assertMatches,
     assertUndefined,
 } from 'kixx-assert';
 
@@ -277,5 +278,36 @@ describe('route patterns', ({ describe }) => {
                 assert(caught, 'expected an error to be thrown');
             });
         }
+    });
+
+    // This is the behavior of the published path-to-regexp 9.0.0. Each case
+    // differs from the hand-converted copy it replaced, which matched the
+    // doubled slashes, split at the last dot, and compiled an empty string.
+    describe('behavior that changed with path-to-regexp 9.0.0', ({ it }) => {
+        it('does not match a doubled trailing slash after {/}', () => {
+            assertEqual(null, makeRoute('/admin{/}').matchPathname('/admin//'));
+        });
+
+        it('does not match "//" against the "/" pattern', () => {
+            const route = makeRoute('/');
+
+            assert(route.matchPathname('/'), 'expected / to match');
+            assertEqual(null, route.matchPathname('//'));
+        });
+
+        it('splits /:filename.:extension at the first dot', () => {
+            const params = makeRoute('/:filename.:extension').matchPathname('/foo.tar.gz');
+
+            assertEqual('foo', params.filename);
+            assertEqual('tar.gz', params.extension);
+        });
+
+        it('throws when compiling a pathname from an empty string parameter', () => {
+            const caught = catchError(() => compilePathname('/users/:id', { id: '' }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('TypeError', caught.name);
+            assertMatches('"id"', caught.message);
+        });
     });
 });

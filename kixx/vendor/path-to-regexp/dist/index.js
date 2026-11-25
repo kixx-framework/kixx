@@ -16,24 +16,14 @@ function escape(str) {
     return str.replace(/[.+*?^${}()[\]|/\\]/g, "\\$&");
 }
 /**
- * Tokenized path instance.
- */
-export class TokenData {
-    constructor(tokens, originalPath) {
-        this.tokens = tokens;
-        this.originalPath = originalPath;
-    }
-}
-/**
  * ParseError is thrown when there is an error processing the path.
  */
 export class PathError extends TypeError {
+    originalPath;
     constructor(message, originalPath) {
-        let text = message;
-        if (originalPath)
-            text += `: ${originalPath}`;
-        text += `; visit https://git.new/pathToRegexpError for info`;
-        super(text);
+        super(message +
+            (originalPath ? `: ${originalPath}` : "") +
+            "; visit https://git.new/pathToRegexpError for info");
         this.originalPath = originalPath;
     }
 }
@@ -57,20 +47,20 @@ export function parse(str, options = {}) {
             path = "";
         }
         while (index < chars.length) {
-            const value = chars[index++];
-            if (value === end) {
+            const char = chars[index++];
+            if (char === end) {
                 writePath();
                 return output;
             }
-            if (value === "\\") {
+            if (char === "\\") {
                 if (index === chars.length) {
                     throw new PathError(`Unexpected end after \\ at index ${index}`, str);
                 }
                 path += chars[index++];
                 continue;
             }
-            if (value === ":" || value === "*") {
-                const type = value === ":" ? "param" : "wildcard";
+            if (char === ":" || char === "*") {
+                const type = char === ":" ? "param" : "wildcard";
                 let name = "";
                 if (ID_START.test(chars[index])) {
                     do {
@@ -101,7 +91,7 @@ export function parse(str, options = {}) {
                 output.push({ type, name });
                 continue;
             }
-            if (value === "{") {
+            if (char === "{") {
                 writePath();
                 output.push({
                     type: "group",
@@ -109,17 +99,10 @@ export function parse(str, options = {}) {
                 });
                 continue;
             }
-            if (value === "}" ||
-                value === "(" ||
-                value === ")" ||
-                value === "[" ||
-                value === "]" ||
-                value === "+" ||
-                value === "?" ||
-                value === "!") {
-                throw new PathError(`Unexpected ${value} at index ${index - 1}`, str);
+            if ("}()[]+?!".includes(char)) {
+                throw new PathError(`Unexpected ${char} at index ${index - 1}`, str);
             }
-            path += value;
+            path += char;
         }
         if (end) {
             throw new PathError(`Unexpected end at index ${index}, expected ${end}`, str);
@@ -127,7 +110,10 @@ export function parse(str, options = {}) {
         writePath();
         return output;
     }
-    return new TokenData(consumeUntil(""), str);
+    return {
+        tokens: consumeUntil(""),
+        originalPath: str,
+    };
 }
 /**
  * Compile a string to a template function for the path.
@@ -192,6 +178,9 @@ function tokenToFunction(token, delimiter, encode) {
                     result += delimiter;
                 result += encodeValue(value[i]);
             }
+            if (!result) {
+                throw new TypeError(`Expected "${token.name}" to be a non-empty array`);
+            }
             return result;
         };
     }
@@ -201,8 +190,8 @@ function tokenToFunction(token, delimiter, encode) {
             missing.push(token.name);
             return "";
         }
-        if (typeof value !== "string") {
-            throw new TypeError(`Expected "${token.name}" to be a string`);
+        if (typeof value !== "string" || value.length === 0) {
+            throw new TypeError(`Expected "${token.name}" to be a non-empty string`);
         }
         return encodeValue(value);
     };
@@ -257,14 +246,12 @@ export function pathToRegexp(path, options = {}) {
             }
             if (combinations > 0)
                 source += "|";
-            source += toRegExpSource(tokens, delimiter, keys, data.originalPath);
+            source += toRegExpSource(tokens, delimiter, keys, data.originalPath, trailing);
             combinations++;
         });
     }
     process(path);
     let pattern = `^(?:${source})`;
-    if (trailing)
-        pattern += "(?:" + escape(delimiter) + "$)?";
     pattern += end ? "$" : "(?=" + escape(delimiter) + "|$)";
     return { regexp: new RegExp(pattern, sensitive ? "" : "i"), keys };
 }
@@ -287,76 +274,81 @@ function flatten(tokens, index, result, callback) {
 /**
  * Transform a flat sequence of tokens into a regular expression.
  */
-function toRegExpSource(tokens, delimiter, keys, originalPath) {
+function toRegExpSource(tokens, delimiter, keys, originalPath, trailing) {
     let result = "";
-    let backtrack = "";
+    let prefix = "";
+    let hasWildcardAhead = false;
+    let hasSegmentWildcard = false;
     let wildcardBacktrack = "";
-    let prevCaptureType = 0;
-    let hasSegmentCapture = 0;
     let index = 0;
-    function hasInSegment(index, type) {
+    function seekWildcard(index) {
         while (index < tokens.length) {
             const token = tokens[index++];
-            if (token.type === type)
+            if (token.type === "wildcard")
                 return true;
-            if (token.type === "text") {
-                if (token.value.includes(delimiter))
-                    break;
-            }
         }
         return false;
     }
-    function peekText(index) {
+    function textRemaining(index) {
         let result = "";
         while (index < tokens.length) {
             const token = tokens[index++];
             if (token.type !== "text")
+                return result;
+            if (token.value.includes(delimiter))
                 break;
             result += token.value;
         }
-        return result;
     }
     while (index < tokens.length) {
         const token = tokens[index++];
         if (token.type === "text") {
-            result += escape(token.value);
-            backtrack += token.value;
-            if (prevCaptureType === 2)
-                wildcardBacktrack += token.value;
+            const value = escape(token.value);
+            result += value;
+            wildcardBacktrack += value;
+            prefix += token.value;
             if (token.value.includes(delimiter))
-                hasSegmentCapture = 0;
+                hasSegmentWildcard = false;
             continue;
         }
         if (token.type === "param" || token.type === "wildcard") {
-            if (prevCaptureType && !backtrack) {
+            if (result && !prefix) {
                 throw new PathError(`Missing text before "${token.name}" ${token.type}`, originalPath);
             }
+            keys.push(token);
             if (token.type === "param") {
-                result +=
-                    hasSegmentCapture & 2 // Seen wildcard in segment.
-                        ? `(${negate(delimiter, backtrack)}+)`
-                        : hasInSegment(index, "wildcard") // See wildcard later in segment.
-                            ? `(${negate(delimiter, peekText(index))}+)`
-                            : hasSegmentCapture & 1 // Seen parameter in segment.
-                                ? `(${negate(delimiter, backtrack)}+|${escape(backtrack)})`
-                                : `(${negate(delimiter, "")}+)`;
-                hasSegmentCapture |= prevCaptureType = 1;
+                if (hasSegmentWildcard) {
+                    const value = negate(delimiter, prefix);
+                    result += `(${value}+?|${value}*${escape(prefix)})`;
+                }
+                else {
+                    const text = textRemaining(index);
+                    if (text) {
+                        result += `(?=(${negate(delimiter, "")}+?)${escape(text)})(?:\\${keys.length})`;
+                    }
+                    else {
+                        result += `(${negate(delimiter, "")}+)`;
+                    }
+                }
             }
             else {
-                result +=
-                    hasSegmentCapture & 2 // Seen wildcard in segment.
-                        ? `(${negate(backtrack, "")}+)`
-                        : wildcardBacktrack // No capture in segment, seen wildcard in path.
-                            ? `(${negate(wildcardBacktrack, "")}+|${negate(delimiter, "")}+)`
-                            : `([^]+)`;
+                // If we had a wildcard, close lookahead and reset.
+                if (hasWildcardAhead)
+                    result += `)${wildcardBacktrack}`;
+                hasWildcardAhead = seekWildcard(index);
+                // Lock earlier wildcards; leave the last one greedy.
+                result += hasWildcardAhead ? "(?=([^]+?)" : "([^]+)";
+                hasSegmentWildcard = true;
                 wildcardBacktrack = "";
-                hasSegmentCapture |= prevCaptureType = 2;
             }
-            keys.push(token);
-            backtrack = "";
+            wildcardBacktrack += `(?:\\${keys.length})`;
+            prefix = "";
             continue;
         }
         throw new TypeError(`Unknown token type: ${token.type}`);
+    }
+    if (trailing && !prefix.endsWith(delimiter)) {
+        result += "(?:" + escape(delimiter) + "$)?";
     }
     return result;
 }
@@ -375,9 +367,11 @@ function negate(a, b) {
     return `[^${escape(a + b)}]`;
 }
 /**
- * Stringify an array of tokens into a path string.
+ * Stringify token data into a path string.
  */
-function stringifyTokens(tokens, index) {
+export function stringify(data) {
+    const { tokens } = data;
+    let index = 0;
     let value = "";
     while (index < tokens.length) {
         const token = tokens[index++];
@@ -386,15 +380,15 @@ function stringifyTokens(tokens, index) {
             continue;
         }
         if (token.type === "group") {
-            value += "{" + stringifyTokens(token.tokens, 0) + "}";
+            value += "{" + stringify(token) + "}";
             continue;
         }
         if (token.type === "param") {
-            value += ":" + stringifyName(token.name, tokens[index]);
+            value += ":" + stringifyName(token.name, tokens, index);
             continue;
         }
         if (token.type === "wildcard") {
-            value += "*" + stringifyName(token.name, tokens[index]);
+            value += "*" + stringifyName(token.name, tokens, index);
             continue;
         }
         throw new TypeError(`Unknown token type: ${token.type}`);
@@ -402,19 +396,36 @@ function stringifyTokens(tokens, index) {
     return value;
 }
 /**
- * Stringify token data into a path string.
+ * Wrap a parameter name in quotes, escaping only the characters the parser
+ * treats specially inside a quoted name (`"` and `\`). `JSON.stringify` can't
+ * be used here because it emits escapes like `\n` that the parser reads back as
+ * the literal character `n`, so names with control characters wouldn't survive
+ * a `parse` -> `stringify` -> `parse` round trip.
  */
-export function stringify(data) {
-    return stringifyTokens(data.tokens, 0);
+function quoteName(name) {
+    return `"${name.replace(/["\\]/g, "\\$&")}"`;
 }
 /**
  * Stringify a parameter name, escaping when it cannot be emitted directly.
  */
-function stringifyName(name, next) {
+function stringifyName(name, tokens, index) {
     if (!ID.test(name))
-        return JSON.stringify(name);
-    if ((next === null || next === void 0 ? void 0 : next.type) === "text" && ID_CONTINUE.test(next.value[0])) {
-        return JSON.stringify(name);
+        return quoteName(name);
+    while (index < tokens.length) {
+        const token = tokens[index++];
+        if (token.type === "text") {
+            if (!token.value)
+                continue;
+            // Destructuring reads the first *code point*, matching `parse`, which
+            // iterates the path with `[...str]`. Indexing with `[0]` would read only the
+            // leading surrogate of an astral character, missing that the parser treats
+            // the whole character as `ID_Continue` and absorbs it into the name.
+            const [first] = token.value;
+            if (ID_CONTINUE.test(first))
+                return quoteName(name);
+        }
+        break;
     }
     return name;
 }
+//# sourceMappingURL=index.js.map
