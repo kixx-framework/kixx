@@ -109,6 +109,18 @@ function throwOverloaded() {
     throw error;
 }
 
+function releaseInput(fields) {
+    return {
+        releaseId: 'release-hash',
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 1,
+        totalBytes: 10,
+        contractVersion: 2,
+        provenance: {},
+        ...fields,
+    };
+}
+
 function makeDeferredPromise() {
     let resolve;
     let reject;
@@ -682,6 +694,145 @@ describe('CloudflareContentStore', ({ describe }) => {
 
             assertEqual('AssertionError', caught.name);
             assertEqual(0, calls);
+        });
+    });
+
+    describe('recordRelease()', ({ it }) => {
+        it('sends the normalized record and returns the outcome without the envelope', async () => {
+            const record = { releaseId: 'release-hash' };
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: true, outcome: 'created', record }));
+            const store = makeStore();
+
+            const result = await store.recordRelease(makeContext({ durableObject }), releaseInput());
+
+            assertEqual('outcome,record', Object.keys(result).sort().join(','));
+            assertEqual('created', result.outcome);
+            assertEqual('release-hash', result.record.releaseId);
+            assertEqual(null, durableObject.calls[0][0].createdBy.name);
+        });
+
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: true, outcome: 'created' }));
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            for (const badRelease of [ undefined, releaseInput({ releaseId: '' }), releaseInput({ provenance: { branch: 'main' } }) ]) {
+                const caught = await catchAsyncError(() => store.recordRelease(context, badRelease));
+
+                assertEqual('AssertionError', caught?.name);
+                assertMatches('ContentStore#recordRelease: release', caught.message);
+            }
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.recordRelease(makeContext({ durableObject }), releaseInput()));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('recordRelease', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.recordRelease(makeContext({ durableObject }), releaseInput()));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
+        });
+    });
+
+    describe('getRelease()', ({ it }) => {
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', () => ({ success: true, record: null }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), ''));
+
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), 'release-hash'));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('getRelease', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.getRelease(makeContext({ durableObject }), 'release-hash'));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
+        });
+    });
+
+    describe('listReleases()', ({ it }) => {
+        it('sends the decoded cursor and returns the next position as a cursor', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', (page) => {
+                return { success: true, items: [ { releaseId: 'a' } ], nextSequence: page.before === null ? 7 : null };
+            });
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const first = await store.listReleases(context, { limit: 1 });
+            const second = await store.listReleases(context, { limit: 1, cursor: first.cursor });
+
+            assertEqual('{"limit":1,"before":null}', JSON.stringify(durableObject.calls[0][0]));
+            assertEqual('{"limit":1,"before":7}', JSON.stringify(durableObject.calls[1][0]));
+            assertEqual('7', first.cursor);
+            assertEqual(null, second.cursor);
+            assertEqual('cursor,items', Object.keys(first).sort().join(','));
+        });
+
+        it('rejects bad input before calling the Durable Object', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', () => ({ success: true, items: [], nextSequence: null }));
+            const store = makeStore();
+            const context = makeContext({ durableObject });
+
+            const badCursor = await catchAsyncError(() => store.listReleases(context, { cursor: '01' }));
+            const badLimit = await catchAsyncError(() => store.listReleases(context, { limit: 0 }));
+            const badKey = await catchAsyncError(() => store.listReleases(context, { buildId: 'build-1' }));
+
+            assertEqual('BadRequestError', badCursor.name);
+            assertEqual('InvalidCursor', badCursor.code);
+            assertEqual('AssertionError', badLimit.name);
+            assertEqual('AssertionError', badKey.name);
+            assertEqual(0, durableObject.calls.length);
+        });
+
+        it('rejects with a 503 when the Durable Object is overloaded', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', throwOverloaded);
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listReleases(makeContext({ durableObject })));
+
+            assertEqual('ServiceUnavailableError', caught.name);
+            assertEqual('ContentStoreOverloaded', caught.code);
+            assertEqual(1, durableObject.calls.length);
+        });
+
+        it('throws an OperationalError when the Durable Object reports failure', async () => {
+            const durableObject = makeScriptedDurableObject('listReleases', () => ({ success: false, message: 'history unavailable' }));
+            const store = makeStore();
+
+            const caught = await catchAsyncError(() => store.listReleases(makeContext({ durableObject })));
+
+            assertEqual('OperationalError', caught.name);
+            assertMatches('history unavailable', caught.message);
         });
     });
 

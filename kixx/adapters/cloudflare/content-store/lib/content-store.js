@@ -18,6 +18,7 @@ import {
     normalizeActivation,
     normalizeCodeInfo,
     normalizeHistoryPage,
+    normalizeReleaseInput,
 } from '../../../../content-addressable-store/publishing-history.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
 
@@ -87,8 +88,8 @@ const KV_WRITE_RATE_LIMIT_MESSAGE = 'KV PUT failed: 429 Too Many Requests';
 
 
 /**
- * Stores content-addressed blobs in Cloudflare KV and build indexes in a
- * Durable Object.
+ * Stores content-addressed blobs in Cloudflare KV, and build indexes and
+ * publishing history in a Durable Object.
  *
  * Blob and index keys include the configured wire format, isolating data
  * written by format. Build reads use a bounded isolate-local promise cache.
@@ -653,6 +654,107 @@ export default class ContentStore {
 
         const { success: _success, ...assignmentResult } = result;
         return assignmentResult;
+    }
+
+    /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult>}
+     * @throws {AssertionError} When the record is malformed; no Durable Object call is made
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async recordRelease(context, release) {
+        const input = normalizeReleaseInput(release, 'ContentStore#recordRelease: release');
+
+        const trace = new TraceLogger(context.logger, 'content-store-record-release', { releaseId: input.releaseId });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'recordRelease',
+                (durableObject) => durableObject.recordRelease(input),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#recordRelease() was unsuccessful: ${ result.message }`);
+        }
+
+        const { success: _success, ...recordResult } = result;
+        return recordResult;
+    }
+
+    /**
+     * Reads one Release record. Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<(import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)>} The record, or null when none was recorded
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async getRelease(context, releaseId) {
+        assertNonEmptyString(releaseId, 'ContentStore#getRelease: releaseId');
+
+        const trace = new TraceLogger(context.logger, 'content-store-get-release', { releaseId });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'getRelease',
+                (durableObject) => durableObject.getRelease(releaseId),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#getRelease() was unsuccessful: ${ result.message }`);
+        }
+
+        return result.record;
+    }
+
+    /**
+     * Lists Release records newest first. Never cached.
+     * @param {RequestContext} context - Request context exposing the configured Durable Object binding
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPageOptions} [options] - Page options
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentHistoryPage>}
+     * @throws {BadRequestError} With code `InvalidCursor` when the cursor is malformed
+     * @throws {OperationalError} When the Durable Object call fails or reports an unsuccessful result
+     * @throws {ServiceUnavailableError} When the Durable Object reports it is overloaded (`code` `ContentStoreOverloaded`)
+     */
+    async listReleases(context, options) {
+        const { limit, cursor } = normalizeHistoryPage(options, 'ContentStore#listReleases: options');
+        const page = { limit, before: cursor === null ? null : decodeHistoryCursor(cursor) };
+
+        const trace = new TraceLogger(context.logger, 'content-store-list-releases', { limit });
+        let result;
+        try {
+            result = await this.#callDurableObject(
+                context,
+                'listReleases',
+                (durableObject) => durableObject.listReleases(page),
+            );
+            trace.ok();
+        } catch (err) {
+            trace.error();
+            throw err;
+        }
+
+        if (!result.success) {
+            throw new OperationalError(`ContentStore#listReleases() was unsuccessful: ${ result.message }`);
+        }
+
+        return historyPageFromResult(result);
     }
 
     /**

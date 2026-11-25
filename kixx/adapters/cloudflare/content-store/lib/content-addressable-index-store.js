@@ -4,7 +4,7 @@ import ContentAddressableIndexStoreCore from './content-addressable-index-store-
 
 /**
  * SQLite-backed Durable Object that persists content-addressable index
- * closures and the build pointers that select them.
+ * closures, the build pointers that select them, and publishing history.
  *
  * All behavior lives in ContentAddressableIndexStoreCore; this class only
  * binds it to the runtime. Its public methods are the RPC surface the Worker
@@ -58,6 +58,18 @@ export default class ContentAddressableIndexStore extends DurableObject {
 
     assignBuild(buildId, assignment) {
         return this.#core.assignBuild(buildId, assignment);
+    }
+
+    recordRelease(release) {
+        return this.#core.recordRelease(release);
+    }
+
+    getRelease(releaseId) {
+        return this.#core.getRelease(releaseId);
+    }
+
+    listReleases(page) {
+        return this.#core.listReleases(page);
     }
 
     listActivations(page) {

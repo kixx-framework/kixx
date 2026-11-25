@@ -1,5 +1,6 @@
 import { assert, assertNonEmptyString, isPlainObject } from '../../../../assertions/mod.js';
-import { HISTORY_LIMITS } from '../../../../content-addressable-store/publishing-history.js';
+import { RELEASE_RECORD_OUTCOME } from '../../../../content-addressable-store/content-store-interface.js';
+import { HISTORY_LIMITS, normalizeReleaseInput } from '../../../../content-addressable-store/publishing-history.js';
 import assignBuild, { BUILD_POINTER_COLUMNS, pointerFromRow } from './assign-build.js';
 import initializeSchema from './initialize-schema.js';
 import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
@@ -9,6 +10,11 @@ import { decodeStorageRow, encodeStorageRow } from './index-entry-codec.js';
 // in a long-lived Durable Object instance while keeping the working set
 // (the current build plus recent rollback targets) resident.
 const CLOSURE_CACHE_MAX_SIZE = 10;
+
+const RELEASE_COLUMNS = `
+    sequence, release_id, created_at, created_by_type, created_by_id, created_by_name,
+    object_count, total_bytes, contract_version, provenance_json
+`;
 
 const ACTIVATION_COLUMNS = `
     sequence, build_id, assignment_id, from_release_id, to_release_id, activated_at,
@@ -21,7 +27,7 @@ const ACTIVATION_COLUMNS = `
 
 /**
  * Persists immutable content-addressable index closures, the build pointers
- * that select them, and the Activation recorded with each changed assignment.
+ * that select them, and publishing history: Release records and Activations.
  *
  * A closure is identified by its root hash and is independent of any build.
  * Assigning or rolling back a build updates only its pointer; it does not
@@ -268,6 +274,99 @@ export default class ContentAddressableIndexStoreCore {
     }
 
     /**
+     * Records a Release for a saved closure. The first record for a Release
+     * is kept; a repeat changes nothing and resolves that first record.
+     *
+     * The closure check, the existence check, and the insert run in one
+     * synchronous transaction.
+     * @param {import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseInput} release - The record to store, without its timestamp
+     * @returns {Promise<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecordResult & {success: true}>}
+     */
+    async recordRelease(release) {
+        const input = normalizeReleaseInput(release, 'ContentAddressableIndexStore#recordRelease: release');
+        const result = this.#ctx.storage.transactionSync(() => this.#recordReleaseInTransaction(input));
+        return { success: true, ...result };
+    }
+
+    #recordReleaseInTransaction(input) {
+        const { releaseId, createdBy } = input;
+
+        const closureRows = this.#sql.exec(
+            'SELECT 1 FROM closure_entries WHERE root_hash = ? LIMIT 1',
+            releaseId,
+        ).toArray();
+        if (closureRows.length === 0) {
+            return { outcome: RELEASE_RECORD_OUTCOME.MISSING_CLOSURE };
+        }
+
+        const existing = this.#getReleaseRecord(releaseId);
+        if (existing) {
+            return { outcome: RELEASE_RECORD_OUTCOME.EXISTS, record: existing };
+        }
+
+        this.#sql.exec(
+            `
+            INSERT INTO releases (
+                release_id, created_at, created_by_type, created_by_id, created_by_name,
+                object_count, total_bytes, contract_version, provenance_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            releaseId,
+            new Date(this.#now()).toISOString(),
+            createdBy.type,
+            createdBy.id,
+            createdBy.name,
+            input.objectCount,
+            input.totalBytes,
+            input.contractVersion,
+            JSON.stringify(input.provenance),
+        );
+
+        return { outcome: RELEASE_RECORD_OUTCOME.CREATED, record: this.#getReleaseRecord(releaseId) };
+    }
+
+    #getReleaseRecord(releaseId) {
+        const [ row ] = this.#sql.exec(
+            `SELECT ${ RELEASE_COLUMNS } FROM releases WHERE release_id = ?`,
+            releaseId,
+        ).toArray();
+        return row ? releaseFromRow(row) : null;
+    }
+
+    /**
+     * Reads one Release record.
+     * @param {string} releaseId - Root hash of the Release's closure
+     * @returns {Promise<{success: true, record: (import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord|null)}>} The record, null when none was recorded
+     */
+    async getRelease(releaseId) {
+        assertNonEmptyString(releaseId, 'ContentAddressableIndexStore#getRelease: releaseId');
+        return { success: true, record: this.#getReleaseRecord(releaseId) };
+    }
+
+    /**
+     * Lists Release records newest first.
+     * @param {Object} page
+     * @param {number} page.limit - Page size, 1 to 100
+     * @param {(number|null)} [page.before] - Sequence to continue after; the newest row when null
+     * @returns {Promise<{success: true, items: Array<import('../../../../content-addressable-store/content-store-interface.js').ContentReleaseRecord>, nextSequence: (number|null)}>}
+     */
+    async listReleases(page) {
+        const { limit, before } = assertHistoryPage(page, 'ContentAddressableIndexStore#listReleases: page');
+
+        const where = before === null ? '' : 'WHERE sequence < ?';
+        const bindings = before === null ? [] : [ before ];
+
+        const rows = this.#sql.exec(
+            `SELECT ${ RELEASE_COLUMNS } FROM releases ${ where } ORDER BY sequence DESC LIMIT ?`,
+            ...bindings,
+            limit + 1,
+        ).toArray();
+
+        return { success: true, ...pageFromRows(rows, limit, releaseFromRow) };
+    }
+
+    /**
      * Lists Activations newest first, for one build or across every build.
      * @param {Object} page
      * @param {(string|null)} [page.buildId] - Only this build's Activations; every build's when null
@@ -328,6 +427,18 @@ function pageFromRows(rows, limit, mapRow) {
     const kept = rows.slice(0, limit);
     const nextSequence = rows.length > limit ? kept.at(-1).sequence : null;
     return { items: kept.map(mapRow), nextSequence };
+}
+
+function releaseFromRow(row) {
+    return {
+        releaseId: row.release_id,
+        createdAt: row.created_at,
+        createdBy: { type: row.created_by_type, id: row.created_by_id, name: row.created_by_name },
+        objectCount: row.object_count,
+        totalBytes: row.total_bytes,
+        contractVersion: row.contract_version,
+        provenance: JSON.parse(row.provenance_json),
+    };
 }
 
 function activationFromRow(row) {

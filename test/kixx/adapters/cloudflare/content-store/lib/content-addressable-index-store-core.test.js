@@ -43,6 +43,18 @@ function assignment(fields) {
     };
 }
 
+function releaseInput(fields) {
+    return {
+        releaseId: 'root-1',
+        createdBy: { type: 'deploy-key', id: 'test-key' },
+        objectCount: 1,
+        totalBytes: 10,
+        contractVersion: 2,
+        provenance: {},
+        ...fields,
+    };
+}
+
 function listTables(sql) {
     return sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").toArray().map((row) => row.name).join(',');
 }
@@ -529,6 +541,117 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
         });
     });
 
+    describe('recordRelease', ({ it }) => {
+        it('stamps a new record from the injected clock and keeps the first record', async () => {
+            let now = Date.UTC(2027, 0, 15, 12);
+            const { core, sql } = await makeCore({ now: () => now });
+            await core.saveIndex('root-1', makeIndex());
+
+            const created = await core.recordRelease(releaseInput({ provenance: { message: 'First' } }));
+            now += 60000;
+            const repeated = await core.recordRelease(releaseInput({
+                createdBy: { type: 'user', id: 'user-2', name: 'Ada Editor' },
+                provenance: { message: 'Second' },
+            }));
+            const read = await core.getRelease('root-1');
+
+            assertEqual(true, created.success);
+            assertEqual('created', created.outcome);
+            assertEqual('2027-01-15T12:00:00.000Z', created.record.createdAt);
+            assertEqual('exists', repeated.outcome);
+            assertEqual(JSON.stringify(created.record), JSON.stringify(repeated.record));
+            assertEqual(JSON.stringify(created.record), JSON.stringify(read.record));
+            assertEqual('First', read.record.provenance.message);
+            assertEqual(null, read.record.createdBy.name);
+            assertEqual(undefined, read.record.sequence);
+            assertEqual(1, sql.exec('SELECT count(*) AS n FROM releases').one().n);
+        });
+
+        it('resolves missingClosure without a record and writes nothing', async () => {
+            const { core, sql } = await makeCore();
+            await core.saveIndex('empty-root', {});
+
+            const neverSaved = await core.recordRelease(releaseInput({ releaseId: 'never-saved' }));
+            const empty = await core.recordRelease(releaseInput({ releaseId: 'empty-root' }));
+
+            assertEqual('outcome,success', Object.keys(neverSaved).sort().join(','));
+            assertEqual('missingClosure', neverSaved.outcome);
+            assertEqual('missingClosure', empty.outcome);
+            assertEqual(null, (await core.getRelease('never-saved')).record);
+            assertEqual(0, sql.exec('SELECT count(*) AS n FROM releases').one().n);
+        });
+
+        it('stores and reads back a Release record with every field at its length cap', async () => {
+            const { core } = await makeCore();
+            await core.saveIndex('root-1', makeIndex());
+            const input = releaseInput({
+                createdBy: { type: 'user', id: 'i'.repeat(256), name: 'n'.repeat(256) },
+                objectCount: Number.MAX_SAFE_INTEGER,
+                totalBytes: Number.MAX_SAFE_INTEGER,
+                provenance: {
+                    sourceRevision: 'r'.repeat(256),
+                    message: 'm'.repeat(2000),
+                    client: 'c'.repeat(256),
+                    intendedForBuildId: 'b'.repeat(256),
+                },
+            });
+
+            const { record } = await core.recordRelease(input);
+
+            assertEqual(JSON.stringify(input.createdBy), JSON.stringify(record.createdBy));
+            assertEqual(JSON.stringify(input.provenance), JSON.stringify(record.provenance));
+            assertEqual(Number.MAX_SAFE_INTEGER, record.objectCount);
+            assertEqual(Number.MAX_SAFE_INTEGER, record.totalBytes);
+        });
+
+        it('rejects a malformed record and an empty release id', async () => {
+            const { core, sql } = await makeCore();
+            await core.saveIndex('root-1', makeIndex());
+
+            const badRecord = await catchAsyncError(() => core.recordRelease(releaseInput({ objectCount: -1 })));
+            const badId = await catchAsyncError(() => core.getRelease(''));
+
+            assertEqual('AssertionError', badRecord.name);
+            assertMatches('ContentAddressableIndexStore#recordRelease: release.objectCount', badRecord.message);
+            assertMatches('ContentAddressableIndexStore#getRelease: releaseId', badId.message);
+            assertEqual(0, sql.exec('SELECT count(*) AS n FROM releases').one().n);
+        });
+    });
+
+    describe('listReleases', ({ it }) => {
+        it('lists records stamped at one instant in reverse insertion order', async () => {
+            const { core } = await makeCore({ now: () => Date.UTC(2027, 0, 15, 12) });
+            for (const releaseId of [ 'root-1', 'root-2', 'root-3' ]) {
+                await core.saveIndex(releaseId, makeIndex());
+                await core.recordRelease(releaseInput({ releaseId }));
+            }
+            const ids = (page) => page.items.map((item) => item.releaseId).join(',');
+
+            const all = await core.listReleases({ limit: 100 });
+            const pageOne = await core.listReleases({ limit: 2, before: null });
+            const pageTwo = await core.listReleases({ limit: 2, before: pageOne.nextSequence });
+
+            assertEqual(true, all.success);
+            assertEqual('root-3,root-2,root-1', ids(all));
+            assertEqual(1, new Set(all.items.map((item) => item.createdAt)).size);
+            assertEqual(null, all.nextSequence);
+            assertEqual('root-3,root-2', ids(pageOne));
+            assertEqual('root-1', ids(pageTwo));
+            assertEqual(null, pageTwo.nextSequence);
+        });
+
+        it('rejects a malformed page', async () => {
+            const { core } = await makeCore();
+
+            for (const page of [ undefined, {}, { limit: 0 }, { limit: 101 }, { limit: 2, before: -1 } ]) {
+                const caught = await catchAsyncError(() => core.listReleases(page));
+
+                assert(caught, 'expected the page to reject');
+                assertMatches('ContentAddressableIndexStore#listReleases: page', caught.message);
+            }
+        });
+    });
+
     describe('listActivations', ({ it }) => {
         it('lists rows stamped at one instant in reverse insertion order', async () => {
             const { core } = await makeCore({ now: () => Date.UTC(2027, 0, 15, 12) });
@@ -605,6 +728,7 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
                     code: { revision: 'revision-1', fingerprint: 'fingerprint-1' },
                 }));
                 const written = await first.listActivations({ limit: 100 });
+                const recorded = await first.recordRelease(releaseInput());
                 storage.close();
 
                 storage = createFakeDurableObjectStorage({ path: filename });
@@ -614,6 +738,8 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
                 assertEqual(JSON.stringify(assigned.pointer), JSON.stringify((await reopened.getBuildPointer('build-1')).pointer));
                 assertEqual(JSON.stringify(written.items), JSON.stringify((await reopened.listActivations({ limit: 100 })).items));
                 assertEqual(1, written.items.length);
+                assertEqual(JSON.stringify(recorded.record), JSON.stringify((await reopened.getRelease('root-1')).record));
+                assertEqual(1, (await reopened.listReleases({ limit: 100 })).items.length);
             } finally {
                 storage?.close();
                 fs.rmSync(directory, { recursive: true, force: true });
