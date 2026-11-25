@@ -60,6 +60,15 @@ const DURABLE_OBJECT_SHELLS = [
     'adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
 ];
 
+// Files under test/ that only Cloudflare can load, as repository-relative
+// paths: a Cloudflare entry point, and a generated registry that exports
+// Durable Object shells. No unit test may reach one. List a file here when a
+// fixture gains one.
+const CLOUDFLARE_ONLY_MODULES = [
+    'test/fixtures/project/cloudflare-server.js',
+    'test/fixtures/project/cloudflare-durable-objects.generated.js',
+];
+
 // Static import and export specifiers, including multi-line import lists.
 // Excluding `(` and `=` keeps it from matching `export function f(…)`,
 // `export const x = '…'`, and JSDoc `import('…')` type references.
@@ -205,11 +214,18 @@ describe('import hygiene', ({ it }) => {
         const violations = [];
 
         // Every .js file under test/ is a starting point: test files, and the
-        // fakes and suites they share.
-        for (const { file, specifiers, chain } of readImportGraph(listJavaScriptFiles(TEST_DIRECTORY))) {
+        // fakes, suites, and fixture files they share. The files only
+        // Cloudflare can load are not, and reaching one is a violation.
+        const entryFiles = listJavaScriptFiles(TEST_DIRECTORY).filter((filepath) => !isCloudflareOnlyModule(filepath));
+
+        for (const { file, specifiers, chain } of readImportGraph(entryFiles, isCloudflareOnlyModule)) {
             const trail = chain.map(toRepositoryPath).join(' -> ');
 
-            if (DURABLE_OBJECT_SHELLS.includes(toCorePath(file))) {
+            if (isCloudflareOnlyModule(file)) {
+                violations.push({ file: trail, specifier: '(a module only Cloudflare can load)' });
+            }
+
+            if (isDurableObjectShell(file)) {
                 violations.push({ file: trail, specifier: '(a Durable Object shell)' });
             }
 
@@ -221,6 +237,32 @@ describe('import hygiene', ({ it }) => {
         }
 
         assertEqual('', formatViolations(violations));
+    });
+
+    it('lists only modules that Cloudflare alone can load', () => {
+        const problems = [];
+
+        for (const entry of CLOUDFLARE_ONLY_MODULES) {
+            const filepath = path.join(REPOSITORY_DIRECTORY, entry);
+
+            if (!fs.existsSync(filepath)) {
+                problems.push(`CLOUDFLARE_ONLY_MODULES lists ${ entry }, which doesn't exist`);
+                continue;
+            }
+
+            // What makes a file Cloudflare-only is a cloudflare:* import or a
+            // Durable Object shell. An entry with neither is stale.
+            const needsCloudflare = extractSpecifiers(fs.readFileSync(filepath, 'utf8')).some((specifier) => {
+                return specifier.startsWith('cloudflare:')
+                    || (specifier.startsWith('.') && isDurableObjectShell(path.resolve(path.dirname(filepath), specifier)));
+            });
+
+            if (!needsCloudflare) {
+                problems.push(`CLOUDFLARE_ONLY_MODULES lists ${ entry }, which imports no cloudflare:* module and no Durable Object shell`);
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
     });
 
     it('reaches only relative imports from the probe', () => {
@@ -281,7 +323,10 @@ function readCoreImports() {
 //
 // A dynamic import() isn't followed, because SPECIFIER_PATTERN doesn't
 // match one.
-function readImportGraph(entryFiles) {
+//
+// A file that `stopAt` accepts is recorded but never read, so its imports
+// aren't followed: it may import a file that doesn't exist here.
+function readImportGraph(entryFiles, stopAt = () => false) {
     const graph = new Map();
     const queue = entryFiles.map((filepath) => [ filepath ]);
 
@@ -293,7 +338,7 @@ function readImportGraph(entryFiles) {
             continue;
         }
 
-        const specifiers = extractSpecifiers(fs.readFileSync(file, 'utf8'));
+        const specifiers = stopAt(file) ? [] : extractSpecifiers(fs.readFileSync(file, 'utf8'));
         graph.set(file, { file, specifiers, chain });
 
         for (const specifier of specifiers) {
@@ -325,6 +370,14 @@ function toCorePath(filepath) {
 
 function toRepositoryPath(filepath) {
     return path.relative(REPOSITORY_DIRECTORY, filepath).split(path.sep).join('/');
+}
+
+function isDurableObjectShell(filepath) {
+    return isInsideCore(filepath) && DURABLE_OBJECT_SHELLS.includes(toCorePath(filepath));
+}
+
+function isCloudflareOnlyModule(filepath) {
+    return CLOUDFLARE_ONLY_MODULES.includes(toRepositoryPath(filepath));
 }
 
 function leavingModuleOf(corePath) {

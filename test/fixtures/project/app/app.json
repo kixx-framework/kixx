@@ -1,0 +1,9 @@
+{
+    "secrets": [
+        {
+            "name": "FIXTURE_APP_SECRET",
+            "required": true,
+            "description": "Shows that an app declares its own secrets."
+        }
+    ]
+}
