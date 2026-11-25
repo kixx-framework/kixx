@@ -33,11 +33,12 @@ const OPTIONAL_DIRECTIVE = '# @optional';
  * Parses the text of a secrets manifest into the sets of required and optional
  * secret names.
  *
- * The manifest is the committed `example.env.secrets` template, which serves
- * two purposes at once: developers copy it to create a local secrets file, and
- * deployments read it as the authoritative list of secret *names* an
- * environment must provide. Only the names are meaningful here; the value
- * after `=` is a placeholder and is discarded.
+ * The manifest is `example.env.secrets`, a committed file generated from the
+ * secrets that core, the installed plugins, and the app declare in their
+ * manifests. It serves two purposes at once: developers copy it to create a
+ * local secrets file, and deployments read it as the authoritative list of
+ * secret *names* an environment must provide. Only the names are meaningful
+ * here; the value after `=` is a placeholder and is discarded.
  *
  * A comment line reading exactly `# @optional` marks the next entry optional.
  * Further comment lines may follow the directive, so it can be placed at the

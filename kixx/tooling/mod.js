@@ -14,3 +14,4 @@ export {
     ROUTES_REGISTRY_FILE_NAME,
     SECRETS_MANIFEST_FILE_NAME,
 } from './render-registries.js';
+export { readInstallation, renderProjectFiles, writeProjectFiles } from './generate-project-files.js';
