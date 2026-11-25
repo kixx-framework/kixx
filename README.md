@@ -34,12 +34,16 @@ kixx/
 ├── .github/workflows/ci.yml     # CI: lint and unit tests on Node.js and Deno
 ├── kixx/                        # Core, vendored into projects as kixx/
 │   ├── config/, context/, http-router/, hyperview/, logger/, ...   # Framework modules
-│   ├── adapters/                # Platform adapters: node/, cloudflare/, general/
+│   ├── adapters/                # Platform adapters: node/, cloudflare/
+│   ├── plugin.json              # Core's manifest, in the plugin manifest schema
+│   ├── tooling/                 # Manifest validation and the registry generator
 │   ├── vendor/                  # Third-party code, vendored unmodified
 │   └── document-store/, jobs/, object-store/, permissions/
 │                                # Leaving core in later sections (see test/kixx/import-hygiene.test.js)
+├── plugins/                     # First-party plugins; today only README.md, the plugin guide
 ├── test/                        # Unit tests mirroring kixx/ (and later plugins/)
 │   ├── fakes/                   # Shared fakes of platform services (KV, Durable Objects)
+│   ├── fixtures/                # A small project that boots from generated registries
 │   └── test-app/                # Unit tests for the integration runner and the probe
 ├── test-app/                    # Integration suite, run against a real target (see test-app/README.md)
 │   ├── run-tests.js             # Integration test runner (`node test-app/run-tests.js --local`)
@@ -57,6 +61,7 @@ kixx/
 ├── reference-app/               # What remains of the v6 starter app: source material, not runnable
 ├── test-v6/                     # v6 tests not yet brought back; never run or linted
 ├── tools/                       # Scripts for working on this repo
+│   └── generate-registries.js   # Writes a project's registries from its manifests
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)
 ├── agents/plans/                # Structured implementation plans
 ├── run-tests.js                 # Unit test runner (`node run-tests.js [path]`)
@@ -77,9 +82,9 @@ Kixx Core
 Kixx core lives in `kixx/`. When we say "Kixx", we mean core (not `devkit/`). It is vendored into each project as `kixx/`, so it never imports anything outside itself.
 
 - Modules - HTTP routing, server-rendered HTML pages and templates, data storage (key/value and published content), logging, and configuration.
-- `adapters/` - Connectors that run the same app on Node.js (`node/`, which Deno also uses) or Cloudflare (`cloudflare/`), plus platform-neutral plugins (`general/`). Your app code doesn't change between platforms.
+- `adapters/` - Connectors that run the same app on Node.js (`node/`, which Deno also uses) or Cloudflare (`cloudflare/`). Your app code doesn't change between platforms.
 
-Plugins arrive later in `plugins/`.
+A plugin is a directory in `plugins/` with a manifest, `plugin.json`. Core has one too (`kixx/plugin.json`). From the installed manifests a generator writes registries, which wire core and the plugins into each platform's entry point, so adding a plugin never edits an entry point. The registries are committed. See [plugins/README.md](plugins/README.md). No plugin ships yet.
 
 Kixx Devkit
 -----------

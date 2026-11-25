@@ -54,6 +54,22 @@ to exist in, or match the shape of, the same name in the other.
 At startup the app loads only the selected environment's section. An
 environment name with no section in the config file fails startup.
 
+### Config defaults
+
+Core and each installed plugin supply defaults for the sections they own,
+per platform. The selected environment's section is laid over them, so a
+config file holds only the values that have no default and the ones you want
+to change.
+
+- **Your value wins.** A key you set replaces the default.
+- **Objects merge key by key.** Setting `HYPERVIEW.usePageCache` leaves the
+  other `HYPERVIEW` defaults in place.
+- **Arrays and other values replace the default whole.**
+
+The defaults are in each manifest's `config.defaults` (`kixx/plugin.json`,
+`plugins/<name>/plugin.json`). Where a setting below has a default, its
+table gives it.
+
 ### Which environment is selected
 
 `ENVIRONMENT` selects the config section to load, so it cannot itself live in
@@ -127,41 +143,53 @@ node node-server.js -e production -p 8080
 
 ### The secrets manifest
 
-`example.env.secrets` lists the secret names a deployment must provide. It is
-committed, and it must exist. Each `NAME=value` line declares a required
-secret; the value is a placeholder and is ignored. A comment line reading
-exactly `# @optional` marks the next entry optional (only comment lines may
-sit between the directive and its entry).
+Code declares the secrets it reads, and `example.env.secrets` is generated
+from those declarations. It lists the secret names a deployment must
+provide. It is committed. Never edit it: change a declaration and
+regenerate.
+
+- **The app** declares its secrets in `app/app.json`.
+- **A plugin** declares its secrets in its manifest,
+  `plugins/<name>/plugin.json`. Core does the same in `kixx/plugin.json`;
+  it declares none today.
+
+```json
+{
+    "secrets": [
+        { "name": "API_SIGNING_SECRET", "description": "Signs API tokens." },
+        { "name": "SUPPORT_TOKEN", "required": false, "description": "Lets support staff sign in." }
+    ]
+}
+```
+
+A secret is required unless it says `"required": false`. The generated file
+names each secret's owner and repeats its description. The value is a
+placeholder and is ignored, and a comment line reading exactly `# @optional`
+marks the next entry optional:
 
 ```
-# Signs CSRF tokens.
-CSRF_TOKEN_SIGNING_SECRET=secure-long-random-string
+# Declared by the app.
+# Signs API tokens.
+API_SIGNING_SECRET=replace-me
 
 # @optional
-# Deleted after the first admin is created.
-ADMIN_BOOTSTRAP_TOKEN=change-me
+# Declared by the app.
+# Lets support staff sign in.
+SUPPORT_TOKEN=replace-me
 ```
 
-The shipped manifest declares:
-
-| Name | Required | Notes |
-| --- | --- | --- |
-| `DOCUMENT_STORE_CURSOR_SIGNING_SECRET` | yes | Rotating it invalidates every pagination cursor in flight. |
-| `CSRF_TOKEN_SIGNING_SECRET` | yes | Rotating it invalidates every open admin form. |
-| `ADMIN_BOOTSTRAP_TOKEN` | optional | Creates the first admin; remove it afterwards. Generate one with `kixx admin gen-secure-token`. |
-
-On Node.js, startup checks the merged environment against the manifest:
-every required name must resolve to a non-empty string, or startup fails
-before any store is opened, naming every missing secret at once. Optional
-names are not checked.
+On every platform, startup checks the environment against the declared
+secrets: every required name must resolve to a non-empty string, or startup
+fails before any store is opened, naming every missing secret at once and
+never a value. Optional names are not checked. Two secrets with one name fail
+when the file is generated.
 
 Keep code and manifest in sync in this order:
 
-- **Adding a secret:** add the name to `example.env.secrets`, set its value
-  on each deployment, then deploy the code that reads it.
+- **Adding a secret:** declare it and regenerate, set its value on each
+  deployment, then deploy the code that reads it.
 - **Removing a secret:** deploy the code that stopped reading it, remove the
-  name from `example.env.secrets`, then delete the value from each
-  deployment.
+  declaration and regenerate, then delete the value from each deployment.
 
 On Cloudflare the manifest is also a build input; see
 [Worker secrets](#worker-secrets).
@@ -251,8 +279,18 @@ On Cloudflare:
 | --- | --- | --- |
 | `blobReadCacheTtlSeconds` | 86400 | Edge-cache TTL for content reads from KV. Values under 60 are raised to 60. Content is addressed by hash, so a long TTL never serves stale content. Shipped: 129600 (36 hours). |
 | `indexCacheTtlSeconds` | 10 | How long an isolate reuses a build's resolved content index. A newly assigned Release can take this long to reach every isolate. |
-| `kvNamespaceName`, `kvNamespaceId` | — | The KV namespace holding content. The devkit binds it by ID and checks that it exists. |
-| `kvBindingName`, `durableObjectBindingName`, `durableObjectClassName` | — | Framework-owned. Leave the shipped values. |
+| `kvNamespace.namespaceName`, `kvNamespace.namespaceId` | — | The KV namespace holding content. |
+| `kvNamespace.bindingName` | `CA_STORE_KV_STORE` | Framework-owned. Leave the default. |
+| `durableObject.bindingName` | `CA_STORE_DURABLE_OBJECT` | The binding of the content index's Durable Object namespace. Framework-owned. Leave the default. |
+
+```jsonc
+"CONTENT_STORE": {
+    "kvNamespace": {
+        "namespaceName": "my-app-content",
+        "namespaceId": "<the namespace's id>",
+    },
+},
+```
 
 ## Admin rate limits
 
@@ -370,7 +408,11 @@ are created by Cloudflare when the first version is deployed.
 
 ### Worker packaging
 
-`cloudflare-server.js` is the entry module. The CLI uploads every statically
+`cloudflare-server.js` is the entry module. It imports the generated
+`cloudflare-registry.generated.js` and `routes.generated.js` (through
+`virtual-hosts.js`), and re-exports `cloudflare-durable-objects.generated.js`,
+which exports every Durable Object class. Those three files are generated
+from the plugin manifests and committed. The CLI uploads every statically
 reachable module as a separate ES module with comments removed; there is no
 transpiling, tree shaking, or minification. The build rejects bare package
 imports (including `node_modules` packages), modules outside the app
@@ -380,8 +422,9 @@ mistakes, and `import()` with a non-literal specifier.
 `cloudflare-config.jsonc` is not a module and is never uploaded. Before
 packaging, the CLI writes `cloudflare-config.generated.js` holding the
 top-level fields and only the selected environment. `cloudflare-server.js`
-imports it. Do not edit or commit the generated file; change
-`cloudflare-config.jsonc` instead.
+imports it. Do not edit or commit that generated file; change
+`cloudflare-config.jsonc` instead. It is the one generated file that is not
+committed.
 
 ## Adding a new setting
 
@@ -394,6 +437,7 @@ imports it. Do not edit or commit the generated file; change
 3. Per-deploy, non-secret: add the key to `example.env` with an explanatory
    comment, and to each `.env.<environment>` file that needs a value. Do not
    set `ENVIRONMENT` or `BUILD_ID` for Cloudflare.
-4. Per-deploy, secret: add the name to `example.env.secrets` (mark it
-   `# @optional` if a deployment may omit it), then follow the order in
+4. Per-deploy, secret: declare it in `app/app.json` (with
+   `"required": false` if a deployment may omit it), regenerate
+   `example.env.secrets`, then follow the order in
    [the secrets manifest](#the-secrets-manifest).
