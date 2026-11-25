@@ -6,7 +6,7 @@ import { authenticateAdminDataApiToken as authenticateToken } from '../../transa
  * Authenticates Administrative Data API requests and stores the token principal on the request context.
  *
  * Only bearer credentials are read: an absent header, HTTP Basic credentials,
- * a Publishing API token, or any other credential is a 401. The principal's
+ * the deploy key, or any other credential is a 401. The principal's
  * permissions come only from the token's own grants, never from the minting
  * admin's roles, so a token cannot act with more authority than it was given.
  *

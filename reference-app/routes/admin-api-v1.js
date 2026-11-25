@@ -152,26 +152,4 @@ export default [
             },
         ],
     },
-    {
-        pattern: '/publishing-api-tokens{/}',
-        name: 'publishing-api-tokens',
-        inboundMiddleware: [
-            authenticateAdminApiRequest,
-        ],
-        targets: [
-            {
-                name: 'create',
-                methods: [ 'POST' ],
-                requestHandlers: [
-                    authorize([
-                        {
-                            action: 'urn:kixx:create',
-                            resource: 'urn:kixx:admin:api-tokens:publishing',
-                        },
-                    ]),
-                    AdminAPI.createPublishingApiToken,
-                ],
-            },
-        ],
-    },
 ];

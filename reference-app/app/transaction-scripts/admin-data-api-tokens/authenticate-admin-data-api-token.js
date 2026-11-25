@@ -15,9 +15,9 @@ const TOKEN_PATTERN = new RegExp(`^${ ADMIN_DATA_API_TOKEN_PREFIX }[0-9a-f]{64}$
  * stored state. Nothing is cached, so a revocation takes effect for every
  * request that authenticates after it is stored.
  *
- * Every rejection is a 401: unlike the Publishing API, an expired or revoked
- * token here is a failed authentication, not an authorization denial, so a
- * client always re-credentials rather than retrying.
+ * Every rejection is a 401: an expired or revoked token is a failed
+ * authentication, not an authorization denial, so a client always
+ * re-credentials rather than retrying.
  *
  * @param {import('../../../kixx/context/request-context.js').default} context - Active request context.
  * @param {string|null} token - Raw bearer token presented by the request.
@@ -26,7 +26,7 @@ const TOKEN_PATTERN = new RegExp(`^${ ADMIN_DATA_API_TOKEN_PREFIX }[0-9a-f]{64}$
  * @throws {AssertionError} When an unexpected storage failure occurs.
  */
 export async function authenticateAdminDataApiToken(context, token) {
-    // Rejecting other shapes before lookup keeps Publishing API tokens and any
+    // Rejecting other shapes before lookup keeps the deploy key and any
     // other credential out of this domain even if a hash were ever to collide.
     if (!TOKEN_PATTERN.test(token ?? '')) {
         throw new UnauthenticatedError(UNAUTHENTICATED_MESSAGE);
