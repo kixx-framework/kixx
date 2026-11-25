@@ -1,19 +1,18 @@
-// General plugin: pure framework logic with no platform variant of its own.
+// Core registration: pure framework logic with no platform variant of its own.
 
-import HyperviewService from '../../../hyperview/hyperview-service.js';
-
-
-const DEFAULTS = {
-    useTemplateCache: false,
-    usePageCache: false,
-    pageCacheReadTtlSeconds: 60 * 60 * 24,
-    pageCacheExpirationSeconds: 60 * 60 * 24,
-    allowJsonResponse: false,
-};
+import { assert, isPlainObject } from '../assertions/mod.js';
+import HyperviewService from './hyperview-service.js';
 
 
 export function register(context) {
     const { logger, config } = context;
+
+    // Core's manifest holds the defaults, and they are merged under the
+    // project's config before boot. So the block is always here, complete.
+    assert(
+        isPlainObject(config?.env?.HYPERVIEW),
+        'hyperview plugin requires context.config.env.HYPERVIEW to be a plain object',
+    );
 
     const {
         useTemplateCache,
@@ -21,15 +20,15 @@ export function register(context) {
         pageCacheReadTtlSeconds,
         pageCacheExpirationSeconds,
         allowJsonResponse,
-    } = config.env.HYPERVIEW ?? {};
+    } = config.env.HYPERVIEW;
 
     context.registerService('HyperviewService', new HyperviewService({
         logger,
-        useTemplateCache: useTemplateCache ?? DEFAULTS.useTemplateCache,
-        usePageCache: usePageCache ?? DEFAULTS.usePageCache,
-        pageCacheReadTtlSeconds: pageCacheReadTtlSeconds ?? DEFAULTS.pageCacheReadTtlSeconds,
-        pageCacheExpirationSeconds: pageCacheExpirationSeconds ?? DEFAULTS.pageCacheExpirationSeconds,
-        allowJsonResponse: allowJsonResponse ?? DEFAULTS.allowJsonResponse,
+        useTemplateCache,
+        usePageCache,
+        pageCacheReadTtlSeconds,
+        pageCacheExpirationSeconds,
+        allowJsonResponse,
     }));
 }
 

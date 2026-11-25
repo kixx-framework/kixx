@@ -3,10 +3,16 @@
 // appear only in adapters, and nothing imports a module that is leaving
 // core except the known edges below.
 //
+// Adapters are reached only through generated registries and entry points
+// (TECH-3). So no core module outside adapters/ imports one: it would carry
+// a platform's code into every target's bundle.
+//
 // Unit tests never run the platform (QA-7, D56). So cloudflare:* modules
 // appear only in the Durable Object shells listed below, each shell is
 // only a binding to a plain class, and nothing a unit test imports
-// reaches a shell or a cloudflare:* module.
+// reaches a shell or a cloudflare:* module. Core's manifest declares
+// exactly those shells, because a generated registry exports what the
+// manifest declares.
 //
 // The probe in test-app/probe/ is bundled into every target the
 // integration suite runs on (QA-8). So everything it reaches imports by
@@ -25,6 +31,7 @@ import { assertEqual } from 'kixx-assert';
 
 const REPOSITORY_DIRECTORY = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'kixx/');
+const CORE_MANIFEST_FILE = path.join(CORE_DIRECTORY, 'plugin.json');
 const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
 const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
@@ -44,7 +51,8 @@ const KNOWN_EDGES = [
 ];
 
 // Durable Object classes, as core-relative paths. These are the only core
-// files that import a cloudflare:* module. List a new shell here.
+// files that import a cloudflare:* module. List a new shell here, and
+// declare it in core's manifest (kixx/plugin.json).
 //
 // Core has no Cloudflare entry point to list. One would export a shell, so
 // the rule that no unit test reaches a shell keeps tests away from it too.
@@ -106,6 +114,19 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
+    it('imports no adapter from core outside adapters/', () => {
+        // A file that imports a Node.js adapter holds no node:* specifier of
+        // its own, so the rule above would not catch it.
+        const violations = imports.filter(({ file, specifier, target }) => {
+            return specifier.startsWith('.')
+                && !file.startsWith('adapters/')
+                && isInsideCore(target)
+                && toCorePath(target).startsWith('adapters/');
+        });
+
+        assertEqual('', formatViolations(violations));
+    });
+
     it('imports cloudflare:* modules only in Durable Object shells', () => {
         const cloudflareImports = imports.filter(({ specifier }) => specifier.startsWith('cloudflare:'));
 
@@ -132,6 +153,16 @@ describe('import hygiene', ({ it }) => {
         });
 
         assertEqual('', formatViolations(violations));
+    });
+
+    it('declares exactly the Durable Object shells in core\'s manifest', () => {
+        // A shell no manifest declares would never be exported from a Worker,
+        // and a declared module that isn't a listed shell would escape the
+        // thin-shell rule above.
+        const manifest = JSON.parse(fs.readFileSync(CORE_MANIFEST_FILE, 'utf8'));
+        const declared = manifest.cloudflare.durableObjects.map(({ module }) => module.replace(/^\.\//, ''));
+
+        assertEqual(DURABLE_OBJECT_SHELLS.slice().sort().join('\n'), declared.sort().join('\n'));
     });
 
     it('imports modules leaving core only through known edges', () => {

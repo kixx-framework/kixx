@@ -1,0 +1,64 @@
+{
+    "name": "kixx",
+    "version": "7.0.0-alpha.0",
+    "description": "Kixx core: routing, Hyperview, the content store, and the key/value store.",
+    "services": [ "ContentAddressableStore", "ContentStore", "HyperviewService", "KeyValueStore" ],
+    "lifecycle": [
+        "./content-addressable-store/plugin.js",
+        "./hyperview/plugin.js"
+    ],
+    "adapters": {
+        "node": {
+            "loggerWriter": "./adapters/node/logger-writer/lib/logger-writer.js",
+            "serverRequest": "./adapters/node/server-request/lib/server-request.js",
+            "lifecycle": [
+                "./adapters/node/key-value-store/plugin.js",
+                "./adapters/node/content-store/plugin.js"
+            ]
+        },
+        "cloudflare": {
+            "loggerWriter": "./adapters/cloudflare/logger-writer/lib/logger-writer.js",
+            "serverRequest": "./adapters/cloudflare/server-request/lib/server-request.js",
+            "lifecycle": [
+                "./adapters/cloudflare/key-value-store/plugin.js",
+                "./adapters/cloudflare/content-store/plugin.js"
+            ]
+        }
+    },
+    "config": {
+        "keys": [ "CONTENT_STORE", "HYPERVIEW", "KEY_VALUE_STORE", "LOGGER" ],
+        "defaults": {
+            "all": {
+                "HYPERVIEW": {
+                    "useTemplateCache": false,
+                    "usePageCache": false,
+                    "pageCacheReadTtlSeconds": 86400,
+                    "pageCacheExpirationSeconds": 86400,
+                    "allowJsonResponse": false
+                }
+            },
+            "cloudflare": {
+                "KEY_VALUE_STORE": { "bindingName": "KEY_VALUE_STORE" },
+                "CONTENT_STORE": {
+                    "blobReadCacheTtlSeconds": 86400,
+                    "indexCacheTtlSeconds": 10,
+                    "kvNamespace": { "bindingName": "CA_STORE_KV_STORE" },
+                    "durableObject": { "bindingName": "CA_STORE_DURABLE_OBJECT" }
+                }
+            }
+        }
+    },
+    "cloudflare": {
+        "kvNamespaces": [
+            { "config": "KEY_VALUE_STORE" },
+            { "config": "CONTENT_STORE.kvNamespace" }
+        ],
+        "durableObjects": [
+            {
+                "className": "ContentAddressableIndexStore",
+                "module": "./adapters/cloudflare/content-store/lib/content-addressable-index-store.js",
+                "config": "CONTENT_STORE.durableObject"
+            }
+        ]
+    }
+}

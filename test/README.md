@@ -292,14 +292,14 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 
 `test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear:
 
-- **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
-- **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules.
+- **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. No core module outside `kixx/adapters/` imports an adapter: adapters are reached through generated registries and entry points. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
+- **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules. Core's manifest (`kixx/plugin.json`) declares exactly the same files under `cloudflare.durableObjects`.
 - **What a unit test may reach.** Nothing that a file under `test/` imports, directly or through other modules, is a shell or imports a `cloudflare:*` module. A failure prints the chain of files that leads there.
 - **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module.
 
 Its lists are constants at the top of the file:
 
-- `DURABLE_OBJECT_SHELLS`: add the file of a new Durable Object class, and remove a deleted one. An entry that no longer imports a `cloudflare:*` module fails too.
+- `DURABLE_OBJECT_SHELLS`: add the file of a new Durable Object class, and remove a deleted one. An entry that no longer imports a `cloudflare:*` module fails too. Declare the class in core's manifest in the same change.
 - `LEAVING_CORE` and `KNOWN_EDGES`: delete an entry when its module or edge is gone. The rule "lists no module or edge that is already gone" fails until you do.
 
 The rules follow static `import` and `export … from` statements. A dynamic `import()` isn't followed.

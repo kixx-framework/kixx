@@ -1,14 +1,30 @@
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from 'kixx-assert';
+import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
-import ApplicationContext from '../../../../../kixx/context/application-context.js';
-import HyperviewService from '../../../../../kixx/hyperview/hyperview-service.js';
-import { register, initialize } from '../../../../../kixx/adapters/general/hyperview/plugin.js';
+import ApplicationContext from '../../../kixx/context/application-context.js';
+import HyperviewService from '../../../kixx/hyperview/hyperview-service.js';
+import { register, initialize } from '../../../kixx/hyperview/plugin.js';
+import { validatePluginManifest, resolveInstallation } from '../../../kixx/tooling/mod.js';
 
+
+// The config defaults a generated registry carries: core's manifest holds
+// them, and boot merges them under the project's config.
+function readCoreConfigDefaults() {
+    const filepath = fileURLToPath(new URL('../../../kixx/plugin.json', import.meta.url));
+    const manifest = validatePluginManifest(JSON.parse(fs.readFileSync(filepath, 'utf8')), {
+        file: 'kixx/plugin.json',
+        isCore: true,
+    });
+
+    return resolveInstallation({ core: manifest, plugins: [] }).targets.node.configDefaults;
+}
 
 function makeApplicationContext(env) {
     return new ApplicationContext({
-        config: { env: env ?? {} },
+        config: { env: env ?? readCoreConfigDefaults() },
         logger: {
             createChild() {
                 return { debug() {} };
@@ -68,6 +84,17 @@ describe('hyperview plugin', ({ describe }) => {
             register(context);
 
             assert(context.getService('HyperviewService') instanceof HyperviewService);
+        });
+
+        it('fails with the config path when the HYPERVIEW block is missing', () => {
+            for (const env of [ {}, { HYPERVIEW: null }, { HYPERVIEW: 'on' } ]) {
+                const context = makeApplicationContext(env);
+                const caught = catchError(() => register(context));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('context.config.env.HYPERVIEW', caught.message);
+            }
         });
     });
 
