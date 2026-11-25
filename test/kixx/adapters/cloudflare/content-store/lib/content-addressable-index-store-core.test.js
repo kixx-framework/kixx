@@ -53,7 +53,9 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
             await core.ready;
 
             assertEqual(1, callCount);
-            assertEqual('builds,closure_entries,content_schema,objects', listTables(state.storage.sql));
+            assertEqual(4, state.storage.sql.exec('SELECT version FROM content_schema').one().version);
+            assertEqual(1, state.storage.sql.exec("SELECT count(*) AS n FROM sqlite_master WHERE type = 'index' AND name = 'activations_build'").one().n);
+            assertEqual('activations,builds,closure_entries,content_schema,objects,releases', listTables(state.storage.sql));
         });
 
         it('rejects ready when the storage holds an incompatible schema', async () => {
@@ -68,6 +70,26 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
             assertMatches('ContentAddressableIndexStore: incompatible unversioned schema', caught.message);
             assertEqual('legacy', listTables(state.storage.sql));
         });
+
+        it('rejects ready for an older or newer schema version and changes nothing', async () => {
+            for (const version of [ 3, 5 ]) {
+                const state = createFakeDurableObjectState();
+                const current = new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
+                await current.ready;
+                await current.saveIndex('root-1', makeIndex());
+                state.storage.sql.exec('UPDATE content_schema SET version = ?', version);
+
+                const core = new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
+                const caught = await catchAsyncError(() => core.ready);
+
+                assert(caught, 'expected ready to reject');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('ContentAddressableIndexStore: incompatible schema version', caught.message);
+                assertEqual(version, state.storage.sql.exec('SELECT version FROM content_schema').one().version);
+                assertEqual('activations,builds,closure_entries,content_schema,objects,releases', listTables(state.storage.sql));
+                assertEqual(2, state.storage.sql.exec('SELECT count(*) AS n FROM closure_entries').one().n);
+            }
+        });
     });
 
     describe('migrate', ({ it }) => {
@@ -78,7 +100,7 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
             await core.migrate();
             await core.migrate();
 
-            assertEqual('builds,closure_entries,content_schema,objects', listTables(sql));
+            assertEqual('activations,builds,closure_entries,content_schema,objects,releases', listTables(sql));
             assertEqual(1, sql.exec('SELECT count(*) AS n FROM content_schema').one().n);
             assertEqual(2, sql.exec('SELECT count(*) AS n FROM closure_entries').one().n);
         });

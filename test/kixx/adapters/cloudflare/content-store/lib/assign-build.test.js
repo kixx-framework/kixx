@@ -78,7 +78,13 @@ describe('assignBuild', ({ after, it }) => {
     });
 
     it('rejects incompatible schemas without silently resetting them', () => {
-        for (const statement of [ 'UPDATE content_schema SET version = 2', 'DROP TABLE content_schema' ]) {
+        const statements = [
+            'UPDATE content_schema SET version = 2',
+            'UPDATE content_schema SET version = 3',
+            'UPDATE content_schema SET version = 5',
+            'DROP TABLE content_schema',
+        ];
+        for (const statement of statements) {
             const sql = makeSql();
             saveClosure(sql, 'first');
             const assigned = assignBuild(sql, 'build', { rootHash: 'first' });
