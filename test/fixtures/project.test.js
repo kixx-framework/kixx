@@ -9,9 +9,14 @@ import { assert, assertEqual, assertFalsy, isFunction } from 'kixx-assert';
 
 import { renderProjectFiles } from '../../kixx/tooling/mod.js';
 import { createProjectFileSystem } from '../../kixx/adapters/node/tooling/lib/project-file-system.js';
+import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
 import { startNodeServer } from '../../kixx/adapters/node/server/lib/node-server.js';
+import { createWorker } from '../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js';
+import ContentAddressableIndexStoreCore from '../../kixx/adapters/cloudflare/content-store/lib/content-addressable-index-store-core.js';
+import { createFakeDurableObjectNamespace } from '../fakes/durable-object.js';
+import { createFakeKVNamespace } from '../fakes/workers-kv.js';
 
 // Never an entry point, and never the Durable Object registry: only
 // Cloudflare can load those.
@@ -148,6 +153,62 @@ async function bootOnNode() {
     };
 }
 
+// Builds the fixture's Worker the way its cloudflare-server.js does, from the
+// committed registry, with fakes for the bindings core's manifest declares.
+// `secrets` are the secret values the environment holds.
+function bootOnCloudflare(secrets) {
+    // Workers KV allows one write per second to a key, and so does the fake.
+    // A test moves this clock on between visits instead of waiting.
+    const clock = { now: Date.now() };
+
+    const env = {
+        ENVIRONMENT: 'test',
+        BUILD_ID: 'fixture-build',
+        ...secrets,
+        KEY_VALUE_STORE: createFakeKVNamespace({ now: () => clock.now }),
+        CA_STORE_KV_STORE: createFakeKVNamespace(),
+        CA_STORE_DURABLE_OBJECT: createFakeDurableObjectNamespace((state) => {
+            return new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
+        }),
+    };
+
+    // Reached only when a request fails unexpectedly, which no test here
+    // causes: both stay empty.
+    const waits = [];
+    const waitUntilPromises = [];
+
+    const worker = createWorker({
+        env,
+        sourceConfig: parseJsonc(readCommittedFile('cloudflare-config.jsonc')),
+        registry: cloudflareRegistry,
+        virtualHosts,
+        app,
+        wait(milliseconds) {
+            waits.push(milliseconds);
+            return Promise.resolve();
+        },
+    });
+
+    const executionContext = {
+        waitUntil(promise) {
+            waitUntilPromises.push(promise);
+            promise.catch(() => {});
+        },
+    };
+
+    return {
+        env,
+        clock,
+        waits,
+        waitUntilPromises,
+
+        // Cloudflare hands fetch() the environment again on every request.
+        fetch(pathname) {
+            return worker.fetch(new Request(`https://localhost${ pathname }`), env, executionContext);
+        },
+    };
+}
+
 async function fetchJSON(url) {
     const response = await fetch(url);
     const body = await response.json();
@@ -161,6 +222,15 @@ function assertNoSecretValue(value) {
     for (const [ name, secretValue ] of Object.entries(SECRET_VALUES)) {
         assertFalsy(text.includes(secretValue), `the value of ${ name } was printed`);
     }
+}
+
+function catchError(fn) {
+    try {
+        fn();
+    } catch (error) {
+        return error;
+    }
+    return null;
 }
 
 async function catchRejection(promise) {
@@ -542,6 +612,100 @@ describe('fixture project', ({ describe }) => {
             assertEqual(0, fs.readdirSync(dataDirectory).length);
             assertEqual(0, fakeProcess.handlers.size);
             assertEqual(0, fakeProcess.exitCodes.length);
+        });
+    });
+
+    // Unit coverage of the Cloudflare registry and adapters on fakes. It is
+    // not the real boot: only Cloudflare can load the entry point and the
+    // Durable Object classes.
+    describe('booted on the Cloudflare adapters against fakes', ({ before, it }) => {
+        let booted;
+        let firstVisit;
+        let secondVisit;
+
+        before(async () => {
+            booted = bootOnCloudflare({
+                FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+            });
+
+            const firstResponse = await booted.fetch('/visits');
+            firstVisit = { response: firstResponse, body: await firstResponse.json() };
+
+            booted.clock.now += 1000;
+
+            const secondResponse = await booted.fetch('/visits/');
+            secondVisit = { response: secondResponse, body: await secondResponse.json() };
+        });
+
+        it('counts visits through the key/value store', () => {
+            assertEqual(200, firstVisit.response.status);
+            assertEqual(1, firstVisit.body.count);
+            assertEqual(200, secondVisit.response.status);
+            assertEqual(2, secondVisit.body.count);
+        });
+
+        it('keeps the count in the namespace bound as KEY_VALUE_STORE', () => {
+            const puts = booted.env.KEY_VALUE_STORE.calls.filter(({ method }) => method === 'put');
+
+            assertEqual(2, puts.length);
+            assertEqual(0, booted.env.CA_STORE_KV_STORE.calls.length);
+        });
+
+        it('runs the visits plugin\'s Cloudflare adapter', () => {
+            assertEqual('cloudflare', firstVisit.body.target);
+        });
+
+        it('lays the project\'s config over the defaults for all targets and for Cloudflare', () => {
+            const { config } = firstVisit.body;
+
+            assertEqual('hello from the fixture', config.greeting);
+            assertEqual('default-one,default-two', config.tags.join(','));
+            assertEqual(60, config.limits.perMinute);
+            assertEqual(600, config.limits.perHour);
+
+            // A default only the Cloudflare target has.
+            assertEqual('a default for Cloudflare', config.platformNote);
+        });
+
+        it('serves the same mounted routes as the Node.js boot', async () => {
+            const panel = await booted.fetch('/panel');
+
+            assertEqual(200, panel.status);
+            assertEqual('yes', panel.headers.get('x-fixture-panel'));
+            assertEqual('Fixture panel', (await panel.json()).title);
+
+            const panelVisits = await booted.fetch('/panel/visits');
+
+            assertEqual(200, panelVisits.status);
+            assertEqual('visits', (await panelVisits.json()).panel);
+
+            const reports = await booted.fetch('/reports/visits');
+
+            assertEqual(404, reports.status);
+            assertEqual(CATCH_ALL_BODY, await reports.text());
+        });
+
+        it('never reaches the Worker\'s own error path', () => {
+            assertEqual(0, booted.waits.length);
+            assertEqual(0, booted.waitUntilPromises.length);
+        });
+
+        it('puts no secret value in a response', () => {
+            assertNoSecretValue([ firstVisit.body, secondVisit.body ]);
+        });
+    });
+
+    describe('booted on the Cloudflare adapters without its required secrets', ({ it }) => {
+        it('throws the error the Node.js boot rejects with', () => {
+            // The optional secret is present; both required ones are absent.
+            const error = catchError(() => {
+                bootOnCloudflare({ VISITS_OPTIONAL_TOKEN: SECRET_VALUES.VISITS_OPTIONAL_TOKEN });
+            });
+
+            assertEqual('OperationalError', error.name);
+            assertEqual(MISSING_SECRETS_MESSAGE, error.message);
+            assertNoSecretValue(error);
         });
     });
 });
