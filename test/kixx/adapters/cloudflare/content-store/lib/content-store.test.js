@@ -1084,8 +1084,7 @@ describe('CloudflareContentStore', ({ describe }) => {
         });
 
         it('leaves a blob unregistered after registry failure and repairs it on repeat upload', async () => {
-            let nowMilliseconds = 1_800_000_000_000;
-            const kvStore = createFakeKVNamespace({ now: () => nowMilliseconds });
+            const kvStore = createFakeKVNamespace({ now: () => 1_800_000_000_000 });
             const files = new Map();
             let registerCalls = 0;
             const durableObject = {
@@ -1108,9 +1107,8 @@ describe('CloudflareContentStore', ({ describe }) => {
                 () => store.putFile(context, '/a.txt', 'hash-a', 'bytes'),
             );
             const missing = await store.statFiles(context, [ 'hash-a' ]);
-            // KV accepts one write per second to a key, so the repeat upload
-            // comes a second later.
-            nowMilliseconds += 1000;
+            // The repeat upload comes within the second in which KV refuses a
+            // second write to the key.
             const size = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
             const repaired = await store.statFiles(context, [ 'hash-a' ]);
 
@@ -1119,6 +1117,67 @@ describe('CloudflareContentStore', ({ describe }) => {
             assertEqual(5, size);
             assertEqual(5, repaired[0].size);
             assertEqual(2, kvStore.calls.length);
+        });
+
+        it('accepts a repeat upload KV refuses for its write rate, and registers it again', async () => {
+            const kvStore = createFakeKVNamespace();
+            const registered = [];
+            const durableObject = {
+                async registerFile(hash, size) {
+                    registered.push({ hash, size });
+                    return { success: true };
+                },
+            };
+            const context = makeContext({ durableObject, kvStore });
+            const store = makeStore();
+
+            const first = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
+            const second = await store.putFile(context, '/a.txt', 'hash-a', 'bytes');
+
+            assertEqual(5, first);
+            assertEqual(5, second);
+            assertEqual(2, registered.length);
+            assertEqual('hash-a', registered[1].hash);
+            assertEqual(5, registered[1].size);
+            assertEqual('put,put', kvStore.calls.map((call) => call.method).join(','));
+            assertEqual('bytes', await kvStore.get('hash-a#1'));
+        });
+
+        it('rethrows any other KV write failure without registering the file', async () => {
+            const failure = new Error('KV PUT failed: 500 Internal Server Error');
+            const kvStore = {
+                async put() {
+                    throw failure;
+                },
+            };
+            let registerCalls = 0;
+            const durableObject = {
+                async registerFile() {
+                    registerCalls += 1;
+                    return { success: true };
+                },
+            };
+            const store = makeStore();
+
+            const caught = await catchAsyncError(
+                () => store.putFile(makeContext({ durableObject, kvStore }), '/a.txt', 'hash-a', 'bytes'),
+            );
+
+            assertEqual(failure, caught);
+            assertEqual(0, registerCalls);
+        });
+
+        it('answers an empty bulk read without calling KV', async () => {
+            const kvStore = createFakeKVNamespace();
+            const store = makeStore();
+            const context = makeContext({ kvStore });
+
+            const results = await store.getFiles(context, 'text', []);
+            const caught = await catchAsyncError(() => store.getFiles(context, 'arrayBuffer', []));
+
+            assertEqual(0, results.length);
+            assertEqual('AssertionError', caught.name);
+            assertEqual(0, kvStore.calls.length);
         });
 
         it('rejects a blob that is neither a string nor an ArrayBuffer', async () => {

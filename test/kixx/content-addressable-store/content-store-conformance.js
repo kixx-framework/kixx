@@ -103,6 +103,39 @@ export default function contentStoreConformance(describe, makeContentStore) {
             assertEqual(JSON.stringify([ { size: 4 }, null, { size: 1 }, { size: 4 } ]), JSON.stringify(results));
         });
 
+        // An upload is idempotent, so a store must absorb any limit its
+        // platform puts on rewriting a key. No pause separates the two calls.
+        it('accepts one hash uploaded twice in a row', async () => {
+            const { store, context } = makeContentStore();
+            const hash = `twice-${ crypto.randomUUID() }`;
+
+            const first = await store.putFile(context, '/twice.txt', hash, 'twice');
+            const second = await store.putFile(context, '/twice.txt', hash, 'twice');
+
+            assertEqual(5, first);
+            assertEqual(5, second);
+            assertEqual('twice', await store.getFile(context, 'text', '/twice.txt', hash));
+            assertEqual(JSON.stringify([ { size: 5 } ]), JSON.stringify(await store.statFiles(context, [ hash ])));
+        });
+
+        it('resolves an empty array for an empty bulk read', async () => {
+            const { store, context } = makeContentStore();
+
+            const results = await store.getFiles(context, 'text', []);
+
+            assert(Array.isArray(results));
+            assertEqual(0, results.length);
+        });
+
+        it('resolves an empty array for an empty bulk stat', async () => {
+            const { store, context } = makeContentStore();
+
+            const results = await store.statFiles(context, []);
+
+            assert(Array.isArray(results));
+            assertEqual(0, results.length);
+        });
+
         it('accepts exactly 100 stat hashes and rejects a larger list', async () => {
             const { store, context } = makeContentStore();
             const allowed = Array.from({ length: 100 }, (_, index) => `hash-${ index }`);

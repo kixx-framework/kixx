@@ -74,6 +74,10 @@ const DURABLE_OBJECT_OVERLOADED_RETRY_AFTER_SECONDS = 5;
 // a programmer error here and must not be retried or wrapped.
 const DURABLE_OBJECT_ERROR_MARKERS = [ 'remote', 'retryable', 'overloaded' ];
 
+// Workers KV allows one write per second to a key and rejects a faster one
+// with this message.
+const KV_WRITE_RATE_LIMIT_MESSAGE = 'KV PUT failed: 429 Too Many Requests';
+
 
 /**
  * Stores content-addressed blobs in Cloudflare KV and build indexes in a
@@ -404,12 +408,16 @@ export default class ContentStore {
      *
      * Unlike the read methods, this takes no type: a write carries its own
      * representation, so the blob itself is the only thing worth checking.
+     *
+     * Idempotent: uploading one hash again resolves the same size, even
+     * within the second in which KV refuses a second write to the key.
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {string} _pathname - Logical pathname retained for store interface compatibility
      * @param {string} hash - Content hash identifying the blob
      * @param {string|ArrayBuffer} blob - Blob to store
      * @returns {Promise<number>} Stored blob size in bytes
      * @throws {AssertionError} When `blob` is neither a string nor an ArrayBuffer
+     * @throws {Error} When KV rejects the write for any reason but its per-key write rate
      */
     async putFile(context, pathname, hash, blob) {
         assertNonEmptyString(hash, 'ContentStore#putFile: hash');
@@ -419,7 +427,18 @@ export default class ContentStore {
         );
         const kv = this.#resolveKvStore(context);
         const key = this.#buildFileKey(hash);
-        await kv.put(key, blob);
+
+        try {
+            await kv.put(key, blob);
+        } catch (err) {
+            if (!isKvWriteRateLimitError(err)) {
+                throw err;
+            }
+            // The key is the content hash, so the bytes already stored under
+            // it are these bytes.
+            this.#logger.debug('blob already written within the last second', { hash });
+        }
+
         const size = isString(blob) ? textEncoder.encode(blob).byteLength : blob.byteLength;
 
         const trace = new TraceLogger(context.logger, 'content-store-put-file', { pathname, hash });
@@ -489,6 +508,7 @@ export default class ContentStore {
      *
      * At most `KV_BULK_MAX_KEYS` blobs may be requested per call; a longer
      * `files` list is a programmer error, not a read this store will split.
+     * An empty `files` list resolves an empty array without reading KV.
      * @param {RequestContext} context - Request context exposing the configured KV binding
      * @param {'text'} type - Representation to return for every blob
      * @param {Array<{hash: string}>} files - Blob descriptors to retrieve
@@ -506,6 +526,11 @@ export default class ContentStore {
             files.length <= KV_BULK_MAX_KEYS,
             `ContentStore#getFiles() accepts at most ${ KV_BULK_MAX_KEYS } files per call; received ${ files.length }`,
         );
+
+        // KV rejects a bulk get() with no keys.
+        if (files.length === 0) {
+            return [];
+        }
 
         const kv = this.#resolveKvStore(context);
 
@@ -620,6 +645,13 @@ function assertValidType(value, method, acceptedTypes) {
     if (!acceptedTypes.includes(value)) {
         throw new AssertionError(`Invalid type "${ value }" passed into ContentStore#${ method }`);
     }
+}
+
+// KV documents this message for a write that breaks its per-key rate, and no
+// error class, status, or code to test instead. A 429 raised for any other
+// reason carries the same message, and is reported as stored too.
+function isKvWriteRateLimitError(err) {
+    return isString(err?.message) && err.message.includes(KV_WRITE_RATE_LIMIT_MESSAGE);
 }
 
 function assertValidTupleArity(entries) {
