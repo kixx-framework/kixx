@@ -8,7 +8,6 @@ import {
 } from '../../../lib/vendor/kixx-assert/mod.js';
 
 import PublishingAPIClient from '../../../lib/publishing/publishing-api-client.js';
-import UsageError from '../../../lib/usage-error.js';
 
 const ORIGIN = 'https://app.example.test';
 const TOKEN = 'publishing-secret';
@@ -521,21 +520,6 @@ describe('publishing/publishing-api-client', ({ it }) => {
         assertEqual('ObjectStatus', JSON.parse(fetchMock.calls[0].init.body).data.type);
         assertEqual('/publishing-api/v1/releases', fetchMock.calls[1].url.pathname);
         assertUndefined(JSON.parse(fetchMock.calls[1].init.body).data.attributes.provenance);
-    });
-
-    it('turns PublishingApiTokenInactive into a usage error naming create-publishing-token', async () => {
-        const client = makeClient(async () => makeResponse(403, {
-            errors: [ { status: '403', code: 'PublishingApiTokenInactive', detail: `Token ${ TOKEN } inactive` } ],
-        }));
-
-        const caught = await catchAsyncError(() => client.discover());
-
-        assertEqual('PublishingApiTokenInactiveError', caught.name);
-        assert(caught instanceof UsageError, 'expected a UsageError');
-        assertEqual(403, caught.status);
-        assertMatches('expired or revoked', caught.message);
-        assertMatches('kixx admin create-publishing-token', caught.message);
-        assertNotMatches(TOKEN, caught.message);
     });
 
     it('sends the observed assignment identity as the JSON precondition', async () => {

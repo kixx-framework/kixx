@@ -70,7 +70,7 @@ describe('kixx.js entry point', ({ it }) => {
         const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
 
         assertEqual(
-            'gen-secure-token,accept-invite,create-publishing-token,list-migrations,run-migration',
+            'gen-secure-token,accept-invite,list-migrations,run-migration',
             names.join(','),
         );
     }, { timeout: TIMEOUT });
@@ -251,7 +251,7 @@ describe('kixx.js entry point', ({ it }) => {
     }, { timeout: TIMEOUT });
 
     it('aligns option descriptions in one column', async () => {
-        const { stdout } = await runEntryPoint([ 'admin', 'create-publishing-token', '--help' ]);
+        const { stdout } = await runEntryPoint([ 'admin', 'run-migration', '--help' ]);
 
         const optionsSection = stdout.slice(stdout.indexOf('Options:\n')).split('\n\n')[0];
         const optionLines = optionsSection.split('\n').slice(1);
@@ -259,7 +259,7 @@ describe('kixx.js entry point', ({ it }) => {
             'Show this help',
             'Print the kixx version',
             'Required application environment',
-            'Publishing role ids, defaults to editor',
+            'Override the configured Admin API origin',
         ];
 
         const columns = descriptions.map((text) => {
@@ -275,8 +275,6 @@ describe('kixx.js entry point', ({ it }) => {
         for (const line of optionLines) {
             assert(line.length <= 80, `line fits in 80 columns: ${ line }`);
         }
-
-        assertMatches(/--roles <string>\.\.\./, stdout);
     }, { timeout: TIMEOUT });
 
     it('reports an unknown option as a usage message without a stack', async () => {
