@@ -95,7 +95,7 @@ With it you can:
 
 - `kixx dev` - Run your app locally. It restarts when you change the code.
 - `kixx local` - Run throwaway local instances with writable data, to test publishing and admin signup.
-- `kixx admin` - Create the first admin account, mint publishing tokens, and run data migrations.
+- `kixx admin` - Create the first admin account and run data migrations.
 - `kixx app` - Publish your site's content to a running app.
 - `kixx cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
 

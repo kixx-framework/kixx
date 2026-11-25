@@ -25,8 +25,9 @@ A missing directory or file is an empty layer. Never commit `secrets.json`.
 `app` and `admin` commands read:
 
 - `app.environments.<env>.origin` in `config.json`: the application's origin.
-- `app.environments.<env>.publishingToken` in `secrets.json`: the token
-  minted by `kixx admin create-publishing-token` (used by `app` commands).
+- `app.environments.<env>.publishingToken` in `secrets.json`: the
+  environment's deploy key, whose SHA-256 is the deployment's
+  `DEPLOY_KEY_HASH` (used by `app` commands).
 
 ```json
 // .kixx/config.json
@@ -44,7 +45,7 @@ A missing directory or file is an empty layer. Never commit `secrets.json`.
 {
     "app": {
         "environments": {
-            "production": { "publishingToken": "kxpat_..." }
+            "production": { "publishingToken": "kxdk_..." }
         }
     },
     "cloudflare": {

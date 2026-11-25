@@ -39,8 +39,8 @@ Requests authenticate with an Administrative Data API bearer token:
 Authorization: Bearer kxadt_<secret>
 ```
 
-These tokens are a separate credential domain. Publishing API tokens
-(`kxpat_`), admin passwords, and HTTP Basic credentials are rejected. A missing,
+These tokens are a separate credential domain. The deploy key (`kxdk_`),
+admin passwords, and HTTP Basic credentials are rejected. A missing,
 malformed, unknown, expired, or revoked token returns `401` with a
 `WWW-Authenticate: Bearer` challenge; expired and revoked tokens carry code
 `AdminDataApiTokenInactive`.

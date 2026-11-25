@@ -3,9 +3,9 @@ Kixx Devkit
 
 The `kixx` command: local development, build, and deployment tools for Kixx
 applications. It runs the app locally with restarts after code changes,
-manages throwaway local instances, creates the first admin account, mints
-publishing tokens, runs data migrations, publishes application content, and
-builds and deploys Cloudflare Worker versions.
+manages throwaway local instances, creates the first admin account, runs
+data migrations, publishes application content, and builds and deploys
+Cloudflare Worker versions.
 
 Install
 -------
@@ -55,7 +55,6 @@ Commands
 
 - `kixx admin gen-secure-token` — generate a secure token.
 - `kixx admin accept-invite` — redeem an invite and create an admin account.
-- `kixx admin create-publishing-token` — mint a Publishing API token.
 - `kixx admin list-migrations` — list migrations and their status.
 - `kixx admin run-migration` — run one batch of a migration.
 - `kixx app publish` — publish content and assign it to a build.

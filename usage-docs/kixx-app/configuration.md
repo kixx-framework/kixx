@@ -378,6 +378,8 @@ Cloudflare environment.
 The source version's secret names must match the manifest:
 
 - Every required name must be set.
+- A `# @required-outside-development` name counts as required: no Worker
+  environment is `development`.
 - An optional (`# @optional`) name is inherited when set, and skipped when
   not.
 - Any other secret on the Worker fails the build.
