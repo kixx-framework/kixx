@@ -1,4 +1,10 @@
-import { assert, assertArray, isString } from '../assertions/mod.js';
+import {
+    assert,
+    assertArray,
+    isNonEmptyString,
+    isObjectNotNull,
+    isString,
+} from '../assertions/mod.js';
 import { OperationalError } from '../errors/mod.js';
 
 
@@ -148,6 +154,43 @@ export function compareSecretNames(options) {
     extra.sort();
 
     return { missing, extra };
+}
+
+/**
+ * Checks that the environment provides every secret the installed code
+ * declares as required. It runs at boot on every platform, so a deployment
+ * that lacks a secret fails at once, not on the first request that reads it.
+ *
+ * A required name is missing when its value in `env` is not a non-empty
+ * string. Optional names are never checked. Every missing name is reported in
+ * one error, and the message holds names only: never a value, and never the
+ * name of a secret that is present.
+ *
+ * @param {Object} env - Environment variables, secrets, and platform bindings
+ * @param {SecretsManifest} secrets - The declared secret names
+ * @returns {void}
+ * @throws {OperationalError} When one or more required secrets are missing
+ */
+export function assertDeclaredSecrets(env, secrets) {
+    const { required, optional } = secrets ?? {};
+
+    assert(isObjectNotNull(env), 'assertDeclaredSecrets: env must be an object');
+    assertArray(required, 'assertDeclaredSecrets: secrets.required');
+    assertArray(optional, 'assertDeclaredSecrets: secrets.optional');
+
+    const missing = required.filter((name) => !isNonEmptyString(env[name]));
+
+    if (missing.length === 0) {
+        return;
+    }
+
+    missing.sort();
+
+    throw new OperationalError(
+        `Missing required environment secrets: ${ missing.join(', ') }. Every declared secret is listed in example.env.secrets.`,
+        {},
+        assertDeclaredSecrets,
+    );
 }
 
 // A blank line and the end of the file are one condition, not two: a file
