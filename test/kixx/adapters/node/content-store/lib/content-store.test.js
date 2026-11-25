@@ -9,7 +9,9 @@ import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import ContentStore from '../../../../../../kixx/adapters/node/content-store/lib/content-store.js';
 import Logger from '../../../../../../kixx/logger/logger.js';
-import contentStoreConformance from '../../../../content-addressable-store/content-store-conformance.js';
+import contentStoreConformance, {
+    contentStoreHistoryConformance,
+} from '../../../../content-addressable-store/content-store-conformance.js';
 
 
 const temporaryDirectories = [];
@@ -35,6 +37,24 @@ function makeStore(rootDirectory, options = {}) {
         format: 4,
         ...options,
     });
+}
+
+// Every assignment needs an Activation; most tests do not care what it says.
+function assignment(fields) {
+    return {
+        activation: { reason: 'publish', actor: { type: 'deploy-key', id: 'test-key' } },
+        ...fields,
+    };
+}
+
+function makeConformanceStore() {
+    const rootDirectory = path.join(os.tmpdir(), `kixx-content-store-contract-${ randomUUID() }`);
+    temporaryDirectories.push(rootDirectory);
+    return {
+        store: makeStore(rootDirectory),
+        context: makeContext(),
+        createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 4 }),
+    };
 }
 
 async function catchAsyncError(fn) {
@@ -64,15 +84,8 @@ describe('Node ContentStore', ({ after, describe }) => {
         }
     });
 
-    contentStoreConformance(describe, () => {
-        const rootDirectory = path.join(os.tmpdir(), `kixx-content-store-contract-${ randomUUID() }`);
-        temporaryDirectories.push(rootDirectory);
-        return {
-            store: makeStore(rootDirectory),
-            context: makeContext(),
-            createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: 4 }),
-        };
-    });
+    contentStoreConformance(describe, makeConformanceStore);
+    contentStoreHistoryConformance(describe, makeConformanceStore);
 
     describe('construction', ({ it }) => {
         it('requires a logger, root directory, and positive format', () => {
@@ -91,12 +104,16 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             store.close();
 
             const reopened = makeStore(rootDirectory);
             const pointer = await reopened.getBuildPointer(makeContext(), 'build');
             assertEqual(JSON.stringify(assigned.pointer), JSON.stringify(pointer));
+            const { items } = await reopened.listActivations(makeContext(), { buildId: 'build' });
+            assertEqual(1, items.length);
+            assertEqual(assigned.pointer.assignmentId, items[0].assignmentId);
+            assertEqual('root', items[0].toReleaseId);
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             assertEqual(0, database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE name LIKE 'pending_build_assignments%'").get().count);
             database.close();
@@ -107,7 +124,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             store.close();
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
@@ -165,8 +182,8 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex(makeContext(), 'first', firstEntries);
             await first.saveIndex(makeContext(), 'second', secondEntries);
-            await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
-            await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
+            await first.assignBuild(makeContext(), 'current', assignment({ rootHash: 'first' }));
+            await second.assignBuild(makeContext(), 'current', assignment({ rootHash: 'second' }));
 
             const build = await first.getBuild(makeContext(), 'current');
             assertEqual('second', build.rootHash);
@@ -182,24 +199,24 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await first.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
             await first.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
-            const original = await first.assignBuild(makeContext(), 'current', { rootHash: 'first' });
+            const original = await first.assignBuild(makeContext(), 'current', assignment({ rootHash: 'first' }));
 
             // A second instance moves the pointer between when a caller could
             // have observed "first" and when it tries to restore it, the same
             // way a concurrent deploy or test run would.
-            const replacement = await second.assignBuild(makeContext(), 'current', { rootHash: 'second' });
+            const replacement = await second.assignBuild(makeContext(), 'current', assignment({ rootHash: 'second' }));
 
-            const conflicted = await first.assignBuild(makeContext(), 'current', {
+            const conflicted = await first.assignBuild(makeContext(), 'current', assignment({
                 rootHash: 'first',
                 expectedAssignmentId: original.pointer.assignmentId,
-            });
+            }));
             assertEqual('conflict', conflicted.outcome);
             assertEqual('second', (await first.getBuild(makeContext(), 'current')).rootHash);
 
-            const assigned = await first.assignBuild(makeContext(), 'current', {
+            const assigned = await first.assignBuild(makeContext(), 'current', assignment({
                 rootHash: 'first',
                 expectedAssignmentId: replacement.pointer.assignmentId,
-            });
+            }));
             assertEqual('assigned', assigned.outcome);
             assertEqual('first', (await second.getBuild(makeContext(), 'current')).rootHash);
 
@@ -211,16 +228,16 @@ describe('Node ContentStore', ({ after, describe }) => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             database.prepare('UPDATE builds SET assigned_at = ? WHERE build_id = ?').run('2000-01-01T00:00:00.000Z', 'build');
             database.close();
 
-            const result = await store.assignBuild(makeContext(), 'build', {
+            const result = await store.assignBuild(makeContext(), 'build', assignment({
                 rootHash: 'root',
                 expectedAssignmentId: (await store.getBuildPointer(makeContext(), 'build')).assignmentId,
-            });
+            }));
 
             assertEqual('unchanged', result.outcome);
             assertEqual('2000-01-01T00:00:00.000Z', result.pointer.assignedAt);
@@ -248,14 +265,58 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
             failCommit = true;
-            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', { rootHash: 'root' }));
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' })));
             assertEqual(null, await store.getBuildPointer(makeContext(), 'build'));
-            const assigned = await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
 
             assertEqual('OperationalError', failed.name);
             assertEqual('assigned', assigned.outcome);
             store.close();
             database.close();
+        });
+
+        it('rolls back the pointer when its Activation cannot be written', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            // activations.assignment_id is unique, so a repeated identity
+            // fails the Activation insert after the pointer was written.
+            const store = makeStore(rootDirectory, { randomUUID: () => '11111111-1111-4111-8111-111111111111' });
+            await store.saveIndex(makeContext(), 'first', { '/': [ 'tree', 'first' ] });
+            await store.saveIndex(makeContext(), 'second', { '/': [ 'tree', 'second' ] });
+            const first = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'first' }));
+
+            const failed = await catchAsyncError(() => store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'second' })));
+
+            const pointer = await store.getBuildPointer(makeContext(), 'build');
+            const { items } = await store.listActivations(makeContext());
+            assertEqual('OperationalError', failed.name);
+            assert(failed.cause);
+            assertEqual('first', pointer.rootHash);
+            assertEqual(first.pointer.assignedAt, pointer.assignedAt);
+            assertEqual(first.pointer.assignmentId, pointer.assignmentId);
+            assertEqual(1, items.length);
+            assertEqual('first', items[0].toReleaseId);
+            store.close();
+        });
+
+        it('stamps assignments from the injected clock and lists same-instant Activations in reverse insertion order', async () => {
+            const rootDirectory = await makeTemporaryDirectory();
+            const instant = Date.UTC(2027, 0, 15, 12, 30, 0);
+            const store = makeStore(rootDirectory, { now: () => instant });
+            for (const rootHash of [ 'first', 'second', 'third' ]) {
+                await store.saveIndex(makeContext(), rootHash, { '/': [ 'tree', rootHash ] });
+            }
+
+            const assigned = await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'first' }));
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'second' }));
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'third' }));
+
+            const { items } = await store.listActivations(makeContext());
+            assertEqual('2027-01-15T12:30:00.000Z', assigned.pointer.assignedAt);
+            assertEqual('third,second,first', items.map((item) => item.toReleaseId).join(','));
+            for (const item of items) {
+                assertEqual('2027-01-15T12:30:00.000Z', item.activatedAt);
+            }
+            store.close();
         });
 
         it('initializes schema version four with required SQLite pragmas', async () => {
@@ -305,7 +366,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             const store = makeStore(rootDirectory);
 
             await store.saveIndex(makeContext(), 'root', { '/': [ 'tree', 'root' ] });
-            await store.assignBuild(makeContext(), 'build', { rootHash: 'root' });
+            await store.assignBuild(makeContext(), 'build', assignment({ rootHash: 'root' }));
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             database.prepare('UPDATE closures SET entries_json = ? WHERE root_hash = ?').run('{', 'root');
             database.close();
