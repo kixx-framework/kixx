@@ -66,6 +66,12 @@ kixx/content-compiler/README.md
 
 The one compiler that turns a project's content into content objects and a Release manifest: the entry point a tool loads (`kixx/tooling/mod.js` and the two Node.js adapters), `compileProjectContent()` and `compileContent()`, the content source port and how to write a source, what is compiled and each object type, the result (`objects`, `release`, `report`, `graph`), stylesheet bundling and JavaScript comment stripping, plugin content and collisions, the template checks and what they can't see, the dependency graph, the limits, and every problem code.
 
+### Code Fingerprint
+
+kixx/code-fingerprint/README.md
+
+Which project paths are content, agent files, tests, docs, or code (D40), with the classification table and its precedence; `classifyPath()` and `createPathClassifier()`.
+
 ### Static Assets
 
 kixx/static-assets/README.md
