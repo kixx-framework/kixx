@@ -4,8 +4,8 @@ A small Kixx project the unit suite reads and boots: core, two tiny plugins, an 
 
 | Path | What it shows |
 |---|---|
-| `app/app.js`, `app/app.json` | The app's lifecycle module and its one required secret. |
-| `plugins/visits/` | Adapters per target, config defaults, an optional secret, mounted routes, a content root, `start()` and `stop()`, and routes contributed only when `panel` is installed. Its block for `reports`, which is not installed, must leave no trace. |
+| `app/app.js`, `app/app.json` | The app's lifecycle module, its one required secret, and a template helper it declares and registers. |
+| `plugins/visits/` | Adapters per target, config defaults, an optional secret, mounted routes, a content root, a declared template helper, `start()` and `stop()`, and routes contributed only when `panel` is installed. Its block for `reports`, which is not installed, must leave no trace. |
 | `plugins/panel/` | A dependency, a required secret, and middleware on a mount. |
 | `plugins/draft/` | A directory without a `plugin.json`. It is not a plugin. |
 | `virtual-hosts.js` | The project's own routes, then `pluginRoutes`, then the catch-all. |

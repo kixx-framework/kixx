@@ -92,6 +92,7 @@ export const contentRoots = [
 export const templateHelpers = [
     "assetUrl",
     "each",
+    "fixtureGreeting",
     "formatDate",
     "if",
     "ifEqual",
@@ -100,5 +101,6 @@ export const templateHelpers = [
     "truncate",
     "unescape",
     "unless",
+    "visitCount",
     "with"
 ];

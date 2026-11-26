@@ -5,5 +5,6 @@
             "required": true,
             "description": "Shows that an app declares its own secrets."
         }
-    ]
+    ],
+    "templateHelpers": [ "fixtureGreeting" ]
 }

@@ -5,6 +5,11 @@ export function initialize(context) {
     // never put in the log.
     context.getEnvString('FIXTURE_APP_SECRET', { required: true });
 
+    // Declared under templateHelpers in app.json.
+    context.getService('HyperviewService').registerTemplateHelper('fixtureGreeting', (_context, _options, name) => {
+        return `Hello, ${ name }`;
+    });
+
     context.getService('FixtureLog').events.push('app.initialize');
 }
 

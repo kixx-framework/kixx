@@ -2,7 +2,7 @@
     "name": "visits",
     "version": "7.0.0-alpha.0",
     "core": "7.0.0",
-    "description": "Counts visits. Shows adapters, config, routes, content, start and stop, and a conditional contribution.",
+    "description": "Counts visits. Shows adapters, config, routes, content, a template helper, start and stop, and a conditional contribution.",
     "services": [ "FixtureLog", "Visits", "VisitsPlatform" ],
     "lifecycle": [ "./plugin.js" ],
     "adapters": {
@@ -34,6 +34,7 @@
         { "module": "./routes.js", "mount": "/visits", "name": "visits" }
     ],
     "content": { "pagesDirectory": "./pages" },
+    "templateHelpers": [ "visitCount" ],
     "whenInstalled": {
         "panel": {
             "routes": [

@@ -78,6 +78,7 @@ Code outside `adapters/` imports no `node:*` or `cloudflare:*` module and no ada
         "templatesDirectory": "./templates",
         "staticAssetsDirectory": "./static-assets"
     },
+    "templateHelpers": [ "visitCount" ],
     "whenInstalled": {
         "admin": {
             "routes": [ { "module": "./admin-routes.js", "mount": "/admin/visits", "name": "admin-visits" } ]
@@ -105,6 +106,7 @@ Code outside `adapters/` imports no `node:*` or `cloudflare:*` module and no ada
 | `cloudflare.durableObjects` | Objects with `className`, `module` (a module path), and `config` (a config path). |
 | `routes` | Objects with `module` (a module path) and, to mount it, `mount` and `name`. `mount` starts with `/`. `name` is lowercase letters, digits, and hyphens. Give both or neither. See "Routes". |
 | `content` | `pagesDirectory`, `templatesDirectory`, and `staticAssetsDirectory`: at least one, each a directory path. Recorded in the registries as `contentRoots`. Nothing reads them yet. |
+| `templateHelpers` | The names of the template helpers the plugin registers with `registerTemplateHelper()`. Letters, digits, and underscores, not starting with a digit. See "Template Helpers". |
 | `whenInstalled` | An object keyed by another plugin's name. Each value holds `lifecycle`, `routes`, or `content`, at least one, under the rules above. See "Contributing Only When Another Plugin Is Installed". |
 
 Three kinds of path appear:
@@ -115,7 +117,7 @@ Three kinds of path appear:
 
 **Core's manifest** (`kixx/plugin.json`) uses the same keys, with three differences. It has no `core`, `dependencies`, or `whenInstalled`. Each of its adapters must also name `loggerWriter` and `serverRequest`: a module path whose default export is the class. A plugin's manifest can't hold either.
 
-**The app manifest** (`app/app.json`) holds only `secrets`. A project without the file declares none.
+**The app manifest** (`app/app.json`) holds only `secrets` and `templateHelpers`. A project without the file declares none.
 
 **Across manifests**, the generator rejects: a dependency that isn't installed, a dependency cycle, a plugin whose `core` is newer than core or of another major version, and a service, config key, secret, Durable Object class, route mount, or route name declared twice. It reports every such problem in one error.
 
@@ -161,7 +163,7 @@ The generator reads `kixx/plugin.json`, each `plugins/<name>/plugin.json`, and `
 
 | File | Holds |
 |---|---|
-| `node-registry.generated.js` | For Node.js and Deno: `LoggerWriter`, `ServerRequest`, `plugins`, `configDefaults`, `secrets`, `contentRoots`. |
+| `node-registry.generated.js` | For Node.js and Deno: `LoggerWriter`, `ServerRequest`, `plugins`, `configDefaults`, `secrets`, `contentRoots`, `templateHelpers`. |
 | `cloudflare-registry.generated.js` | The same exports for Cloudflare. It imports no Durable Object class. |
 | `cloudflare-durable-objects.generated.js` | One export per Durable Object class. Only Cloudflare can load it. |
 | `routes.generated.js` | `pluginRoutes`: every route the plugins contribute. For both targets. |
@@ -174,6 +176,7 @@ A target registry's exports:
 - `configDefaults`: the config defaults for the target.
 - `secrets`: `{ required, optional, requiredOutsideDevelopment }`, each a sorted list of names.
 - `contentRoots`: where plugin content lives, as paths from the project root.
+- `templateHelpers`: every declared template helper name, sorted, each once.
 
 Rules:
 
@@ -283,6 +286,27 @@ An optional secret may be absent. Read a secret with `context.getEnvString(name)
 Core declares one secret: `DEPLOY_KEY_HASH`, the SHA-256 of the deploy key, required outside development.
 
 `example.env.secrets` is generated from the declarations. It is the template for `.env.<environment>.secrets`, and the list of secret names every deployment must provide. A comment line reading exactly `# @optional` marks the next entry optional, and one reading exactly `# @required-outside-development` marks it required outside development. Only comment lines may come between a directive and its entry, so a description may not be exactly either directive.
+
+## Template Helpers
+
+List every template helper your code registers under `templateHelpers`: in `plugin.json` for a plugin, in `app/app.json` for the app. Core lists its own in `kixx/plugin.json`.
+
+```json
+"templateHelpers": [ "visitCount" ]
+```
+
+```javascript
+export function initialize(context) {
+    context.getService('HyperviewService').registerTemplateHelper('visitCount', visitCount);
+}
+```
+
+The list exists because the pre-publish checks compile every template without running any app code. They can't see what is registered, so they read what is declared: a template that calls a helper no manifest declares fails the checks.
+
+- **Boot warns, and never fails.** After the app's `initialize()`, Hyperview compares the declared names with the registered ones. It logs one warning for helpers registered but not declared, and one for helpers declared but not registered.
+- **Several manifests may declare one name.** Registering a helper replaces an earlier one of the same name, so a plugin or the app may replace a core helper and declare it too.
+- **Not in a `whenInstalled` block.** A helper a `whenInstalled` lifecycle module registers goes in the plugin's top-level list.
+- **Known limit.** A helper used with no arguments (`{{visitCount}}`) reads as a data lookup, so the checks can't tell a mistyped name from a missing value.
 
 ## Deploy Key
 

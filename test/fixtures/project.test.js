@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import util from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { describe } from 'kixx-test';
+import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertFalsy, isFunction } from 'kixx-assert';
 
 import { renderProjectFiles } from '../../kixx/tooling/mod.js';
@@ -13,6 +13,7 @@ import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
 import { sha256Hex } from '../../kixx/utils/crypto.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
+import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
 import { startNodeServer } from '../../kixx/adapters/node/server/lib/node-server.js';
 import { createWorker } from '../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js';
 import ContentAddressableIndexStoreCore from '../../kixx/adapters/cloudflare/content-store/lib/content-addressable-index-store-core.js';
@@ -123,8 +124,8 @@ function makeProcess(env) {
 
 // Boots the fixture the way its node-server.js does, from the committed
 // registry, with a fake process and the stores in a temporary directory. The
-// caller must await close().
-async function bootOnNode() {
+// caller must await close(). A test may pass a changed copy of the registry.
+async function bootOnNode(registry = nodeRegistry) {
     const dataDirectory = await makeDataDirectory();
 
     const fakeProcess = makeProcess({
@@ -138,7 +139,7 @@ async function bootOnNode() {
 
     try {
         started = await startNodeServer({
-            registry: nodeRegistry,
+            registry,
             virtualHosts,
             app,
             baseDirectory: PROJECT_DIRECTORY,
@@ -171,8 +172,9 @@ async function bootOnNode() {
 
 // Builds the fixture's Worker the way its cloudflare-server.js does, from the
 // committed registry, with fakes for the bindings core's manifest declares.
-// `secrets` are the secret values the environment holds.
-function bootOnCloudflare(secrets) {
+// `secrets` are the secret values the environment holds. A test may pass a
+// changed copy of the registry.
+function bootOnCloudflare(secrets, registry = cloudflareRegistry) {
     // Workers KV allows one write per second to a key, and so does the fake.
     // A test moves this clock on between visits instead of waiting.
     const clock = { now: Date.now() };
@@ -196,7 +198,7 @@ function bootOnCloudflare(secrets) {
     const worker = createWorker({
         env,
         sourceConfig: parseJsonc(readCommittedFile('cloudflare-config.jsonc')),
-        registry: cloudflareRegistry,
+        registry,
         virtualHosts,
         app,
         wait(milliseconds) {
@@ -415,6 +417,17 @@ describe('fixture project', ({ describe }) => {
             // Core's Cloudflare defaults name its bindings; Node.js has none.
             assertEqual('KEY_VALUE_STORE', cloudflareRegistry.configDefaults.KEY_VALUE_STORE.bindingName);
             assertFalsy(Object.hasOwn(nodeRegistry.configDefaults, 'KEY_VALUE_STORE'));
+        });
+
+        it('list every declared template helper: core\'s, the visits plugin\'s, and the app\'s', () => {
+            assertEqual(
+                [
+                    'assetUrl', 'each', 'fixtureGreeting', 'formatDate', 'if', 'ifEqual', 'markup',
+                    'plusOne', 'truncate', 'unescape', 'unless', 'visitCount', 'with',
+                ].join(','),
+                nodeRegistry.templateHelpers.join(','),
+            );
+            assertEqual(nodeRegistry.templateHelpers.join(','), cloudflareRegistry.templateHelpers.join(','));
         });
 
         it('list the visits plugin\'s content root', () => {
@@ -826,6 +839,81 @@ describe('fixture project', ({ describe }) => {
 
         it('puts no secret value in a response', () => {
             assertNoSecretValue([ firstVisit.body, secondVisit.body ]);
+        });
+    });
+
+    // Boot compares the registry's declared template helpers with the ones
+    // registered. The fixture's log level is NONE, so these read what the
+    // comparison returned, not the log.
+    describe('template helper declarations at boot', ({ before, after, it }) => {
+        const tracker = new MockTracker();
+        const CLOUDFLARE_SECRETS = {
+            DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
+            FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+            PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+        };
+
+        let report;
+
+        // The registry as it would be if the visits plugin's manifest didn't
+        // declare its helper. No fixture file changes.
+        function withoutVisitsHelper(registry) {
+            return {
+                ...registry,
+                templateHelpers: registry.templateHelpers.filter((name) => name !== 'visitCount'),
+            };
+        }
+
+        function lastResult() {
+            return report.mock.getCall(report.mock.callCount() - 1).result;
+        }
+
+        async function bootAndCloseOnNode(registry) {
+            const booted = await bootOnNode(registry);
+            await booted.close();
+        }
+
+        before(() => {
+            // Calls through to the real method and records what it returned.
+            report = tracker.method(HyperviewService.prototype, 'reportTemplateHelperDifferences');
+        });
+
+        after(() => {
+            tracker.reset();
+        });
+
+        it('reports no difference on Node.js', async () => {
+            const callsBefore = report.mock.callCount();
+
+            await bootAndCloseOnNode();
+
+            assertEqual(callsBefore + 1, report.mock.callCount());
+            assertEqual('{"undeclared":[],"unregistered":[]}', JSON.stringify(lastResult()));
+        });
+
+        it('reports no difference on Cloudflare', () => {
+            const callsBefore = report.mock.callCount();
+
+            bootOnCloudflare(CLOUDFLARE_SECRETS);
+
+            assertEqual(callsBefore + 1, report.mock.callCount());
+            assertEqual('{"undeclared":[],"unregistered":[]}', JSON.stringify(lastResult()));
+        });
+
+        it('reports an undeclared helper on Node.js, and still boots', async () => {
+            await bootAndCloseOnNode(withoutVisitsHelper(nodeRegistry));
+
+            assertEqual('{"undeclared":["visitCount"],"unregistered":[]}', JSON.stringify(lastResult()));
+        });
+
+        it('reports an undeclared helper on Cloudflare, and still boots', async () => {
+            const booted = bootOnCloudflare(CLOUDFLARE_SECRETS, withoutVisitsHelper(cloudflareRegistry));
+
+            assertEqual('{"undeclared":["visitCount"],"unregistered":[]}', JSON.stringify(lastResult()));
+
+            const response = await booted.fetch('/visits');
+
+            assertEqual(200, response.status);
         });
     });
 
