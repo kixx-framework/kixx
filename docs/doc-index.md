@@ -72,6 +72,12 @@ kixx/code-fingerprint/README.md
 
 Which project paths are content, agent files, tests, docs, or code (D40), with the classification table and its precedence; `classifyPath()` and `createPathClassifier()`; `computeCodeFingerprint()` and the format 1 serialization byte for byte, with a worked example; feeding it from `git ls-tree -r -z` (`parseGitLsTree()`) or Studio's workspace; the golden vectors; and the version rule.
 
+### Publish Gates
+
+kixx/publish-gates/README.md
+
+The server's publish rules (CONT-4, CONT-5, CONT-6): the `prestage` and `publish` intents, the field table, `findBuildAssignmentProblems()` and `findReleaseProvenanceProblems()`, `assignReleaseThroughGates()` and its error codes (`BuildNotFound`, `BuildCodeUnknown`, `CodeFingerprintMismatch`), what `force` does and doesn't do, the development rule (`isDevelopmentEnvironment()`), and how Studio calls the gates in-process.
+
 ### Static Assets
 
 kixx/static-assets/README.md
