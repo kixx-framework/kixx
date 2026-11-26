@@ -317,6 +317,8 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
                     filepath: 'public/shared.txt',
                     message: 'Static asset pathname "shared.txt" is also produced by "static-assets/shared.txt"',
                     conflictingFile: 'static-assets/shared.txt',
+                    owner: 'app',
+                    conflictingOwner: 'app',
                     pathname: 'shared.txt',
                 },
             ], null, 2), JSON.stringify(result.report.problems, null, 2));
@@ -438,10 +440,18 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
             }
         });
 
-        it('requires pluginContentRoots to be an empty array', async () => {
-            const roots = [ { plugin: 'visits', pagesDirectory: 'plugins/visits/pages' } ];
+        it('requires pluginContentRoots to be an array of roots', async () => {
+            const invalid = [
+                'plugins',
+                {},
+                [ null ],
+                [ { pagesDirectory: 'plugins/visits/pages' } ],
+                [ { plugin: '', pagesDirectory: 'plugins/visits/pages' } ],
+                [ { plugin: 'visits' } ],
+                [ { plugin: 'visits', pagesDirectory: 1 } ],
+            ];
 
-            for (const value of [ 'plugins', {}, roots ]) {
+            for (const value of invalid) {
                 const caught = await catchRejection(compileContent({
                     source,
                     templateHelpers: [],

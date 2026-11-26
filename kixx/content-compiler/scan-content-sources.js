@@ -38,23 +38,52 @@ const assetTextDecoder = new TextDecoder();
  */
 
 /**
+ * @typedef {Object} PluginContentRoot
+ * @property {string} plugin - The plugin's name
+ * @property {string} [pagesDirectory] - Path from the source's root
+ * @property {string} [templatesDirectory] - Path from the source's root
+ * @property {string} [staticAssetsDirectory] - Path from the source's root
+ */
+
+// The owner label of the project's own content.
+const APP_OWNER = 'app';
+
+const APP_CONTENT_ROOT = Object.freeze({
+    owner: APP_OWNER,
+    pagesDirectory: 'pages',
+    templatesDirectory: 'templates',
+    staticAssetsDirectory: 'static-assets',
+    publicDirectory: 'public',
+});
+
+/**
  * Materializes all publishable content a content source holds: the `pages`,
- * `templates`, `static-assets`, and `public` directories at its root.
+ * `templates`, `static-assets`, and `public` directories at its root, then
+ * the content directories of each plugin.
+ *
+ * Every owner's content shares one set of namespaces. The first owner to
+ * supply a page, global partial, base template, or static asset keeps it:
+ * the project first, then the plugins in the order given. Each later one is
+ * a collision problem.
  *
  * A problem in the content is returned as data. A failure of the source
  * itself rejects.
  *
  * @param {ContentSourceInterface} source - Rooted at the project
+ * @param {Object} [options]
+ * @param {PluginContentRoot[]} [options.pluginContentRoots=[]] - Validated by the caller
  * @returns {Promise<{resources: ContentSourceResource[], unmatchedFiles: string[], problems: Object[]}>} Scanned resources and validation facts
  */
-export default async function scanContentSources(source) {
-    const scanner = new ContentSourceScanner(source);
+export default async function scanContentSources(source, options) {
+    const { pluginContentRoots = [] } = options ?? {};
+    const scanner = new ContentSourceScanner(source, pluginContentRoots);
     return await scanner.scan();
 }
 
 class ContentSourceScanner {
 
     #source;
+    #contentRoots;
     #resources = [];
     #problems = [];
     // Every regular file found beneath a scanned root, by its path from the
@@ -62,18 +91,42 @@ class ContentSourceScanner {
     #files = new Map();
     #symlinks = new Set();
     #matchedFiles = new Set();
+    // The page.json that first claimed each page pathname.
+    #pages = new Map();
     #staticAssets = new Map();
     #stylesheetProblemKeys = new Set();
 
-    constructor(source) {
+    constructor(source, pluginContentRoots) {
         this.#source = source;
+        this.#contentRoots = [
+            APP_CONTENT_ROOT,
+            ...pluginContentRoots.map(({ plugin, ...directories }) => {
+                return { owner: plugin, ...directories };
+            }),
+        ];
     }
 
     async scan() {
-        await this.#scanPages();
+        for (const root of this.#contentRoots) {
+            if (root.pagesDirectory) {
+                await this.#scanPages(root.pagesDirectory, root.owner);
+            }
+        }
+
         await this.#scanTemplates();
-        await this.#scanStaticAssets();
-        await this.#scanStaticDirectory('public');
+
+        // One owner's static-assets and public directories are scanned
+        // together, so the project's files claim their pathnames before any
+        // plugin's.
+        for (const root of this.#contentRoots) {
+            if (root.staticAssetsDirectory) {
+                await this.#scanStaticAssets(root.staticAssetsDirectory, root.owner);
+            }
+
+            if (root.publicDirectory) {
+                await this.#scanStaticDirectory(root.publicDirectory, root.owner);
+            }
+        }
 
         this.#resources.sort((left, right) => {
             return compareStrings(`${ left.type }\0${ left.pathname }`, `${ right.type }\0${ right.pathname }`);
@@ -90,8 +143,8 @@ class ContentSourceScanner {
         };
     }
 
-    async #scanPages() {
-        const { files } = await this.#walkFiles('pages');
+    async #scanPages(directory, owner) {
+        const { files } = await this.#walkFiles(directory, owner);
         const manifests = files.filter(({ relativePath }) => {
             return basename(relativePath) === 'page.json';
         });
@@ -103,13 +156,30 @@ class ContentSourceScanner {
                 continue;
             }
 
+            const pageDirectory = dirname(file.relativePath);
+            const pathname = pageDirectory === '' ? '/' : `/${ pageDirectory }`;
+
+            // A page.json claims its pathname even when it turns out to be
+            // malformed, so fixing it can't surprise the next owner.
+            const claimant = this.#pages.get(pathname);
+            if (claimant) {
+                this.#addCollision({
+                    code: 'page-collision',
+                    label: `Page "${ pathname }"`,
+                    file,
+                    claimant,
+                    pathname,
+                });
+                continue;
+            }
+
+            this.#pages.set(pathname, file);
+
             const metadata = await this.#readManifest(file, 'page.json');
             if (!metadata) {
                 continue;
             }
 
-            const pageDirectory = dirname(file.relativePath);
-            const pathname = pageDirectory === '' ? '/' : `/${ pageDirectory }`;
             this.#resources.push(await this.#makeResource(
                 'PageMetadata',
                 pathname,
@@ -237,48 +307,87 @@ class ContentSourceScanner {
     }
 
     async #scanTemplates() {
-        const { files, entries } = await this.#walkFiles('templates');
+        const listings = [];
 
-        await this.#scanTemplateBundle(files, entries, 'partials', 'GlobalTemplatePartials');
-        await this.#scanTemplateBundle(files, entries, 'base', 'BaseTemplates');
+        for (const root of this.#contentRoots) {
+            if (root.templatesDirectory) {
+                listings.push(await this.#walkFiles(root.templatesDirectory, root.owner));
+            }
+        }
+
+        await this.#scanTemplateBundle(listings, {
+            directoryName: 'partials',
+            type: 'GlobalTemplatePartials',
+            collisionCode: 'partial-collision',
+            label: 'Global partial',
+        });
+        await this.#scanTemplateBundle(listings, {
+            directoryName: 'base',
+            type: 'BaseTemplates',
+            collisionCode: 'base-template-collision',
+            label: 'Base template',
+        });
     }
 
-    async #scanTemplateBundle(files, entries, directoryName, type) {
+    // Builds the one bundle a Release has for a kind of template, from every
+    // owner's templates: owners in order, and each owner's in walk order.
+    async #scanTemplateBundle(listings, spec) {
+        const { directoryName, type, collisionCode, label } = spec;
         const prefix = `${ directoryName }/`;
-        const bundleFiles = files.filter(({ relativePath }) => relativePath.startsWith(prefix));
+        const payload = [];
+        const sourceFiles = [];
+        const claimants = new Map();
+        let directoryExists = false;
 
-        // A listing holds files and symbolic links, never directories, so
-        // the bundle directory exists when something is listed in it. An
-        // empty directory can't be seen, and yields no bundle.
-        const directoryExists = entries.some((entry) => {
-            return entry.path === directoryName || entry.path.startsWith(prefix);
-        });
+        for (const { files, entries } of listings) {
+            // A listing holds files and symbolic links, never directories,
+            // so the bundle directory exists when something is listed in
+            // it. An empty directory can't be seen, and yields no bundle.
+            directoryExists ||= entries.some((entry) => {
+                return entry.path === directoryName || entry.path.startsWith(prefix);
+            });
+
+            for (const file of files) {
+                if (!file.relativePath.startsWith(prefix)) {
+                    continue;
+                }
+
+                this.#matchedFiles.add(file.sourcePath);
+
+                const id = file.relativePath.slice(prefix.length);
+                if (!this.#validateSourcePath({ ...file, relativePath: id })) {
+                    continue;
+                }
+
+                const claimant = claimants.get(id);
+                if (claimant) {
+                    this.#addCollision({
+                        code: collisionCode,
+                        label: `${ label } "${ id }"`,
+                        file,
+                        claimant,
+                        id,
+                    });
+                    continue;
+                }
+
+                claimants.set(id, file);
+
+                const source = await this.#readText(file.sourcePath);
+                payload.push({ id, source });
+                sourceFiles.push(file.sourcePath);
+            }
+        }
 
         if (!directoryExists) {
             return;
         }
 
-        const payload = [];
-        const sourceFiles = [];
-
-        for (const file of bundleFiles) {
-            this.#matchedFiles.add(file.sourcePath);
-
-            const bundlePath = file.relativePath.slice(prefix.length);
-            if (!this.#validateSourcePath({ ...file, relativePath: bundlePath })) {
-                continue;
-            }
-
-            const source = await this.#readText(file.sourcePath);
-            payload.push({ id: bundlePath, source });
-            sourceFiles.push(file.sourcePath);
-        }
-
         this.#resources.push(await this.#makeResource(type, '/', payload, sourceFiles));
     }
 
-    async #scanStaticAssets() {
-        const { files } = await this.#walkFiles('static-assets');
+    async #scanStaticAssets(directory, owner) {
+        const { files } = await this.#walkFiles(directory, owner);
         const assets = [];
         const stylesheets = new Map();
 
@@ -329,8 +438,8 @@ class ContentSourceScanner {
         }
     }
 
-    async #scanStaticDirectory(directoryName) {
-        const { files } = await this.#walkFiles(directoryName);
+    async #scanStaticDirectory(directory, owner) {
+        const { files } = await this.#walkFiles(directory, owner);
 
         for (const file of files) {
             this.#matchedFiles.add(file.sourcePath);
@@ -360,21 +469,45 @@ class ContentSourceScanner {
             payload,
             sourceFiles,
         );
-        const existing = this.#staticAssets.get(file.relativePath);
+        const claimant = this.#staticAssets.get(file.relativePath);
 
-        if (existing) {
-            this.#addProblem({
+        if (claimant) {
+            this.#addCollision({
                 code: 'static-asset-collision',
-                filepath: file.sourcePath,
-                message: `Static asset pathname "${ file.relativePath }" is also produced by "${ existing.sourceFiles[0] }"`,
-                conflictingFile: existing.sourceFiles[0],
+                label: `Static asset "${ file.relativePath }"`,
+                file,
+                claimant,
                 pathname: file.relativePath,
             });
             return;
         }
 
-        this.#staticAssets.set(file.relativePath, resource);
+        // A bundled stylesheet is named by its first source file.
+        this.#staticAssets.set(file.relativePath, { ...file, sourcePath: sourceFiles[0] });
         this.#resources.push(resource);
+    }
+
+    // Reports a path that an earlier file already claimed. The earlier file
+    // keeps the path.
+    #addCollision(spec) {
+        const { code, label, file, claimant, ...name } = spec;
+
+        // Two of the project's own files can only collide as static assets
+        // (static-assets/ and public/ share a namespace), and that message
+        // names no owner.
+        const message = file.owner === APP_OWNER && claimant.owner === APP_OWNER
+            ? `Static asset pathname "${ file.relativePath }" is also produced by "${ claimant.sourcePath }"`
+            : `${ label } is supplied by ${ describeOwner(claimant) } and by ${ describeOwner(file) }`;
+
+        this.#addProblem({
+            code,
+            filepath: file.sourcePath,
+            message,
+            conflictingFile: claimant.sourcePath,
+            owner: file.owner,
+            conflictingOwner: claimant.owner,
+            ...name,
+        });
     }
 
     #stripJavaScriptComments(file, payload) {
@@ -640,7 +773,7 @@ class ContentSourceScanner {
 
     // Lists one source root. A symbolic link is reported and never followed,
     // which is what keeps content from outside the project out of a Release.
-    async #walkFiles(root) {
+    async #walkFiles(root, owner) {
         const files = [];
         const listing = await this.#source.listFiles(root);
 
@@ -677,6 +810,7 @@ class ContentSourceScanner {
             const file = {
                 relativePath: entry.path,
                 sourcePath,
+                owner,
             };
             files.push(file);
             this.#files.set(sourcePath, file);
@@ -704,6 +838,11 @@ class ContentSourceScanner {
         this.#stylesheetProblemKeys.add(key);
         this.#addProblem(problem);
     }
+}
+
+function describeOwner(file) {
+    const owner = file.owner === APP_OWNER ? 'the app' : `plugin "${ file.owner }"`;
+    return `${ owner } (${ file.sourcePath })`;
 }
 
 // Orders paths as a depth-first walk that sorts each directory's entries by
