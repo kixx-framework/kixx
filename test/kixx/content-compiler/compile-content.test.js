@@ -139,14 +139,13 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
             assertEqual(8, checked);
         });
 
-        it('returns an empty per-page report and an empty graph', async () => {
+        it('returns an empty per-page report and the dependency graph', async () => {
             const result = await compile(makeProjectFiles());
 
             assertEqual('[]', JSON.stringify(result.report.pages));
-            assertEqual(
-                '{"baseTemplates":[],"globalPartials":[],"pages":[]}',
-                canonicalize(result.graph),
-            );
+            assertEqual('/,/about', result.graph.pages.map(({ pathname }) => pathname).join());
+            assertEqual('nav.html', result.graph.globalPartials.map(({ id }) => id).join());
+            assertEqual('default.html', result.graph.baseTemplates.map(({ id }) => id).join());
         });
 
         it('compiles a project with no content at all', async () => {
@@ -249,40 +248,47 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
                     filepath: 'pages/empty/page.json',
                     message: 'Page template "page.html" is empty',
                     referencedFile: 'pages/empty/page.html',
+                    page: '/empty',
                 },
                 {
                     code: 'invalid-manifest',
                     filepath: 'pages/page.json',
                     message: 'page.json must contain a JSON object',
+                    page: '/',
                 },
                 {
                     code: 'invalid-pathname',
                     filepath: 'pages/refs/page.json',
                     message: 'page template references invalid pathname "../shape/page.html"',
                     referencedFile: '../shape/page.html',
+                    page: '/refs',
                 },
                 {
                     code: 'missing-referenced-file',
                     filepath: 'pages/refs/page.json',
                     message: 'page partial "dir" reference "pages/refs/folder" is not a file',
                     referencedFile: 'pages/refs/folder',
+                    page: '/refs',
                 },
                 {
                     code: 'missing-referenced-file',
                     filepath: 'pages/refs/page.json',
                     message: 'page partial "gone" references missing file "pages/refs/gone.html"',
                     referencedFile: 'pages/refs/gone.html',
+                    page: '/refs',
                 },
                 {
                     code: 'reserved-template-filename',
                     filepath: 'pages/reserved/page.json',
                     message: 'Page template "page.json" uses reserved filename "page.json"',
                     referencedFile: 'pages/reserved/page.json',
+                    page: '/reserved',
                 },
                 {
                     code: 'invalid-manifest',
                     filepath: 'pages/shape/page.json',
                     message: 'template must be a string',
+                    page: '/shape',
                 },
             ], null, 2), JSON.stringify(result.report.problems, null, 2));
 
@@ -355,6 +361,7 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
                     message: 'page template reference "pages/linked.html" cannot use symbolic link "pages/linked.html"',
                     referencedFile: 'pages/linked.html',
                     symlink: 'pages/linked.html',
+                    page: '/',
                 },
                 {
                     code: 'symlink-referenced-file',
@@ -362,6 +369,7 @@ describe('content-compiler/compile-content', ({ describe: group }) => {
                     message: 'page partial "deep" reference "pages/linked-directory/deep.html" cannot use symbolic link "pages/linked-directory"',
                     referencedFile: 'pages/linked-directory/deep.html',
                     symlink: 'pages/linked-directory',
+                    page: '/',
                 },
                 {
                     code: 'symlink-source-root',

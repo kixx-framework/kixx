@@ -45,6 +45,34 @@ const assetTextDecoder = new TextDecoder();
  * @property {string} [staticAssetsDirectory] - Path from the source's root
  */
 
+/**
+ * @typedef {Object} ScannedTemplate
+ * @property {string} id
+ * @property {string} owner - `app`, or the plugin's name
+ * @property {string} file - Path from the source's root
+ * @property {string} source
+ */
+
+/**
+ * @typedef {Object} ScannedPage
+ * @property {string} pathname
+ * @property {string} owner - `app`, or the plugin's name
+ * @property {string} metadataFile - The page.json
+ * @property {Object|null} metadata - Null when the page.json couldn't be parsed
+ * @property {string|null} templateFile - The page template's file, when it could be read
+ * @property {string|null} templateSource - Null unless the template was published
+ * @property {Array<{ id: string, file: (string|null), source: (string|null) }>} partials - Every declared partial; file and source are null when it couldn't be read
+ * @property {string[]} includeFiles
+ */
+
+/**
+ * What the scan read of every template, for the checks that follow it.
+ * @typedef {Object} ScannedTemplates
+ * @property {ScannedPage[]} pages - Every page that claimed its pathname, in scan order
+ * @property {ScannedTemplate[]} globalPartials - In bundle order
+ * @property {ScannedTemplate[]} baseTemplates - In bundle order
+ */
+
 // The owner label of the project's own content.
 const APP_OWNER = 'app';
 
@@ -72,7 +100,7 @@ const APP_CONTENT_ROOT = Object.freeze({
  * @param {ContentSourceInterface} source - Rooted at the project
  * @param {Object} [options]
  * @param {PluginContentRoot[]} [options.pluginContentRoots=[]] - Validated by the caller
- * @returns {Promise<{resources: ContentSourceResource[], unmatchedFiles: string[], problems: Object[]}>} Scanned resources and validation facts
+ * @returns {Promise<{resources: ContentSourceResource[], unmatchedFiles: string[], problems: Object[], templates: ScannedTemplates}>} Scanned resources and validation facts
  */
 export default async function scanContentSources(source, options) {
     const { pluginContentRoots = [] } = options ?? {};
@@ -95,6 +123,9 @@ class ContentSourceScanner {
     #pages = new Map();
     #staticAssets = new Map();
     #stylesheetProblemKeys = new Set();
+    #templates = { pages: [], globalPartials: [], baseTemplates: [] };
+    // The page being scanned. Its problems carry its pathname.
+    #currentPage = null;
 
     constructor(source, pluginContentRoots) {
         this.#source = source;
@@ -140,6 +171,7 @@ class ContentSourceScanner {
             resources: this.#resources,
             unmatchedFiles,
             problems: this.#problems,
+            templates: this.#templates,
         };
     }
 
@@ -175,23 +207,46 @@ class ContentSourceScanner {
 
             this.#pages.set(pathname, file);
 
-            const metadata = await this.#readManifest(file, 'page.json');
-            if (!metadata) {
-                continue;
-            }
-
-            this.#resources.push(await this.#makeResource(
-                'PageMetadata',
+            const page = {
                 pathname,
-                metadata,
-                [ file.sourcePath ],
-            ));
+                owner,
+                metadataFile: file.sourcePath,
+                metadata: null,
+                templateFile: null,
+                templateSource: null,
+                partials: [],
+                includeFiles: [],
+            };
+            this.#templates.pages.push(page);
+            this.#currentPage = page;
 
-            const page = this.#validatePageManifest(file, metadata);
-            await this.#scanPageTemplate(file, pathname, page.template);
-            await this.#scanPagePartials(file, pathname, page.partials);
-            await this.#scanPageIncludes(file, pathname, page.includes);
+            await this.#scanPage(file, page);
+
+            this.#currentPage = null;
         }
+    }
+
+    async #scanPage(file, record) {
+        const { pathname } = record;
+        const metadata = await this.#readManifest(file, 'page.json');
+
+        if (!metadata) {
+            return;
+        }
+
+        record.metadata = metadata;
+
+        this.#resources.push(await this.#makeResource(
+            'PageMetadata',
+            pathname,
+            metadata,
+            [ file.sourcePath ],
+        ));
+
+        const page = this.#validatePageManifest(file, metadata);
+        await this.#scanPageTemplate(file, pathname, page.template);
+        await this.#scanPagePartials(file, pathname, page.partials);
+        await this.#scanPageIncludes(file, pathname, page.includes);
     }
 
     async #scanPageTemplate(manifest, pathname, template) {
@@ -208,6 +263,8 @@ class ContentSourceScanner {
         if (!source) {
             return;
         }
+
+        this.#currentPage.templateFile = source.sourcePath;
 
         const filename = basename(template);
         if (RESERVED_PAGE_FILENAMES.has(filename)) {
@@ -248,6 +305,8 @@ class ContentSourceScanner {
             return;
         }
 
+        this.#currentPage.templateSource = source.text;
+
         this.#resources.push(await this.#makeResource(
             'PageTemplate',
             templatePathname,
@@ -265,6 +324,12 @@ class ContentSourceScanner {
                 manifest,
                 reference: partial.filename,
                 role: `page partial "${ partial.id }"`,
+            });
+
+            this.#currentPage.partials.push({
+                id: partial.id,
+                file: source?.sourcePath ?? null,
+                source: source?.text ?? null,
             });
 
             if (source) {
@@ -295,6 +360,7 @@ class ContentSourceScanner {
             if (source) {
                 payload[include.name] = source.text;
                 sourceFiles.push(source.sourcePath);
+                this.#currentPage.includeFiles.push(source.sourcePath);
             }
         }
 
@@ -320,19 +386,21 @@ class ContentSourceScanner {
             type: 'GlobalTemplatePartials',
             collisionCode: 'partial-collision',
             label: 'Global partial',
+            templates: this.#templates.globalPartials,
         });
         await this.#scanTemplateBundle(listings, {
             directoryName: 'base',
             type: 'BaseTemplates',
             collisionCode: 'base-template-collision',
             label: 'Base template',
+            templates: this.#templates.baseTemplates,
         });
     }
 
     // Builds the one bundle a Release has for a kind of template, from every
     // owner's templates: owners in order, and each owner's in walk order.
     async #scanTemplateBundle(listings, spec) {
-        const { directoryName, type, collisionCode, label } = spec;
+        const { directoryName, type, collisionCode, label, templates } = spec;
         const prefix = `${ directoryName }/`;
         const payload = [];
         const sourceFiles = [];
@@ -376,6 +444,7 @@ class ContentSourceScanner {
                 const source = await this.#readText(file.sourcePath);
                 payload.push({ id, source });
                 sourceFiles.push(file.sourcePath);
+                templates.push({ id, owner: file.owner, file: file.sourcePath, source });
             }
         }
 
@@ -820,6 +889,10 @@ class ContentSourceScanner {
     }
 
     #addProblem(problem) {
+        if (this.#currentPage) {
+            problem.page = this.#currentPage.pathname;
+        }
+
         this.#problems.push(problem);
     }
 

@@ -17,6 +17,7 @@ import {
     validateReleaseManifest,
     validateStructuredContent,
 } from '../content-addressable-store/release-manifest.js';
+import { checkTemplates } from './check-templates.js';
 import { createReleaseManifest } from './create-release-manifest.js';
 import scanContentSources from './scan-content-sources.js';
 
@@ -59,20 +60,19 @@ const STRUCTURED_CONTENT_KINDS = {
  * @property {string} code
  * @property {string} message
  * @property {string} filepath - Path from the project root. Empty when no one file is at fault.
+ * @property {string} [page] - The page's pathname, when the problem is in a page's own files
  */
 
 /**
  * @typedef {Object} ContentReport
  * @property {ContentProblem[]} problems - Every problem, once, in a deterministic order
- * @property {Array<{ pathname: string, problems: ContentProblem[] }>} pages - Each page with at least one problem, sorted by pathname
+ * @property {Array<{ pathname: string, problems: ContentProblem[] }>} pages - Each page with at least one problem, sorted by pathname:
+ *     the problems in its own files, then those of every global partial it reaches. The problems are the same objects as in `problems`.
  * @property {string[]} unmatchedFiles - Files under a content directory that no convention matched, as sorted paths from the project root. Information only: they never refuse a Release.
  */
 
 /**
- * @typedef {Object} ContentGraph
- * @property {Object[]} pages
- * @property {Object[]} globalPartials
- * @property {Object[]} baseTemplates
+ * @typedef {import('./check-templates.js').ContentGraph} ContentGraph
  */
 
 /**
@@ -93,10 +93,13 @@ const STRUCTURED_CONTENT_KINDS = {
  * same page, global partial, base template, or static asset is a collision
  * problem: the first keeps it, the project before any plugin.
  *
+ * Every template is compiled against the declared helper names, and every
+ * partial a template references must exist. Nothing is rendered.
+ *
  * A problem in the content is reported as data, and any problem refuses the
  * Release: `release` is null, so a caller that publishes can't publish a
- * refused tree by accident. The objects that could be built are returned
- * either way.
+ * refused tree by accident. The objects that could be built, the report, and
+ * the dependency graph are returned either way.
  *
  * @param {Object} options
  * @param {ContentSourceInterface} options.source - Rooted at the project
@@ -125,8 +128,16 @@ export async function compileContent(options) {
         'compileContent: options.templateHelpers must hold only strings',
     );
 
-    const { resources, unmatchedFiles, problems } = await scanContentSources(source, { pluginContentRoots });
+    const {
+        resources,
+        unmatchedFiles,
+        problems,
+        templates,
+    } = await scanContentSources(source, { pluginContentRoots });
 
+    const templateCheck = checkTemplates({ templates, templateHelpers, problems });
+
+    problems.push(...templateCheck.problems);
     problems.push(...checkContentLimits(resources));
 
     let release = null;
@@ -147,14 +158,10 @@ export async function compileContent(options) {
         release,
         report: {
             problems,
-            pages: [],
+            pages: templateCheck.pages,
             unmatchedFiles,
         },
-        graph: {
-            pages: [],
-            globalPartials: [],
-            baseTemplates: [],
-        },
+        graph: templateCheck.graph,
     };
 }
 
