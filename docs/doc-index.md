@@ -70,7 +70,7 @@ The one compiler that turns a project's content into content objects and a Relea
 
 kixx/code-fingerprint/README.md
 
-Which project paths are content, agent files, tests, docs, or code (D40), with the classification table and its precedence; `classifyPath()` and `createPathClassifier()`.
+Which project paths are content, agent files, tests, docs, or code (D40), with the classification table and its precedence; `classifyPath()` and `createPathClassifier()`; `computeCodeFingerprint()` and the format 1 serialization byte for byte, with a worked example; feeding it from `git ls-tree -r -z` (`parseGitLsTree()`) or Studio's workspace; the golden vectors; and the version rule.
 
 ### Static Assets
 
