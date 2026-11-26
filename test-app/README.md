@@ -83,7 +83,7 @@ The probe has three modules, and none of them imports a package or a platform mo
 
 - `probe/probe-handler.js` is a request handler the test app mounts. Its header comment is the protocol reference.
 - `probe/probe-client.js` is what an integration test uses.
-- `probe/probe-suites.js` lists the suites: `content-store`, `format-date`, `key-value-store`, `logger-writer`, and `server-request`.
+- `probe/probe-suites.js` lists the suites: `content-compiler`, `content-store`, `format-date`, `key-value-store`, `logger-writer`, and `server-request`.
 
 ### The Protocol
 
@@ -121,7 +121,7 @@ const probeHandler = createProbeHandler({
 
 - Mount the handler on a route that accepts `GET` and `POST`.
 - `authorize(context, request)` must return exactly `true` to let a request through. Anything else, or a throw, is a 401. The handler can't be created without it.
-- `factories` maps a suite's name to a function that takes the request's `context` and returns the suite's factory. `BUILT_IN_FACTORIES` covers `format-date`. The app supplies one for each port suite, built over its own bindings. A suite with no factory can be listed but not run.
+- `factories` maps a suite's name to a function that takes the request's `context` and returns the suite's factory. `BUILT_IN_FACTORIES` covers `content-compiler` and `format-date`. The app supplies one for each port suite, built over its own bindings. A suite with no factory can be listed but not run.
 
 ### Using It in a Test
 

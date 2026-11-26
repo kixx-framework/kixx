@@ -26,6 +26,10 @@
 // relative path only, and nothing under test-app/ imports a cloudflare:*
 // module.
 //
+// The content compiler runs in a command line tool, a server, and a Worker,
+// and a tool loads it through the tooling entry. So nothing either entry
+// reaches imports a platform module, a package, or an adapter.
+//
 // When a section extracts a module or removes an edge, delete its entry
 // from LEAVING_CORE or KNOWN_EDGES. The rule "lists no module or edge that
 // is already gone" fails until you do.
@@ -85,6 +89,14 @@ const ENTRY_POINTS = [
 ];
 
 const FIXTURE_PROJECT_DIRECTORY = path.join(TEST_DIRECTORY, 'fixtures/project/');
+
+// Entry modules that must load on every runtime, as core-relative paths.
+// Nothing they reach may import a node:* or cloudflare:* module, a package,
+// or an adapter.
+const PLATFORM_NEUTRAL_ENTRIES = [
+    'content-compiler/mod.js',
+    'tooling/mod.js',
+];
 
 // Everything each of the fixture's entry points imports, in order. An entry
 // point names no plugin and no service: it imports one core server module,
@@ -210,6 +222,32 @@ describe('import hygiene', ({ it }) => {
         const declared = manifest.cloudflare.durableObjects.map(({ module }) => module.replace(/^\.\//, ''));
 
         assertEqual(DURABLE_OBJECT_SHELLS.slice().sort().join('\n'), declared.sort().join('\n'));
+    });
+
+    it('reaches no platform module, package, or adapter from the content compiler or the tooling entry', () => {
+        // The rules above imply this today. This one states it for the
+        // compiler, follows its imports through the rest of core, and holds
+        // if those rules change.
+        const violations = [];
+        const entryFiles = PLATFORM_NEUTRAL_ENTRIES.map((entry) => path.join(CORE_DIRECTORY, entry));
+
+        for (const { file, specifiers, chain } of readImportGraph(entryFiles)) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            if (!isInsideCore(file)) {
+                violations.push({ file: trail, specifier: '(a file outside core)' });
+            } else if (toCorePath(file).startsWith('adapters/')) {
+                violations.push({ file: trail, specifier: '(an adapter)' });
+            }
+
+            for (const specifier of specifiers) {
+                if (!specifier.startsWith('.')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
     });
 
     it('imports modules leaving core only through known edges', () => {
