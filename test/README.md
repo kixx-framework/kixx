@@ -257,10 +257,13 @@ Every port has one, and both of its adapters run it:
 
 | Port | Suite |
 |---|---|
+| Content source | `test/kixx/content-compiler/content-source-conformance.js` |
 | Content store | `test/kixx/content-addressable-store/content-store-conformance.js` |
 | Key/value store | `test/kixx/key-value-store/key-value-store-conformance.js` |
 | Logger writer | `test/kixx/logger/logger-writer-conformance.js` |
 | Server request | `test/kixx/http-router/server-request-conformance.js` |
+
+The content source is the one port whose implementations aren't a Node.js and a Cloudflare adapter: they are the in-memory source in core (`kixx/content-compiler/memory-content-source.js`) and the Node.js adapter.
 
 `test/kixx/hyperview/helpers/format-date-goldens.js` has the same form. It isn't a port: it holds the `formatDate` strings that depend on the runtime's locale and time zone data.
 

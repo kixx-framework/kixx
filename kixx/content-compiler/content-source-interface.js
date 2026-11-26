@@ -27,6 +27,9 @@
  * - What `readFile` answers for a path that is, or lies beneath, a symbolic
  *   link is not defined. The compiler reads only paths a listing gave it as
  *   `file`.
+ *
+ * @see createMemoryContentSource in ./memory-content-source.js
+ * @see createFileSystemContentSource in ../adapters/node/content-compiler/lib/file-system-content-source.js
  */
 
 /**
