@@ -7,6 +7,7 @@ import {
     computeCodeFingerprint,
     isValidCodeFingerprint,
     isValidGitObjectId,
+    parseGitLsTree,
 } from '../../../kixx/code-fingerprint/mod.js';
 import {
     CONTENT_ROOTS,
@@ -14,6 +15,7 @@ import {
     SHA1_OIDS,
     makeGoldenEntries,
 } from './code-fingerprint-goldens.js';
+import * as tooling from '../../../kixx/tooling/mod.js';
 
 
 function fingerprint(entries) {
@@ -127,6 +129,16 @@ describe('computeCodeFingerprint', ({ describe, it }) => {
             assertEqual('AssertionError', error?.name);
             assert(error.message.includes('app/app.js'));
         });
+    });
+});
+
+describe('code fingerprint tooling exports', ({ it }) => {
+    it('re-exports the fingerprint, its predicates, and the parser', () => {
+        assertEqual(CODE_FINGERPRINT_FORMAT, tooling.CODE_FINGERPRINT_FORMAT);
+        assertEqual(computeCodeFingerprint, tooling.computeCodeFingerprint);
+        assertEqual(isValidCodeFingerprint, tooling.isValidCodeFingerprint);
+        assertEqual(isValidGitObjectId, tooling.isValidGitObjectId);
+        assertEqual(parseGitLsTree, tooling.parseGitLsTree);
     });
 });
 
