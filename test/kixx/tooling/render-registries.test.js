@@ -76,6 +76,7 @@ function makeCore(overrides) {
             },
         },
         secrets: [ { name: 'DEPLOY_KEY_HASH', required: 'outsideDevelopment', description: 'Hash of the deploy key.' } ],
+        templateHelpers: [ 'if', 'each', 'formatDate' ],
         cloudflare: {
             kvNamespaces: [ { config: 'KEY_VALUE_STORE' } ],
             durableObjects: [
@@ -97,6 +98,7 @@ function makeBareCore(overrides) {
         config: {},
         secrets: [],
         cloudflare: {},
+        templateHelpers: [],
     }, overrides));
 }
 
@@ -146,6 +148,7 @@ function makeVisits(overrides) {
         },
         routes: [ { module: './routes.js' } ],
         content: { pagesDirectory: './pages', staticAssetsDirectory: './static-assets' },
+        templateHelpers: [ 'visitCount', 'Ordinal' ],
         whenInstalled: {
             admin: {
                 routes: [ { module: './admin-routes.js', mount: '/admin/visits', name: 'admin-visits' } ],
@@ -157,6 +160,7 @@ function makeVisits(overrides) {
 function makeApp() {
     return validateAppManifest({
         secrets: [ { name: 'SUPPORT_TOKEN', required: false, description: 'Lets support staff sign in.' } ],
+        templateHelpers: [ 'initials', 'formatDate' ],
     }, { file: 'app/app.json' });
 }
 
@@ -286,6 +290,16 @@ describe('renderRegistryFiles', ({ describe }) => {
                 '        "staticAssetsDirectory": "plugins/visits/static-assets"',
                 '    }',
                 '];',
+                '',
+                '// Every template helper name the installed code declares.',
+                'export const templateHelpers = [',
+                '    "Ordinal",',
+                '    "each",',
+                '    "formatDate",',
+                '    "if",',
+                '    "initials",',
+                '    "visitCount"',
+                '];',
             ]), files.get(NODE_REGISTRY_FILE_NAME));
         });
 
@@ -354,6 +368,16 @@ describe('renderRegistryFiles', ({ describe }) => {
                 '        "pagesDirectory": "plugins/visits/pages",',
                 '        "staticAssetsDirectory": "plugins/visits/static-assets"',
                 '    }',
+                '];',
+                '',
+                '// Every template helper name the installed code declares.',
+                'export const templateHelpers = [',
+                '    "Ordinal",',
+                '    "each",',
+                '    "formatDate",',
+                '    "if",',
+                '    "initials",',
+                '    "visitCount"',
                 '];',
             ]), files.get(CLOUDFLARE_REGISTRY_FILE_NAME));
         });
@@ -481,7 +505,7 @@ describe('renderRegistryFiles', ({ describe }) => {
         const cloudflare = files.get(CLOUDFLARE_REGISTRY_FILE_NAME);
 
         it('gives both targets the same export names', () => {
-            assertEqual('LoggerWriter,ServerRequest,configDefaults,contentRoots,plugins,secrets', exportNames(node));
+            assertEqual('LoggerWriter,ServerRequest,configDefaults,contentRoots,plugins,secrets,templateHelpers', exportNames(node));
             assertEqual(exportNames(node), exportNames(cloudflare));
         });
 
@@ -537,6 +561,20 @@ describe('renderRegistryFiles', ({ describe }) => {
             );
         });
 
+        it('writes the same sorted helper names for both targets, each once', () => {
+            const expected = JSON.stringify([ 'Ordinal', 'each', 'formatDate', 'if', 'initials', 'visitCount' ]);
+
+            assertEqual(expected, JSON.stringify(readDataExport(node, 'templateHelpers')));
+            assertEqual(expected, JSON.stringify(readDataExport(cloudflare, 'templateHelpers')));
+        });
+
+        it('sorts and de-duplicates helper names whatever order the model holds', () => {
+            const installation = { ...makeInstallation(), templateHelpers: [ 'if', 'each', 'if', 'Ordinal' ] };
+            const text = render(installation).get(NODE_REGISTRY_FILE_NAME);
+
+            assertEqual('Ordinal,each,if', readDataExport(text, 'templateHelpers').join(','));
+        });
+
         it('renders an empty plugins Map, defaults, and lists for a core that contributes nothing', () => {
             const core = makeBareCore({
                 lifecycle: [],
@@ -550,6 +588,7 @@ describe('renderRegistryFiles', ({ describe }) => {
             assert(text.includes('\nexport const plugins = new Map([]);\n'));
             assert(text.includes('\nexport const configDefaults = {};\n'));
             assert(text.includes('\nexport const contentRoots = [];\n'));
+            assert(text.includes('\nexport const templateHelpers = [];\n'));
             assertEqual(0, linesMatching(text, /^import \* as /).length);
         });
     });

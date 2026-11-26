@@ -6,8 +6,8 @@
 import defaultAssignRelease from './assign-release.js';
 import defaultFileSystem from '../file-system.js';
 import defaultPublishContent from './publish-content.js';
-import defaultScan from './scan-content-sources.js';
 import { UnsupportedServerError } from './negotiate-capabilities.js';
+import UsageError from '../usage-error.js';
 
 /**
  * A Release that was created successfully but could not be assigned to a
@@ -51,6 +51,16 @@ export class ReleaseAssignmentError extends Error {
     }
 }
 
+// The content scanner moved into Kixx core as the content compiler. The
+// devkit can't import core, so until the CLI that loads the compiler is
+// built there is nothing to scan with. An injected `scan` still works.
+function defaultScan() {
+    throw new UsageError(
+        '"kixx app publish" and "kixx local publish" do not work in this version of the devkit: ' +
+        'the content compiler moved into Kixx core, and the CLI that loads it is not built yet.',
+    );
+}
+
 /**
  * Scans the project's content, publishes it as a Release, and assigns the
  * Release to the build unless this is a dry run.
@@ -66,6 +76,7 @@ export class ReleaseAssignmentError extends Error {
  * @param {function({releaseId: string, buildId: string}): string} [args.formatRecovery]
  *     Returns the recovery line appended to an assignment failure
  * @returns {Promise<Object>} `publishContent()` result plus `buildId` and `assignmentId`
+ * @throws {UsageError} When no `scan` is given: the devkit has no scanner in this version
  * @throws {UnsupportedServerError} When the server does not serve the assignment protocol
  * @throws {ReleaseAssignmentError} When the Release was created but not assigned
  */

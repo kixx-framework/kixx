@@ -1,4 +1,4 @@
-import { parse } from './vendor/acorn/src/index.js';
+import { parse } from './vendor/acorn/mod.js';
 
 
 /**

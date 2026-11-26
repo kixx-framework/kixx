@@ -446,13 +446,13 @@ describe('probe client', ({ describe }) => {
     });
 
     describe('the registered suites', ({ it }) => {
-        it('registers the four port suites and the formatDate goldens', () => {
+        it('registers the four port suites and the two golden suites', () => {
             assertEqual(
-                'content-store,format-date,key-value-store,logger-writer,server-request',
+                'content-compiler,content-store,format-date,key-value-store,logger-writer,server-request',
                 Object.keys(PROBE_SUITES).sort().join(','),
             );
             assert(Object.isFrozen(PROBE_SUITES), 'expected PROBE_SUITES to be frozen');
-            assertEqual('format-date', Object.keys(BUILT_IN_FACTORIES).join(','));
+            assertEqual('content-compiler,format-date', Object.keys(BUILT_IN_FACTORIES).join(','));
         });
 
         // Listing collects each suite with describe() and it() only, and with
@@ -478,6 +478,17 @@ describe('probe client', ({ describe }) => {
             const client = makeClient(makeTarget({ suites: PROBE_SUITES, factories: BUILT_IN_FACTORIES }));
 
             const { count, failures } = await runSuite(client, 'format-date');
+
+            assertEqual('', failures.join('\n'));
+            assert(count > 0, 'expected the suite to hold tests');
+        });
+
+        // The compiler, its vendored parser, and its hashing, run one test per
+        // request, as they will inside each target.
+        it('runs every content-compiler test through the client and handler', async () => {
+            const client = makeClient(makeTarget({ suites: PROBE_SUITES, factories: BUILT_IN_FACTORIES }));
+
+            const { count, failures } = await runSuite(client, 'content-compiler');
 
             assertEqual('', failures.join('\n'));
             assert(count > 0, 'expected the suite to hold tests');

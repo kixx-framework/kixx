@@ -61,8 +61,8 @@ function makePlugin(name, overrides) {
     return validatePluginManifest(manifest, { file: `plugins/${ name }/plugin.json`, directoryName: name });
 }
 
-function makeApp(secrets) {
-    return validateAppManifest({ secrets }, { file: 'app/app.json' });
+function makeApp(secrets, templateHelpers) {
+    return validateAppManifest({ secrets, templateHelpers }, { file: 'app/app.json' });
 }
 
 // A plugin that uses every part of a manifest the model reads.
@@ -355,11 +355,27 @@ describe('resolveInstallation', ({ describe }) => {
             assertEqual(JSON.stringify([ { owner: 'kixx', config: 'KEY_VALUE_STORE' } ]), JSON.stringify(installation.kvNamespaces));
         });
 
+        it('lists the template helper names of core, the plugins, and the app, sorted, each once', () => {
+            const installation = resolveInstallation({
+                core: makeCore({ templateHelpers: [ 'if', 'each', 'formatDate' ] }),
+                plugins: [
+                    makePlugin('visits', { templateHelpers: [ 'visitCount', 'formatDate' ] }),
+                    makePlugin('admin', { templateHelpers: [ 'Ordinal', '_private' ] }),
+                ],
+                app: makeApp([], [ 'initials', 'each' ]),
+            });
+
+            // Code unit order: capitals, then the underscore, then lowercase.
+            assertEqual('Ordinal,_private,each,formatDate,if,initials,visitCount', installation.templateHelpers.join(','));
+            assert(Object.isFrozen(installation.templateHelpers));
+        });
+
         it('resolves without an app manifest', () => {
             const installation = resolve([]);
 
             assertEqual(0, installation.secrets.length);
             assertEqual(0, installation.routes.length);
+            assertEqual(0, installation.templateHelpers.length);
         });
     });
 
@@ -445,6 +461,17 @@ describe('resolveInstallation', ({ describe }) => {
             const caught = catchError(() => resolve([ makePlugin('visits', { secrets }) ], { app: makeApp(secrets) }));
 
             assertProblems(caught, [ 'secret "SHARED_SECRET" is declared by visits and the app' ]);
+        });
+
+        it('allows a template helper name in several manifests', () => {
+            const templateHelpers = [ 'formatMoney' ];
+
+            const installation = resolve(
+                [ makePlugin('admin', { templateHelpers }), makePlugin('visits', { templateHelpers }) ],
+                { app: makeApp([], templateHelpers) },
+            );
+
+            assertEqual('formatMoney', installation.templateHelpers.join(','));
         });
 
         it('reports a Durable Object class in two manifests', () => {

@@ -64,6 +64,7 @@ const APP_OWNER = 'app';
  * @property {Array<{ owner: string, pagesDirectory: (string|undefined), templatesDirectory: (string|undefined), staticAssetsDirectory: (string|undefined) }>} contentRoots - Only the directories a root declares are present
  * @property {Array<{ owner: string, className: string, module: string, config: string }>} durableObjects - Durable Object classes; `config` is the config path of the block that describes the binding
  * @property {Array<{ owner: string, config: string }>} kvNamespaces - KV namespaces; `config` is the config path of the block that describes the namespace
+ * @property {string[]} templateHelpers - Every template helper name core, the plugins, and the app declare, without repeats, sorted by code unit
  */
 
 
@@ -114,6 +115,7 @@ export function resolveInstallation(options) {
         contentRoots: collect(entries, (manifest) => manifest.contentRoots),
         durableObjects: collect(entries, (manifest) => manifest.cloudflare.durableObjects),
         kvNamespaces: collect(entries, (manifest) => manifest.cloudflare.kvNamespaces),
+        templateHelpers: collectTemplateHelpers(entries, app),
     };
 
     for (const target of TARGETS) {
@@ -313,6 +315,20 @@ function collect(entries, getRecords) {
     return entries.flatMap((entry) => {
         return getRecords(entry.manifest).map((record) => ({ owner: entry.name, ...record }));
     });
+}
+
+// Several owners may declare one helper name, because registering a helper
+// replaces an earlier one of the same name. So the names are a set, and no
+// owner is kept.
+function collectTemplateHelpers(entries, app) {
+    const names = new Set(entries.flatMap((entry) => entry.manifest.templateHelpers));
+
+    for (const name of app?.templateHelpers ?? []) {
+        names.add(name);
+    }
+
+    // The default sort is by code unit, so every machine sorts alike.
+    return Array.from(names).sort();
 }
 
 function collectValues(entries, getValues) {

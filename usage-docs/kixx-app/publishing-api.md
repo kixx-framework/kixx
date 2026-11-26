@@ -112,8 +112,12 @@ fails without it. In `development` with no hash set, the API is open: every
 request is accepted, with or without a credential. Set a hash in
 `development` and it is enforced exactly as everywhere else.
 
-The `kixx app publish` command runs the whole publish workflow below for you;
-see [`kixx app`](../kixx-devkit/app.md).
+The `kixx app publish` command is meant to run the whole publish workflow
+below for you, but it doesn't work in this version; see
+[`kixx app`](../kixx-devkit/app.md).
+
+The objects and the manifest a publish sends are built by the content
+compiler, which also checks the content first; see [Content](content.md).
 
 ### Failed attempts
 
@@ -293,6 +297,10 @@ conditional-header fallback.
 | `maxObjectStatusIds` | 100 | Unique ids in one `POST /objects/status` |
 | `maxManifestEntries` | 10,000 | Entries in one Release manifest |
 
+The content compiler enforces `maxObjectBytes` and `maxManifestEntries` too,
+from the same constants, so content over either limit is refused before
+anything is uploaded.
+
 ## Check which objects are already stored
 
 ```http
@@ -434,8 +442,10 @@ Creation persists nothing if any check fails. The checks run in this order:
    (template bundles, page metadata, includes). Errors from
    both are reported together.
 
-Templates are not compiled and partial references are not resolved, so a
-valid Release can still fail to render.
+The server doesn't compile templates or resolve partial references, so a
+Release it accepts can still fail to render. The content compiler runs those
+checks before a Release is built, and builds none when one fails; see
+[Content](content.md).
 
 A claimed size that disagrees with the stored size fails with
 `409 ObjectSizeMismatch`, which takes precedence over any other error. Otherwise,

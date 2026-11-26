@@ -1325,6 +1325,121 @@ describe('HyperviewService', ({ describe }) => {
         });
     });
 
+    describe('reportTemplateHelperDifferences()', ({ it }) => {
+        const BUILT_IN = [
+            'each', 'if', 'unless', 'ifEqual', 'with', 'unescape', 'plusOne',
+            'formatDate', 'markup', 'truncate', 'assetUrl',
+        ];
+
+        // A service whose child logger records each warning.
+        function makeRecordingSubject() {
+            const warnings = [];
+            const noop = () => {};
+
+            const child = {
+                debug: noop,
+                info: noop,
+                error: noop,
+                warn: (message, info) => warnings.push({ message, info }),
+            };
+
+            const service = new HyperviewService({ logger: { createChild: () => child } });
+
+            return { service, warnings };
+        }
+
+        it('reports nothing and logs nothing when the names match', () => {
+            const { service, warnings } = makeRecordingSubject();
+            service.registerTemplateHelper('shout', () => '');
+
+            const result = service.reportTemplateHelperDifferences([ 'shout', ...BUILT_IN ]);
+
+            assertEqual(0, result.undeclared.length);
+            assertEqual(0, result.unregistered.length);
+            assertEqual(0, warnings.length);
+        });
+
+        it('ignores a name declared more than once', () => {
+            const { service, warnings } = makeRecordingSubject();
+
+            const result = service.reportTemplateHelperDifferences([ ...BUILT_IN, 'if', 'each' ]);
+
+            assertEqual(0, result.unregistered.length);
+            assertEqual(0, warnings.length);
+        });
+
+        it('reports helpers that are registered but not declared, sorted, in one warning', () => {
+            const { service, warnings } = makeRecordingSubject();
+            service.registerTemplateHelper('shout', () => '');
+            service.registerTemplateHelper('Initials', () => '');
+
+            const result = service.reportTemplateHelperDifferences(BUILT_IN);
+
+            assertEqual('Initials,shout', result.undeclared.join(','));
+            assertEqual(0, result.unregistered.length);
+            assertEqual(1, warnings.length);
+            assertMatches('registered but not declared', warnings[0].message);
+            assertMatches('"templateHelpers"', warnings[0].message);
+            assertMatches('app/app.json', warnings[0].message);
+            assertEqual('Initials,shout', warnings[0].info.helpers.join(','));
+        });
+
+        it('reports helpers that are declared but not registered, sorted, in one warning', () => {
+            const { service, warnings } = makeRecordingSubject();
+
+            const result = service.reportTemplateHelperDifferences([ 'shout', ...BUILT_IN, 'Initials' ]);
+
+            assertEqual(0, result.undeclared.length);
+            assertEqual('Initials,shout', result.unregistered.join(','));
+            assertEqual(1, warnings.length);
+            assertMatches('declared but not registered', warnings[0].message);
+            assertMatches('registerTemplateHelper()', warnings[0].message);
+            assertEqual('Initials,shout', warnings[0].info.helpers.join(','));
+        });
+
+        it('logs one warning for each kind of difference and does not throw', () => {
+            const { service, warnings } = makeRecordingSubject();
+            service.registerTemplateHelper('shout', () => '');
+
+            const result = service.reportTemplateHelperDifferences([ ...BUILT_IN, 'initials' ]);
+
+            assertEqual('shout', result.undeclared.join(','));
+            assertEqual('initials', result.unregistered.join(','));
+            assertEqual(2, warnings.length);
+            assertMatches('registered but not declared', warnings[0].message);
+            assertMatches('declared but not registered', warnings[1].message);
+        });
+
+        it('counts a replaced built-in helper as declared', () => {
+            const { service, warnings } = makeRecordingSubject();
+            service.registerTemplateHelper('truncate', () => 'replacement');
+
+            service.reportTemplateHelperDifferences(BUILT_IN);
+
+            assertEqual(0, warnings.length);
+        });
+
+        it('requires an Array of strings', () => {
+            const { service, warnings } = makeRecordingSubject();
+
+            for (const value of [ undefined, null, 'each', { each: true }, [ 'each', 7 ] ]) {
+                let caught = null;
+
+                try {
+                    service.reportTemplateHelperDifferences(value);
+                } catch (error) {
+                    caught = error;
+                }
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assertMatches('declaredNames', caught.message);
+            }
+
+            assertEqual(0, warnings.length);
+        });
+    });
+
     describe('initialize()', ({ it }) => {
 
         it('requires a kvStore', () => {

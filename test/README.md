@@ -257,12 +257,18 @@ Every port has one, and both of its adapters run it:
 
 | Port | Suite |
 |---|---|
+| Content source | `test/kixx/content-compiler/content-source-conformance.js` |
 | Content store | `test/kixx/content-addressable-store/content-store-conformance.js` |
 | Key/value store | `test/kixx/key-value-store/key-value-store-conformance.js` |
 | Logger writer | `test/kixx/logger/logger-writer-conformance.js` |
 | Server request | `test/kixx/http-router/server-request-conformance.js` |
 
-`test/kixx/hyperview/helpers/format-date-goldens.js` has the same form. It isn't a port: it holds the `formatDate` strings that depend on the runtime's locale and time zone data.
+The content source is the one port whose implementations aren't a Node.js and a Cloudflare adapter: they are the in-memory source in core (`kixx/content-compiler/memory-content-source.js`) and the Node.js adapter.
+
+Two golden suites have the same form. Neither is a port:
+
+- `test/kixx/hyperview/helpers/format-date-goldens.js` holds the `formatDate` strings that depend on the runtime's locale and time zone data.
+- `test/kixx/content-compiler/content-compiler-goldens.js` holds the object ids, sizes, and Release manifest the content compiler must produce for one fixed project. The ids are persisted in every published Release, so they must be the same on every runtime.
 
 Write a shared suite this way:
 
@@ -297,6 +303,7 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 `test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear:
 
 - **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. No core module outside `kixx/adapters/` imports an adapter: adapters are reached through generated registries and entry points. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
+- **The content compiler and the tooling entry.** Nothing reachable from `kixx/content-compiler/mod.js` or `kixx/tooling/mod.js` imports a `node:*` or `cloudflare:*` module or a package, or is a file under `kixx/adapters/`. That is what lets the compiler run in a command line tool, a server, and a Worker. The rules above imply it. This one follows the imports and prints the chain of files that leads to a break. The entries are listed in `PLATFORM_NEUTRAL_ENTRIES`.
 - **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules. Core's manifest (`kixx/plugin.json`) declares exactly the same files under `cloudflare.durableObjects`.
 - **What a unit test may reach.** Nothing that a file under `test/` imports, directly or through other modules, is a shell, imports a `cloudflare:*` module, or is one of the `CLOUDFLARE_ONLY_MODULES`. A failure prints the chain of files that leads there. No `*.test.js` file reaches an entry point in `ENTRY_POINTS`.
 - **The fixture project.** Each of its entry points imports exactly the modules a thin shell may (`FIXTURE_ENTRY_POINT_IMPORTS`). Nothing its Cloudflare registry reaches imports a `node:*` module, and nothing its `routes.generated.js` or `virtual-hosts.js` reaches imports a `node:*` or `cloudflare:*` module.
@@ -307,6 +314,7 @@ Its lists are constants at the top of the file:
 - `DURABLE_OBJECT_SHELLS`: add the file of a new Durable Object class, and remove a deleted one. An entry that no longer imports a `cloudflare:*` module fails too. Declare the class in core's manifest in the same change.
 - `CLOUDFLARE_ONLY_MODULES`: the files under `test/` that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
 - `ENTRY_POINTS`: a project's entry points under `test/`. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS`.
+- `PLATFORM_NEUTRAL_ENTRIES`: add the entry module of core code that must load on every runtime.
 - `LEAVING_CORE` and `KNOWN_EDGES`: delete an entry when its module or edge is gone. The rule "lists no module or edge that is already gone" fails until you do.
 
 The rules follow static `import` and `export … from` statements. A dynamic `import()` isn't followed.

@@ -62,10 +62,15 @@ hash on the next scan without an asset build or server restart.
 
 ## Production publishing
 
-Every CSS file under `static-assets/` is published as an entrypoint. Local,
+The content compiler (`kixx/content-compiler/`) builds the static assets of a
+Release. Its reference is `kixx/content-compiler/README.md`.
+
+It publishes every CSS file under `static-assets/` as an entrypoint. Local,
 unconditioned `@import` rules are recursively inlined, so changing an imported
 stylesheet changes the entrypoint hash without adding a production request.
 Imported files are also published at their own logical pathnames. Conditioned
 and external imports remain browser imports. Browser JavaScript modules are
 not bundled; their root-relative imports remain separate requests resolved
-through the Release snapshot.
+through the Release snapshot. The compiler removes comments from CSS and
+JavaScript under `static-assets/`, and publishes files under `public/` exactly
+as they are.

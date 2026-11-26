@@ -30,7 +30,7 @@ Files beside a `pages/**/page.json` are processed according to the directive tha
 
 For example, `body.html` and `page.html` can sit in the same directory and share an `.html` extension while following different rules. A `body.html` file named by `includes` is trusted HTML content for a template to emit with `{{{ includes.body }}}` or `{{ unescape includes.body }}`. Put interpolation, helpers, `{{!-- comments --}}`, or partial tags in `page.html` or a configured partial instead.
 
-The three directories differ in how publishing (`devkit/lib/publishing/`) treats them:
+The three directories differ in how the content compiler (`kixx/content-compiler/`) treats them when it builds a Release:
 
 | Directory | Browser URL | Fingerprinted | Production processing |
 | --- | --- | --- | --- |
@@ -45,7 +45,7 @@ Templates link entrypoints through `assetUrl`, which rewrites the logical pathna
 <script type="module" src="{{ assetUrl assets "/javascript/site.js" }}"></script>
 ```
 
-There is no bundling in development. Production publishing recursively inlines local, unconditioned CSS imports, so splitting a stylesheet adds a request only in development. Browser JavaScript is never bundled; each imported module is a request.
+There is no bundling in development. The content compiler recursively inlines local, unconditioned CSS imports when it builds a Release, so splitting a stylesheet adds a request only in development. Browser JavaScript is never bundled; each imported module is a request.
 
 ## Public Pages Are the Default
 
@@ -102,7 +102,7 @@ static-assets/stylesheets/
 
 Templates link public logical URLs such as `/stylesheets/stylesheet.css`; source `@import`s use root-relative logical URLs such as `/stylesheets/lib/layout.css`.
 
-Publishing fails on a local `@import` that does not name an existing lowercase `.css` pathname inside `static-assets/`, has a query string or fragment, or forms a cycle. An `@import` with a media, `supports()`, or `layer` condition, or an external URL, is not inlined: it remains a production request and must precede all bundled content, including rules inlined by an earlier import.
+The content compiler refuses to build a Release when a local `@import` does not name an existing lowercase `.css` pathname inside `static-assets/`, has a query string or fragment, or forms a cycle. An `@import` with a media, `supports()`, or `layer` condition, or an external URL, is not inlined: it remains a production request and must precede all bundled content, including rules inlined by an earlier import.
 
 Before adding a new file to `lib/`, prefer extending an existing one. A handful of well-documented stylesheets keeps related rules close to the comments that explain them.
 
@@ -137,7 +137,7 @@ There is no CSS linter or formatter in this project; `node run-linter.js` checks
 
 ## CSS Comments
 
-The stylesheets are also developer documentation. Verbose comments are acceptable in `static-assets/stylesheets/` because the devkit bundler strips `.css` and `.js` comments when it scans static assets into a Release — production readers never download them.
+The stylesheets are also developer documentation. Verbose comments are acceptable in `static-assets/stylesheets/` because the content compiler strips `.css` and `.js` comments when it compiles static assets into a Release — production readers never download them.
 
 **That stripping does not apply to page-local CSS** (`pages/**/page.css`), which is page content, not a static asset. Keep its comments short.
 

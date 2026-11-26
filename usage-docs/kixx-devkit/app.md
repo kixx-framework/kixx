@@ -1,5 +1,7 @@
 # `kixx app` — Content Releases
 
+**`kixx app publish` doesn't work in this version.** The content compiler moved into Kixx core, and the CLI that loads it isn't built yet. The command stops with a message that says so.
+
 Commands that publish application content and assign it to a build through
 the Publishing API. See [configuration.md](configuration.md) for
 `--environment` (`-e`), the origin, and the deploy key these commands
@@ -70,34 +72,11 @@ The Release already exists, so recovery is an assignment, not a republish.
 
 ### Stylesheet bundling
 
-Every `.css` file under `static-assets/` is published as an entry point. Local
-unconditioned `@import` rules are inlined recursively in cascade order, and
-each imported file is also published as its own asset. Changing an imported
-file changes the entry point's hash. Stylesheets under `public/` are published
-verbatim.
-
-Imports may be root-relative or relative to the importing file. Targets must
-stay inside `static-assets/`, use canonical lowercase pathnames, end in
-`.css`, and have no query string or fragment.
-
-External imports (a URL scheme or `//`) are kept as-is. Imports with media,
-`supports()`, or `layer` conditions are also kept; local ones are rewritten
-root-relative and validated. Every kept import must precede bundled content.
-
-Import cycles are rejected with the import chain. The entry point keeps a
-leading UTF-8 `@charset`; inlined files lose theirs; other encodings are
-rejected. Relative `url()` references are rewritten root-relative, keeping
-query strings and fragments. Relative bare strings in `image-set()` must use
-`url()`.
-
-Problem codes:
-
-- `css-import-missing`
-- `css-import-invalid`
-- `css-import-misplaced`
-- `css-import-cycle`
-- `css-charset-unsupported`
-- `css-url-invalid`
+Stylesheets are bundled by the content compiler in Kixx core, not by this
+command. The rules and the `css-*` problem codes are in the compiler's
+reference, `kixx/content-compiler/README.md` in your project, under
+"Stylesheets" and "Problem Codes". For the checks content must pass, see
+[Content](../kixx-app/content.md).
 
 ## `assign-build`
 

@@ -74,3 +74,20 @@ export const contentRoots = [
         "pagesDirectory": "plugins/visits/pages"
     }
 ];
+
+// Every template helper name the installed code declares.
+export const templateHelpers = [
+    "assetUrl",
+    "each",
+    "fixtureGreeting",
+    "formatDate",
+    "if",
+    "ifEqual",
+    "markup",
+    "plusOne",
+    "truncate",
+    "unescape",
+    "unless",
+    "visitCount",
+    "with"
+];

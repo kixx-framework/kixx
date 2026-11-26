@@ -16,7 +16,7 @@ JSDoc conventions for server-side JavaScript: supported tags, documenting the pu
 
 plugins/README.md
 
-What a plugin is and how it is wired in: the `plugin.json` manifest reference (also the schema of core's `kixx/plugin.json` and the app's `app/app.json`), lifecycle modules and their order (`register`, `initialize`, `start`, `stop`), the five generated files and how to regenerate them, routes and mounts, config defaults per target, declared secrets and the boot check, the deploy key check for operations endpoints, Cloudflare resources and Durable Object classes, contributing only when another plugin is installed, and thin entry points. Also the ports-and-adapters rules: the three roles, where Node.js and Cloudflare differences live, writing a contract, and checklists for adding a port or a platform.
+What a plugin is and how it is wired in: the `plugin.json` manifest reference (also the schema of core's `kixx/plugin.json` and the app's `app/app.json`), lifecycle modules and their order (`register`, `initialize`, `start`, `stop`), the five generated files and how to regenerate them, routes and mounts, config defaults per target, declared secrets and the boot check, plugin content and its collisions with project content, declared template helpers, the deploy key check for operations endpoints, Cloudflare resources and Durable Object classes, contributing only when another plugin is installed, and thin entry points. Also the ports-and-adapters rules: the three roles, where Node.js and Cloudflare differences live, writing a contract, and checklists for adding a port or a platform.
 
 ### Server Error Handling
 
@@ -28,7 +28,7 @@ Expected operational errors versus programmer bugs and how each platform's serve
 
 docs/vendored-code.md
 
-The rules for code copied into `kixx/errors/`, `kixx/assertions/`, `kixx/vendor/`, and `devkit/lib/vendor/`: unmodified releases only, the file set for Kixx and third-party libraries, changing Kixx libraries upstream first, adding, upgrading, and removing, and the `vendored-code.json` record and its digest.
+The rules for code copied into `kixx/errors/`, `kixx/assertions/`, `kixx/vendor/` (acorn, marked, path-to-regexp, templating), and `devkit/lib/vendor/` (acorn, kixx-assert): unmodified releases only, the file set for Kixx and third-party libraries, changing Kixx libraries upstream first, adding, upgrading, and removing, and the `vendored-code.json` record and its digest.
 
 ### Kixx Library References
 
@@ -40,7 +40,7 @@ API references for framework code under `kixx/`: the `is*` tests and `assert*` h
 
 test/README.md
 
-The unit suite and the integration suite, and which one a test belongs in. Dependency injection of platform services, thin Durable Object shells, the shared fakes in `test/fakes/` and how to write one, the fixture project in `test/fixtures/`, shared conformance suites and the rules for running one on a real platform, and the import hygiene rules. Also testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
+The unit suite and the integration suite, and which one a test belongs in. Dependency injection of platform services, thin Durable Object shells, the shared fakes in `test/fakes/` and how to write one, the fixture project in `test/fixtures/`, shared conformance and golden suites and the rules for running one on a real platform, and the import hygiene rules, including the one that keeps the content compiler and the tooling entry platform-neutral. Also testing with `kixx-test` and `kixx-assert`: file conventions, imports, structure, setup patterns, hook semantics, timeouts, skipping, assertions, `MockTracker`, error and rejection tests, and writing good tests.
 
 ### Integration Suite
 
@@ -60,11 +60,23 @@ docs/configuration-internals.md
 
 `parseJsonc`, `readConfig` and the config defaults it lays under a project's config, `resolveFilepath`, environment merging, and the boot check of declared secrets; the `*.jsonc.template` config templates, their `json` helper, and the Node.js and Cloudflare rendering contexts; and the checklist for adding a new setting.
 
+### Content Compiler
+
+kixx/content-compiler/README.md
+
+The one compiler that turns a project's content into content objects and a Release manifest: the entry point a tool loads (`kixx/tooling/mod.js` and the two Node.js adapters), `compileProjectContent()` and `compileContent()`, the content source port and how to write a source, what is compiled and each object type, the result (`objects`, `release`, `report`, `graph`), stylesheet bundling and JavaScript comment stripping, plugin content and collisions, the template checks and what they can't see, the dependency graph, the limits, and every problem code.
+
 ### Static Assets
 
 kixx/static-assets/README.md
 
-`StaticAssetRequestHandler` fingerprinted versus pathname modes and their caching headers, development asset scanning and root-relative imports, and how CSS and JavaScript are published for production.
+`StaticAssetRequestHandler` fingerprinted versus pathname modes and their caching headers, development asset scanning and root-relative imports, and how the content compiler publishes CSS and JavaScript for production.
+
+### Content
+
+usage-docs/kixx-app/content.md
+
+For app developers: where content lives, what the pre-publish checks catch and don't, reading a failed check, declaring a template helper in `app/app.json` and the boot warning, collisions with plugin content, and unmatched files.
 
 ### Configuration
 

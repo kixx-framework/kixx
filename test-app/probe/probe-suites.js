@@ -11,10 +11,12 @@
  * "Shared Conformance Suites".
  */
 import contentStoreConformance from '../../test/kixx/content-addressable-store/content-store-conformance.js';
+import contentCompilerGoldens from '../../test/kixx/content-compiler/content-compiler-goldens.js';
 import serverRequestConformance from '../../test/kixx/http-router/server-request-conformance.js';
 import formatDateGoldens from '../../test/kixx/hyperview/helpers/format-date-goldens.js';
 import keyValueStoreConformance from '../../test/kixx/key-value-store/key-value-store-conformance.js';
 import loggerWriterConformance from '../../test/kixx/logger/logger-writer-conformance.js';
+import { compileContent, createMemoryContentSource } from '../../kixx/content-compiler/mod.js';
 import formatDate from '../../kixx/hyperview/helpers/format-date.js';
 
 
@@ -24,6 +26,7 @@ import formatDate from '../../kixx/hyperview/helpers/format-date.js';
  * @type {Object<string, Function>}
  */
 export const PROBE_SUITES = Object.freeze({
+    'content-compiler': contentCompilerGoldens,
     'content-store': contentStoreConformance,
     'format-date': formatDateGoldens,
     'key-value-store': keyValueStoreConformance,
@@ -43,5 +46,6 @@ export const PROBE_SUITES = Object.freeze({
  * @type {Object<string, Function>}
  */
 export const BUILT_IN_FACTORIES = Object.freeze({
+    'content-compiler': () => () => ({ compileContent, createMemoryContentSource }),
     'format-date': () => () => ({ formatDate }),
 });

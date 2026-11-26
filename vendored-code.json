@@ -3,11 +3,10 @@
         {
             "path": "devkit/lib/vendor/acorn",
             "name": "acorn",
-            "version": "8.16.0",
-            "source": "github:acornjs/acorn@8bd029044e80fce5b929bcd5ba616bf34ce8a306",
-            "files": "acorn/src/ as src/; acorn/LICENSE as LICENSE; AUTHORS from the repository root",
-            "sha256": "dcced9f6e86a2a0ac2c694e64a8cbc2fe4a02bd3853c64eaa68090004f0a7bc3",
-            "deviation": "Unreleased commit after 8.16.0 (2026-03-29). src/expression.js and src/statement.js differ from tag 8.16.0; src/ differs from tag 8.17.0 in six files."
+            "version": "8.19.0",
+            "source": "npm:acorn@8.19.0",
+            "files": "dist/acorn.mjs as mod.js (renamed, unmodified); README.md; LICENSE",
+            "sha256": "3e59e9d35b2e6f5a3310af200d45d15e349d78ca96103b99848e7a4b475bc4f6"
         },
         {
             "path": "devkit/lib/vendor/kixx-assert",
@@ -32,6 +31,14 @@
             "source": "npm:kixx-server-errors@7.1.0",
             "files": "docs/, lib/, mod.js, README.md, LICENSE",
             "sha256": "2d674c244b17b5a1b8ebceb927e90faa0b706a2d1f8de63e8b4363310da1ab7a"
+        },
+        {
+            "path": "kixx/vendor/acorn",
+            "name": "acorn",
+            "version": "8.19.0",
+            "source": "npm:acorn@8.19.0",
+            "files": "dist/acorn.mjs as mod.js (renamed, unmodified); README.md; LICENSE",
+            "sha256": "3e59e9d35b2e6f5a3310af200d45d15e349d78ca96103b99848e7a4b475bc4f6"
         },
         {
             "path": "kixx/vendor/marked",

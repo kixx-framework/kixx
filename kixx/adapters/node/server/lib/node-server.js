@@ -39,6 +39,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
  * @property {Map<string, Object>} plugins - Lifecycle modules, in the order they run
  * @property {Object} configDefaults - Config defaults, merged under the selected environment's config
  * @property {{ required: string[], optional: string[], requiredOutsideDevelopment: string[] }} secrets - Every declared secret name
+ * @property {string[]} [templateHelpers] - Every declared template helper name; when given, boot warns about each difference from the helpers registered
  */
 
 /**
@@ -168,6 +169,7 @@ export async function startNodeServer(options) {
         plugins: registry.plugins,
         app,
         secrets: registry.secrets,
+        templateHelpers: registry.templateHelpers,
     });
 
     // Whether to trust the X-Forwarded-For header when resolving a request's client

@@ -1,0 +1,7 @@
+{
+    "template": "page.html",
+    "page": {
+        "title": "Fixture home",
+        "description": "The fixture project's one page."
+    }
+}

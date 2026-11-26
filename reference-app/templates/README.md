@@ -326,6 +326,16 @@ export function register(context) {
 }
 ```
 
+Then declare the name in `app/app.json` (a plugin declares its helpers in its `plugin.json`):
+
+```json
+{
+    "templateHelpers": [ "formatMoney" ]
+}
+```
+
+The pre-publish checks read this list, because they compile templates without running `app.js`. A template that calls an undeclared helper fails them. At boot, Hyperview logs a warning when the declared and registered names differ.
+
 - **Scope.** Registered helpers work wherever Hyperview compiles templates: pages, base templates, partials, and page metadata.
 - **Same name replaces** the existing helper, including core and Hyperview helpers.
 - **No implicit context.** Capture config in a factory called from `app.js` (`createFormatMoney(context.config.env.DEFAULT_CURRENCY)`); pass request values as template data and arguments.

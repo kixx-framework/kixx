@@ -61,6 +61,7 @@ function makeManifest() {
             templatesDirectory: './templates',
             staticAssetsDirectory: './static-assets',
         },
+        templateHelpers: [ 'formatVisits', '_count2' ],
         whenInstalled: {
             admin: {
                 routes: [ { module: './admin-routes.js', mount: '/admin/visits', name: 'admin-visits' } ],
@@ -191,6 +192,7 @@ describe('plugin-manifest', ({ describe }) => {
             assertEqual('./pages', result.content.pagesDirectory);
             assertEqual('./templates', result.content.templatesDirectory);
             assertEqual('./static-assets', result.content.staticAssetsDirectory);
+            assertEqual('formatVisits,_count2', result.templateHelpers.join(','));
             assertEqual('/admin/visits', result.whenInstalled.admin.routes[0].mount);
             assertEqual(0, result.whenInstalled.admin.lifecycle.length);
             assertEqual(0, Object.keys(result.whenInstalled.admin.content).length);
@@ -210,6 +212,7 @@ describe('plugin-manifest', ({ describe }) => {
             assert(Object.isFrozen(result.secrets[0]));
             assert(Object.isFrozen(result.cloudflare.durableObjects[0]));
             assert(Object.isFrozen(result.routes[0]));
+            assert(Object.isFrozen(result.templateHelpers));
             assert(Object.isFrozen(result.whenInstalled.admin.routes[0]));
 
             assertEqual(before, JSON.stringify(manifest));
@@ -233,6 +236,7 @@ describe('plugin-manifest', ({ describe }) => {
             assertEqual(0, result.cloudflare.durableObjects.length);
             assertEqual(0, result.routes.length);
             assertEqual(0, Object.keys(result.content).length);
+            assertEqual(0, result.templateHelpers.length);
             assertEqual(0, Object.keys(result.whenInstalled).length);
         });
 
@@ -418,12 +422,27 @@ describe('plugin-manifest', ({ describe }) => {
             { rule: 'a directory path cannot leave the directory', change: set('content.pagesDirectory', './../pages'), source: 'content.pagesDirectory', value: '"./../pages"' },
             { rule: 'a directory path has no trailing slash', change: set('content.pagesDirectory', './pages/'), source: 'content.pagesDirectory', value: '"./pages/"' },
 
+            // templateHelpers
+            { rule: 'templateHelpers is an array', change: set('templateHelpers', 'formatVisits'), source: 'templateHelpers', value: 'array' },
+            { rule: 'a helper name is a string', change: set('templateHelpers.1', 7), source: 'templateHelpers[1]', value: '7 must match' },
+            { rule: 'a helper name holds no hyphen', change: set('templateHelpers.0', 'format-money'), source: 'templateHelpers[0]', value: '"format-money"' },
+            { rule: 'a helper name holds no dot', change: set('templateHelpers.0', 'a.b'), source: 'templateHelpers[0]', value: '"a.b"' },
+            { rule: 'a helper name does not start with a digit', change: set('templateHelpers.0', '2count'), source: 'templateHelpers[0]', value: '"2count"' },
+            { rule: 'a helper name is not empty', change: set('templateHelpers.0', ''), source: 'templateHelpers[0]', value: '"" must match' },
+            { rule: 'a helper name is listed once', change: set('templateHelpers.1', 'formatVisits'), source: 'templateHelpers[1]', value: 'more than once' },
+
             // whenInstalled
             { rule: 'whenInstalled is an object', change: set('whenInstalled', []), source: 'whenInstalled', value: 'JSON object' },
             { rule: 'whenInstalled is keyed by plugin name', change: set('whenInstalled', { Admin: { lifecycle: [ './a.js' ] } }), source: 'whenInstalled.Admin', value: 'plugin name' },
             { rule: 'whenInstalled does not name the plugin itself', change: set('whenInstalled', { visits: { lifecycle: [ './a.js' ] } }), source: 'whenInstalled.visits', value: 'itself' },
             { rule: 'a whenInstalled block is an object', change: set('whenInstalled.admin', []), source: 'whenInstalled.admin', value: 'JSON object' },
             { rule: 'a whenInstalled block holds only its three keys', change: set('whenInstalled.admin.secrets', []), source: 'whenInstalled.admin.secrets', value: 'not a manifest key' },
+            {
+                rule: 'a whenInstalled block declares no template helpers',
+                change: set('whenInstalled.admin.templateHelpers', [ 'formatVisits' ]),
+                source: 'whenInstalled.admin.templateHelpers',
+                value: 'not a manifest key',
+            },
             { rule: 'a whenInstalled block holds at least one key', change: set('whenInstalled.admin', {}), source: 'whenInstalled.admin', value: 'at least one' },
             { rule: 'a whenInstalled lifecycle entry is a module path', change: set('whenInstalled.admin.lifecycle', [ 'a.js' ]), source: 'whenInstalled.admin.lifecycle[0]', value: '"a.js"' },
             { rule: 'a whenInstalled route follows the route rules', change: unset('whenInstalled.admin.routes.0.name'), source: 'whenInstalled.admin.routes[0].name', value: 'is required' },
@@ -518,6 +537,13 @@ describe('plugin-manifest', ({ describe }) => {
             assertEqual('outsideDevelopment', result.secrets[0].required);
         });
 
+        it('accepts template helper names', () => {
+            const result = validateCore(makeCoreManifest({ templateHelpers: [ 'each', 'formatDate' ] }));
+
+            assertEqual('each,formatDate', result.templateHelpers.join(','));
+            assertEqual(0, validateCore(makeCoreManifest()).templateHelpers.length);
+        });
+
         it('rejects a manifest named kixx without isCore', () => {
             const caught = catchError(() => {
                 validatePluginManifest(makeMinimalManifest({ name: 'kixx' }), { file: CORE_FILE, directoryName: 'kixx' });
@@ -591,8 +617,10 @@ describe('plugin-manifest', ({ describe }) => {
             const result = validateApp({});
 
             assertEqual(0, result.secrets.length);
+            assertEqual(0, result.templateHelpers.length);
             assert(Object.isFrozen(result));
             assert(Object.isFrozen(result.secrets));
+            assert(Object.isFrozen(result.templateHelpers));
         });
 
         it('accepts secrets and normalizes them', () => {
@@ -614,6 +642,28 @@ describe('plugin-manifest', ({ describe }) => {
             assert(Object.isFrozen(result.secrets[0]));
             assertEqual(false, Object.isFrozen(manifest.secrets[0]));
             assertUndefined(manifest.secrets[1].required);
+        });
+
+        it('accepts template helper names', () => {
+            const result = validateApp({ templateHelpers: [ 'formatMoney', 'initials' ] });
+
+            assertEqual('formatMoney,initials', result.templateHelpers.join(','));
+        });
+
+        it('applies the template helper rules', () => {
+            const caught = catchError(() => {
+                validateApp({ templateHelpers: [ 'formatMoney', 'format-money', 'formatMoney' ] });
+            });
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('templateHelpers[1] | templateHelpers[2]', caught.errors.map((p) => p.source).join(' | '));
+            assertMatches('templateHelpers[2] "formatMoney" is listed more than once', caught.message);
+        });
+
+        it('rejects a helper list that is not an array', () => {
+            const caught = catchError(() => validateApp({ templateHelpers: {} }));
+
+            assertOneProblem(caught, 'templateHelpers', 'must be a JSON array');
         });
 
         it('rejects any other key', () => {

@@ -12,6 +12,7 @@ import {
     assertNonEmptyString,
     isFunction,
     isPlainObject,
+    isString,
     isUndefined,
     isNonEmptyString,
 } from '../assertions/mod.js';
@@ -211,6 +212,56 @@ export default class HyperviewService {
 
         this.#templateHelpers.set(name, helper);
         return this;
+    }
+
+    /**
+     * Compares the registered template helpers with the names the installed
+     * manifests declare under `templateHelpers`, and logs one warning for each
+     * kind of difference. The pre-publish checks read the declared names, so a
+     * helper that is registered but not declared fails them, and a helper that
+     * is declared but not registered passes them and fails when a page renders.
+     *
+     * A difference is never an error. Call this after every plugin and the app
+     * have registered their helpers.
+     * @param {string[]} declaredNames - Every helper name the installed manifests declare
+     * @returns {{ undeclared: string[], unregistered: string[] }} The names registered but not declared, and the names declared but not registered, each sorted
+     * @throws {AssertionError} When declaredNames is not an Array of strings
+     */
+    reportTemplateHelperDifferences(declaredNames) {
+        assert(
+            Array.isArray(declaredNames) && declaredNames.every(isString),
+            'reportTemplateHelperDifferences: declaredNames must be an Array of strings',
+        );
+
+        const declared = new Set(declaredNames);
+
+        const undeclared = Array.from(this.#templateHelpers.keys())
+            .filter((name) => !declared.has(name))
+            .sort();
+
+        const unregistered = Array.from(declared)
+            .filter((name) => !this.#templateHelpers.has(name))
+            .sort();
+
+        if (undeclared.length > 0) {
+            this.#logger.warn(
+                'template helpers are registered but not declared; '
+                + 'list each under "templateHelpers" in the manifest of the code that registers it '
+                + '(app/app.json for the app), or the pre-publish checks will reject templates that use it',
+                { helpers: undeclared },
+            );
+        }
+
+        if (unregistered.length > 0) {
+            this.#logger.warn(
+                'template helpers are declared but not registered; '
+                + 'register each with registerTemplateHelper(), or remove it from "templateHelpers" in its manifest, '
+                + 'or a template that uses it will fail to render',
+                { helpers: unregistered },
+            );
+        }
+
+        return { undeclared, unregistered };
     }
 
     #compileTemplate(templateId, source) {

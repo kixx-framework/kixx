@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertNotMatches } from 'kixx-assert';
+import { assert, assertEqual, assertMatches, assertNotMatches } from 'kixx-assert';
 
 import { bootApplication } from '../../../kixx/context/boot-application.js';
 import ApplicationContext from '../../../kixx/context/application-context.js';
@@ -237,6 +237,71 @@ describe('bootApplication', ({ it, describe }) => {
             const { appContext } = boot({ env, config: configFor('production'), secrets });
 
             assert(appContext instanceof ApplicationContext);
+        });
+    });
+
+    describe('with declared template helpers', ({ it }) => {
+        // A plugin that registers a stand-in HyperviewService, which records
+        // what boot asks it to compare and when.
+        function makeHyperviewPlugin(calls) {
+            return {
+                register(context) {
+                    context.registerService('HyperviewService', {
+                        reportTemplateHelperDifferences(declaredNames) {
+                            // The real service logs here. A finalized logger
+                            // refuses to create a child, so this throws if
+                            // the comparison runs after logger.finalize().
+                            context.logger.createChild('during-report');
+
+                            calls.push(`report:${ declaredNames.join(',') }`);
+                            return { undeclared: [ 'shout' ], unregistered: [] };
+                        },
+                    });
+                },
+            };
+        }
+
+        it('compares them after the app\'s initialize() and before the logger is finalized', () => {
+            const calls = [];
+
+            const plugins = new Map([
+                [ 'hyperview', makeHyperviewPlugin(calls) ],
+                [ 'visits', { initialize: () => calls.push('visits.initialize') } ],
+            ]);
+
+            const app = { initialize: () => calls.push('app.initialize') };
+
+            boot({ plugins, app, templateHelpers: [ 'each', 'if' ] });
+
+            assertEqual('visits.initialize | app.initialize | report:each,if', calls.join(' | '));
+        });
+
+        it('boots when the comparison finds a difference', () => {
+            const calls = [];
+            const plugins = new Map([ [ 'hyperview', makeHyperviewPlugin(calls) ] ]);
+
+            const { appContext } = boot({ plugins, templateHelpers: [] });
+
+            assert(appContext instanceof ApplicationContext);
+            assertEqual(1, calls.length);
+        });
+
+        it('compares nothing when the option is absent, with or without a HyperviewService', () => {
+            const calls = [];
+            const plugins = new Map([ [ 'hyperview', makeHyperviewPlugin(calls) ] ]);
+
+            boot({ plugins });
+            boot();
+
+            assertEqual(0, calls.length);
+        });
+
+        it('throws an AssertionError when the option is given and HyperviewService is not registered', () => {
+            const caught = catchError(() => boot({ templateHelpers: [] }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('HyperviewService', caught.message);
         });
     });
 

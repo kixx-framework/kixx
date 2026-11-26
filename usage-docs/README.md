@@ -10,6 +10,9 @@ Kixx App
 - [Configuration](kixx-app/configuration.md) — where settings and secrets
   go, environments, dotenv files, job queue settings, and what a Cloudflare
   deployment expects.
+- [Content](kixx-app/content.md) — where content lives, the checks it must
+  pass before it becomes a Release, declaring a template helper, and
+  collisions with plugin content.
 - [Publishing API](kixx-app/publishing-api.md) — publish and roll back site
   content as immutable Releases assigned to builds.
 - [Admin API](kixx-app/admin-api.md) — data migrations, background jobs,

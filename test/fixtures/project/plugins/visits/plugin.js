@@ -30,6 +30,11 @@ export function register(context) {
 
 export function initialize(context) {
     context.getService('Visits').setKeyValueStore(context.getService('KeyValueStore'));
+
+    // Declared under templateHelpers in plugin.json.
+    context.getService('HyperviewService').registerTemplateHelper('visitCount', (_context, _options, count) => {
+        return count === 1 ? '1 visit' : `${ count } visits`;
+    });
 }
 
 export function start(context) {
