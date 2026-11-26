@@ -222,6 +222,11 @@ export default class PublishingAPIClient {
      * retry: resending after a lost response fails its precondition even
      * though the first attempt committed. Reconcile with `getBuild()` instead
      * of retrying.
+     *
+     * Protocol 4 requires an intent. A never-assigned build (`null`
+     * precondition) is a pre-stage; an assigned one is a content-only
+     * publish. This client sends no commit, code, or fingerprint, so a server
+     * outside development refuses its writes with 422.
      * @param {string} buildId - Build pointer id
      * @param {string} releaseId - Release to assign
      * @param {Object} options - Assignment options
@@ -256,7 +261,12 @@ export default class PublishingAPIClient {
                 data: {
                     type: 'Build',
                     id: buildId,
-                    attributes: { releaseId, expectedAssignmentId, reason },
+                    attributes: {
+                        intent: expectedAssignmentId === null ? 'prestage' : 'publish',
+                        releaseId,
+                        expectedAssignmentId,
+                        reason,
+                    },
                 },
             }),
         });
