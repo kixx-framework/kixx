@@ -19,11 +19,25 @@ import {
 const MISSING_RELEASE_ID = 'z'.repeat(26);
 const DEPLOY_KEY_ACTOR = JSON.stringify({ type: 'deploy-key', id: TEST_HASH.slice(0, 12), name: 'Deploy key' });
 
-function buildRequest(buildId, attributes, { headers = {}, id = buildId, contentType } = {}) {
+const COMMIT = 'a'.repeat(40);
+const NEXT_COMMIT = 'b'.repeat(40);
+const FINGERPRINT = `kxfp1:${ '1'.repeat(64) }`;
+const OTHER_FINGERPRINT = `kxfp1:${ '2'.repeat(64) }`;
+const CODE = { revision: COMMIT, fingerprint: FINGERPRINT };
+
+// A complete protocol 4 pre-stage. Most tests are about something else, so
+// buildRequest() starts from it; `bare: true` sends the attributes as given.
+const PRESTAGE = Object.freeze({ intent: 'prestage', sourceRevision: COMMIT, code: CODE });
+
+function publishAttributes(attributes) {
+    return { intent: 'publish', sourceRevision: NEXT_COMMIT, codeFingerprint: FINGERPRINT, ...attributes };
+}
+
+function buildRequest(buildId, attributes, { headers = {}, id = buildId, contentType, bare = false } = {}) {
     return makeJsonRequest({
         type: 'Build',
         id,
-        attributes,
+        attributes: bare ? attributes : { ...PRESTAGE, ...attributes },
         headers,
         contentType,
         pathnameParams: { buildId },
@@ -51,8 +65,16 @@ async function setup() {
     return { ...await sharedSetup, buildId: `build-${ buildCount }` };
 }
 
-async function assign(context, buildId, attributes) {
-    return readDocument(await putBuild(context, buildRequest(buildId, attributes), new ServerResponse())).data;
+async function assign(context, buildId, attributes, options) {
+    return readDocument(await putBuild(context, buildRequest(buildId, attributes, options), new ServerResponse())).data;
+}
+
+async function putError(context, buildId, attributes, options) {
+    return await catchError(() => putBuild(context, buildRequest(buildId, attributes, options), new ServerResponse()));
+}
+
+async function activations(context, buildId) {
+    return readDocument(await listBuildActivations(context, getRequest(buildId), new ServerResponse())).data;
 }
 
 
@@ -76,11 +98,12 @@ describe('Publishing API builds', ({ after, describe }) => {
             assertEqual(200, response.status);
             assertEqual('Build', data.type);
             assertEqual(buildId, data.id);
-            assertEqual('releaseId,assignedAt,assignmentId,code', Object.keys(data.attributes).join(','));
+            assertEqual('releaseId,assignedAt,assignmentId,code,liveSourceRevision', Object.keys(data.attributes).join(','));
             assertEqual(releaseId, data.attributes.releaseId);
             assertEqual(pointer.assignmentId, data.attributes.assignmentId);
             assertEqual(pointer.assignedAt, data.attributes.assignedAt);
-            assertEqual(null, data.attributes.code);
+            assertEqual(JSON.stringify(CODE), JSON.stringify(data.attributes.code));
+            assertEqual(COMMIT, data.attributes.liveSourceRevision);
             assertEqual(null, response.headers.get('etag'));
             assertEqual(false, response.body.includes(TEST_HASH));
         });
@@ -155,15 +178,13 @@ describe('Publishing API builds', ({ after, describe }) => {
             );
         });
 
-        it('rejects every attribute but releaseId, expectedAssignmentId, and reason', async () => {
+        it('rejects every attribute protocol 4 does not define', async () => {
             const { context, service, releaseId, buildId } = await setup();
             const extra = {
-                sourceRevision: 'abc123',
-                summary: 'A change',
-                code: { revision: 'abc123', fingerprint: 'f'.repeat(64) },
-                force: true,
-                forceReason: 'Because',
                 actor: { type: 'user', id: 'someone' },
+                precondition: null,
+                forced: true,
+                fingerprint: FINGERPRINT,
             };
 
             for (const [ name, value ] of Object.entries(extra)) {
@@ -253,18 +274,231 @@ describe('Publishing API builds', ({ after, describe }) => {
         });
     });
 
+    describe('PUT /builds/:buildId protocol 4 gates', ({ it }) => {
+
+        // Production unless a test says otherwise: the harness default.
+        async function developmentSetup() {
+            const { buildId } = await setup();
+            const harness = await makeHarness({ environment: 'development' });
+            const release = await createTestRelease(harness.context, harness.service, 'development gates');
+            return { ...harness, releaseId: release.releaseId, buildId };
+        }
+
+        it('requires code and sourceRevision on a pre-stage outside development', async () => {
+            const { context, service, releaseId, buildId } = await setup();
+
+            const error = await putError(context, buildId, { intent: 'prestage', releaseId, expectedAssignmentId: null }, { bare: true });
+
+            assertEqual(422, error.httpStatusCode);
+            assertEqual('InvalidBuildAssignment', error.code);
+            assertEqual('attributes.sourceRevision,attributes.code', error.errors.map((item) => item.source).join(','));
+            assertEqual(null, await service.getBuildPointer(context, buildId));
+        });
+
+        it('requires sourceRevision and codeFingerprint on a content-only publish outside development', async () => {
+            const { context, releaseId, nextReleaseId, buildId } = await setup();
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+
+            const error = await putError(context, buildId, {
+                intent: 'publish',
+                releaseId: nextReleaseId,
+                expectedAssignmentId: first.attributes.assignmentId,
+            }, { bare: true });
+
+            assertEqual(422, error.httpStatusCode);
+            assertEqual('attributes.sourceRevision,attributes.codeFingerprint', error.errors.map((item) => item.source).join(','));
+        });
+
+        it('requires intent in every environment', async () => {
+            const { context, releaseId, buildId } = await developmentSetup();
+
+            const error = await putError(context, buildId, { releaseId, expectedAssignmentId: null }, { bare: true });
+
+            assertEqual(422, error.httpStatusCode);
+            assertEqual('attributes.intent', error.errors.map((item) => item.source).join(','));
+        });
+
+        it('requires nothing new in development', async () => {
+            const { context, releaseId, buildId } = await developmentSetup();
+
+            const staged = await assign(context, buildId, { intent: 'prestage', releaseId, expectedAssignmentId: null }, { bare: true });
+            const published = await assign(context, buildId, {
+                intent: 'publish',
+                releaseId,
+                expectedAssignmentId: staged.attributes.assignmentId,
+            }, { bare: true });
+
+            assertEqual(null, staged.attributes.code);
+            assertEqual(staged.attributes.assignmentId, published.attributes.assignmentId);
+        });
+
+        it('answers 404 BuildNotFound for a content-only publish to an unassigned build', async () => {
+            const { context, service, releaseId, buildId } = await setup();
+
+            const error = await putError(context, buildId, publishAttributes({ releaseId, expectedAssignmentId: null }), { bare: true });
+
+            assertEqual(404, error.httpStatusCode);
+            assertEqual('BuildNotFound', error.code);
+            assertEqual(null, await service.getBuildPointer(context, buildId));
+        });
+
+        it('answers 409 BuildCodeUnknown for a content-only publish to a build without code', async () => {
+            const { context, service, releaseId, nextReleaseId, buildId } = await setup();
+            // Only the store, or development, can leave a build without code.
+            const first = await service.assignRelease(context, buildId, {
+                releaseId,
+                expectedAssignmentId: null,
+                reason: 'publish',
+                actor: { type: 'deploy-key', id: 'development', name: 'Deploy key' },
+            });
+
+            const error = await putError(context, buildId, publishAttributes({
+                releaseId: nextReleaseId,
+                expectedAssignmentId: first.assignmentId,
+            }), { bare: true });
+
+            assertEqual(409, error.httpStatusCode);
+            assertEqual('BuildCodeUnknown', error.code);
+            assertEqual(releaseId, (await service.getBuildPointer(context, buildId)).rootHash);
+        });
+
+        it('answers 409 CodeFingerprintMismatch, which force does not override', async () => {
+            const { context, service, releaseId, nextReleaseId, buildId } = await setup();
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+
+            for (const extra of [ {}, { force: true, forceReason: 'Emergency.' } ]) {
+                const error = await putError(context, buildId, publishAttributes({
+                    releaseId: nextReleaseId,
+                    expectedAssignmentId: first.attributes.assignmentId,
+                    codeFingerprint: OTHER_FINGERPRINT,
+                    ...extra,
+                }), { bare: true });
+
+                assertEqual(409, error.httpStatusCode);
+                assertEqual('CodeFingerprintMismatch', error.code);
+            }
+            assertEqual(releaseId, (await service.getBuildPointer(context, buildId)).rootHash);
+            assertEqual(1, (await activations(context, buildId)).length);
+        });
+
+        it('answers 409 BuildCodeMismatch for a pre-stage with other code', async () => {
+            const { context, service, releaseId, nextReleaseId, buildId } = await setup();
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+
+            const error = await putError(context, buildId, {
+                releaseId: nextReleaseId,
+                expectedAssignmentId: first.attributes.assignmentId,
+                code: { revision: NEXT_COMMIT, fingerprint: OTHER_FINGERPRINT },
+            });
+
+            assertEqual(409, error.httpStatusCode);
+            assertEqual('BuildCodeMismatch', error.code);
+            assertEqual(releaseId, (await service.getBuildPointer(context, buildId)).rootHash);
+        });
+
+        it('publishes content with the matching fingerprint and records force, summary, and commit', async () => {
+            const { context, releaseId, nextReleaseId, buildId } = await setup();
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null, reason: 'carry-forward' });
+
+            const published = await assign(context, buildId, publishAttributes({
+                releaseId: nextReleaseId,
+                expectedAssignmentId: first.attributes.assignmentId,
+                summary: 'Updated the opening hours.',
+                force: true,
+                forceReason: 'Hotfix published from a branch behind production.',
+            }), { bare: true });
+            const [ latest ] = await activations(context, buildId);
+
+            assertEqual(nextReleaseId, published.attributes.releaseId);
+            assertEqual(JSON.stringify(CODE), JSON.stringify(published.attributes.code));
+            assertEqual(NEXT_COMMIT, latest.attributes.sourceRevision);
+            assertEqual('Updated the opening hours.', latest.attributes.summary);
+            assertEqual('Hotfix published from a branch behind production.', latest.attributes.forceReason);
+        });
+
+        it('answers 422, never 500, for every malformed attribute value', async () => {
+            const { context, service, releaseId, buildId } = await setup();
+            const cases = [
+                [ 'intent', { intent: 'deploy' } ],
+                [ 'sourceRevision', { sourceRevision: 'main' } ],
+                [ 'summary', { summary: '' } ],
+                [ 'summary', { summary: 's'.repeat(2001) } ],
+                [ 'code', { code: 'abc' } ],
+                [ 'code.revision', { code: { ...CODE, revision: 42 } } ],
+                [ 'code.fingerprint', { code: { ...CODE, fingerprint: 'f'.repeat(64) } } ],
+                [ 'code.branch', { code: { ...CODE, branch: 'main' } } ],
+                [ 'codeFingerprint', { codeFingerprint: FINGERPRINT } ],
+                [ 'force', { force: 'yes' } ],
+                [ 'forceReason', { force: true } ],
+                [ 'forceReason', { forceReason: 'Because.' } ],
+                [ 'forceReason', { force: true, forceReason: 'r'.repeat(2001) } ],
+            ];
+
+            for (const [ source, attributes ] of cases) {
+                const error = await putError(context, buildId, { releaseId, expectedAssignmentId: null, ...attributes });
+
+                assertEqual(422, error.httpStatusCode, source);
+                assertEqual('InvalidBuildAssignment', error.code);
+                assertEqual(`attributes.${ source }`, error.errors.map((item) => item.source).join(','), source);
+            }
+
+            const onPublish = await putError(context, buildId, publishAttributes({
+                releaseId,
+                expectedAssignmentId: null,
+                code: CODE,
+                codeFingerprint: 'kxfp1:abc',
+            }), { bare: true });
+            assertEqual('attributes.code,attributes.codeFingerprint', onPublish.errors.map((item) => item.source).join(','));
+            assertEqual(null, await service.getBuildPointer(context, buildId));
+        });
+    });
+
     describe('GET /builds and /builds/:buildId', ({ it }) => {
 
-        it('reports the same Build shape as PUT, with code null', async () => {
+        it('reports the same Build shape as PUT; the list has no liveSourceRevision', async () => {
             const { context, releaseId, buildId } = await setup();
             const written = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
 
             const read = readDocument(await getBuild(context, getRequest(buildId), new ServerResponse())).data;
             const listed = readDocument(await listBuilds(context, getRequest(buildId), new ServerResponse())).data;
+            const { liveSourceRevision, ...listedAttributes } = written.attributes;
 
             assertEqual(JSON.stringify(written), JSON.stringify(read));
-            assertEqual(JSON.stringify(written), JSON.stringify(listed.find((build) => build.id === buildId)));
-            assertEqual(null, read.attributes.code);
+            assertEqual(COMMIT, liveSourceRevision);
+            assertEqual(
+                JSON.stringify({ ...written, attributes: listedAttributes }),
+                JSON.stringify(listed.find((build) => build.id === buildId)),
+            );
+            assertEqual(JSON.stringify(CODE), JSON.stringify(read.attributes.code));
+        });
+
+        it('reports the newest Activation\'s commit as liveSourceRevision', async () => {
+            const { context, releaseId, nextReleaseId, buildId } = await setup();
+            const readLive = async () => readDocument(
+                await getBuild(context, getRequest(buildId), new ServerResponse()),
+            ).data.attributes.liveSourceRevision;
+
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+            assertEqual(COMMIT, await readLive());
+
+            const second = await assign(context, buildId, publishAttributes({
+                releaseId: nextReleaseId,
+                expectedAssignmentId: first.attributes.assignmentId,
+            }), { bare: true });
+            assertEqual(NEXT_COMMIT, second.attributes.liveSourceRevision);
+            assertEqual(NEXT_COMMIT, await readLive());
+        });
+
+        it('reports a null liveSourceRevision when the newest Activation has no commit', async () => {
+            const { buildId } = await setup();
+            const { context, service } = await makeHarness({ environment: 'development' });
+            const release = await createTestRelease(context, service, 'development live');
+
+            const written = await assign(context, buildId, { intent: 'prestage', releaseId: release.releaseId, expectedAssignmentId: null }, { bare: true });
+            const read = readDocument(await getBuild(context, getRequest(buildId), new ServerResponse())).data;
+
+            assertEqual(null, written.attributes.liveSourceRevision);
+            assertEqual(null, read.attributes.liveSourceRevision);
         });
 
         it('answers 404 BuildNotFound for an unassigned build', async () => {
@@ -304,7 +538,7 @@ describe('Publishing API builds', ({ after, describe }) => {
             assertEqual(nextReleaseId, latest.attributes.toReleaseId);
             assertEqual('rollback', latest.attributes.reason);
             assertEqual(DEPLOY_KEY_ACTOR, JSON.stringify(latest.attributes.actor));
-            assertEqual(null, latest.attributes.sourceRevision);
+            assertEqual(COMMIT, latest.attributes.sourceRevision);
             assertEqual(null, latest.attributes.summary);
             assertEqual(null, latest.attributes.forceReason);
             assertEqual(null, earliest.attributes.fromReleaseId);

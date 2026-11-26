@@ -261,7 +261,7 @@ function assertPublishingApiResponses({ missing, wrong, valid }) {
     assertEqual(200, valid.status);
     assertEqual('application/vnd.api+json', valid.mediaType);
     assertEqual('PublishingApi', valid.body.data.type);
-    assertEqual(3, valid.body.data.attributes.buildAssignmentProtocolVersion);
+    assertEqual(4, valid.body.data.attributes.buildAssignmentProtocolVersion);
 
     assertNoSecretValue([ missing, wrong, valid ]);
 }
