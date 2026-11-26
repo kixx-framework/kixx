@@ -33,6 +33,14 @@
             "sha256": "2d674c244b17b5a1b8ebceb927e90faa0b706a2d1f8de63e8b4363310da1ab7a"
         },
         {
+            "path": "kixx/vendor/acorn",
+            "name": "acorn",
+            "version": "8.19.0",
+            "source": "npm:acorn@8.19.0",
+            "files": "dist/acorn.mjs as mod.js (renamed, unmodified); README.md; LICENSE",
+            "sha256": "3e59e9d35b2e6f5a3310af200d45d15e349d78ca96103b99848e7a4b475bc4f6"
+        },
+        {
             "path": "kixx/vendor/marked",
             "name": "marked",
             "version": "16.4.2",
