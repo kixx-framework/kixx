@@ -243,6 +243,22 @@ describe('Publishing API Releases', ({ after, describe }) => {
             assertEqual('provenance.unknown,provenance.sourceRevision', error.errors.map((entry) => entry.source).join(','));
         });
 
+        it('reports only the shape when provenance is not an object', async () => {
+            const { context, object } = await setup();
+            const manifest = manifestAt(object, '/cont-4-shape.css');
+
+            for (const provenance of [ null, 'main' ]) {
+                const error = await catchError(() => createRelease(
+                    context,
+                    releaseRequest({ manifest, provenance }),
+                    new ServerResponse(),
+                ));
+
+                assertEqual('InvalidProvenance', error?.code);
+                assertEqual('provenance', error.errors.map((entry) => entry.source).join(','));
+            }
+        });
+
         it('accepts a missing sourceRevision in development but refuses a malformed one', async () => {
             const { context, object } = await setup();
             const development = { ...context, config: { environment: 'development' } };

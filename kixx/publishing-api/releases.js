@@ -151,7 +151,8 @@ async function parseReleaseRequest(context, request) {
 }
 
 // Every provenance problem in one 422: the store's field rules, then CONT-4's
-// commit id rule for any field the store didn't already report.
+// commit id rule for any field the store didn't already report. Provenance
+// that isn't an object has no fields to check.
 function assertValidProvenance(provenance, isDevelopment) {
     const error = new ValidationError('Invalid Release provenance', { code: 'InvalidProvenance' });
 
@@ -163,7 +164,7 @@ function assertValidProvenance(provenance, isDevelopment) {
 
     const reported = new Set(error.errors.map((entry) => entry.source));
     for (const problem of findReleaseProvenanceProblems(provenance, { isDevelopment })) {
-        if (!reported.has(problem.source)) {
+        if (!reported.has(problem.source) && !reported.has('provenance')) {
             error.push(problem.message, problem.source);
         }
     }
