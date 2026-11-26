@@ -8,6 +8,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, isFunction } from 'kixx-assert';
 
 import { validatePluginManifest, resolveInstallation } from '../../kixx/tooling/mod.js';
+import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
 
 
 const CORE_URL = new URL('../../kixx/', import.meta.url);
@@ -65,6 +66,18 @@ describe('core manifest', ({ it }) => {
         assertEqual(1, manifest.secrets.length);
         assertEqual('DEPLOY_KEY_HASH', manifest.secrets[0].name);
         assertEqual('outsideDevelopment', manifest.secrets[0].required);
+    });
+
+    it('declares exactly the template helpers a new HyperviewService has', () => {
+        const noop = () => {};
+        const logger = { createChild: () => ({ debug: noop, info: noop, warn: noop, error: noop }) };
+        const service = new HyperviewService({ logger });
+
+        const { undeclared, unregistered } = service.reportTemplateHelperDifferences(manifest.templateHelpers);
+
+        assertEqual('', undeclared.join(','), 'built-in helpers missing from kixx/plugin.json');
+        assertEqual('', unregistered.join(','), 'helpers in kixx/plugin.json that Hyperview does not have');
+        assertEqual(11, manifest.templateHelpers.length);
     });
 
     it('names only modules that exist', () => {

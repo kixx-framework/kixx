@@ -59,6 +59,10 @@
             "description": "SHA-256 of the deploy key, as 64 lowercase hex characters. Only the hash is stored on the server."
         }
     ],
+    "templateHelpers": [
+        "each", "if", "unless", "ifEqual", "with", "unescape", "plusOne",
+        "formatDate", "markup", "truncate", "assetUrl"
+    ],
     "cloudflare": {
         "kvNamespaces": [
             { "config": "KEY_VALUE_STORE" },

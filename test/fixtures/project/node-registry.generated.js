@@ -76,4 +76,16 @@ export const contentRoots = [
 ];
 
 // Every template helper name the installed code declares.
-export const templateHelpers = [];
+export const templateHelpers = [
+    "assetUrl",
+    "each",
+    "formatDate",
+    "if",
+    "ifEqual",
+    "markup",
+    "plusOne",
+    "truncate",
+    "unescape",
+    "unless",
+    "with"
+];

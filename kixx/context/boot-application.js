@@ -67,6 +67,7 @@ import {
  * @param {Map<string, PluginModule>} options.plugins - Lifecycle modules, in the order they run.
  * @param {PluginModule} options.app - The application's own lifecycle hooks.
  * @param {SecretsManifest} [options.secrets] - Declared secret names. When given, every name required in config.environment must be set in options.env.
+ * @param {string[]} [options.templateHelpers] - Declared template helper names. When given, HyperviewService must be a registered service: after the app's initialize(), it logs a warning for each difference between these names and the helpers registered. A difference never fails boot.
  * @returns {BootedApplication}
  * @throws {OperationalError} When options.secrets is given and a required secret is missing from options.env
  */
@@ -78,6 +79,7 @@ export function bootApplication(options) {
         plugins,
         app,
         secrets,
+        templateHelpers,
     } = options ?? {};
 
     // Check before anything is built, so a deployment that lacks a secret
@@ -126,6 +128,12 @@ export function bootApplication(options) {
 
     if (isFunction(app.initialize)) {
         app.initialize(appContext);
+    }
+
+    // Checked after every initialize(), which is where plugins and the app
+    // register their helpers.
+    if (!isUndefined(templateHelpers)) {
+        appContext.getService('HyperviewService').reportTemplateHelperDifferences(templateHelpers);
     }
 
     // Finalize the logger to prevent creating infinite child loggers.
