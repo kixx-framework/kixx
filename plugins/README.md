@@ -105,7 +105,7 @@ Code outside `adapters/` imports no `node:*` or `cloudflare:*` module and no ada
 | `cloudflare.kvNamespaces` | Objects with only `config`: a config path. See "Cloudflare Resources". |
 | `cloudflare.durableObjects` | Objects with `className`, `module` (a module path), and `config` (a config path). |
 | `routes` | Objects with `module` (a module path) and, to mount it, `mount` and `name`. `mount` starts with `/`. `name` is lowercase letters, digits, and hyphens. Give both or neither. See "Routes". |
-| `content` | `pagesDirectory`, `templatesDirectory`, and `staticAssetsDirectory`: at least one, each a directory path. Recorded in the registries as `contentRoots`. Nothing reads them yet. |
+| `content` | `pagesDirectory`, `templatesDirectory`, and `staticAssetsDirectory`: at least one, each a directory path. Recorded in the registries as `contentRoots`, which the content compiler reads. See "Content". |
 | `templateHelpers` | The names of the template helpers the plugin registers with `registerTemplateHelper()`. Letters, digits, and underscores, not starting with a digit. See "Template Helpers". |
 | `whenInstalled` | An object keyed by another plugin's name. Each value holds `lifecycle`, `routes`, or `content`, at least one, under the rules above. See "Contributing Only When Another Plugin Is Installed". |
 
@@ -287,6 +287,32 @@ Core declares one secret: `DEPLOY_KEY_HASH`, the SHA-256 of the deploy key, requ
 
 `example.env.secrets` is generated from the declarations. It is the template for `.env.<environment>.secrets`, and the list of secret names every deployment must provide. A comment line reading exactly `# @optional` marks the next entry optional, and one reading exactly `# @required-outside-development` marks it required outside development. Only comment lines may come between a directive and its entry, so a description may not be exactly either directive.
 
+## Content
+
+A plugin ships content by naming up to three directories under `content`:
+
+```json
+"content": {
+    "pagesDirectory": "./pages",
+    "templatesDirectory": "./templates",
+    "staticAssetsDirectory": "./static-assets"
+}
+```
+
+Each is laid out like the project's own directory of that kind: pages are directories with a `page.json`, `templates/` holds `partials/` and `base/`, and static assets are published under their paths. There is no plugin `public/` directory.
+
+The content compiler compiles the project's content and every installed plugin's into one Release. The reference is `kixx/content-compiler/README.md`.
+
+- **The namespaces are shared.** A plugin's pages, global partials, base templates, and static assets merge with the project's. So a plugin's template may include a global partial the project supplies, and a project's template may include a plugin's.
+- **A collision fails the compile.** Two owners can't supply the same page pathname, global partial id, base template id, or static asset path. The project comes first, then the plugins in installation order. The first owner keeps the path, and each later one is a problem that names both files: `page-collision`, `partial-collision`, `base-template-collision`, or `static-asset-collision`.
+- **Name things to stay out of the way.** No prefix is reserved for a plugin. Put a plugin's partials and assets under a directory named for it (`templates/partials/visits/total.html`, `static-assets/visits/visits.css`), and give its base templates and pages names a project is unlikely to pick.
+- **Every template is checked.** A plugin's templates must compile, call only declared helpers, and reference only partials that exist, like the project's. See "Template Helpers".
+- **A global partial or base template may reference only global partials.** A reference in one to a partial that only pages supply is a problem.
+- **A stylesheet's `@import` stays inside the plugin's own static assets directory.**
+- **A `whenInstalled` block's `content` is one more content root** for the same plugin, compiled only when the named plugin is installed.
+
+The generated registries export the directories as `contentRoots`, as paths from the project root. `listPluginContentRoots()` in `kixx/tooling/mod.js` gives a tool the same list, and `compileProjectContent()` passes it to the compiler.
+
 ## Template Helpers
 
 List every template helper your code registers under `templateHelpers`: in `plugin.json` for a plugin, in `app/app.json` for the app. Core lists its own in `kixx/plugin.json`.
@@ -301,7 +327,7 @@ export function initialize(context) {
 }
 ```
 
-The list exists because the pre-publish checks compile every template without running any app code. They can't see what is registered, so they read what is declared: a template that calls a helper no manifest declares fails the checks.
+The list exists because the content compiler's checks compile every template without running any app code. They can't see what is registered, so they read what is declared: a template that calls a helper, with arguments, that no manifest declares is an `unregistered-helper` problem, and the content doesn't compile into a Release.
 
 - **Boot warns, and never fails.** After the app's `initialize()`, Hyperview compares the declared names with the registered ones. It logs one warning for helpers registered but not declared, and one for helpers declared but not registered.
 - **Several manifests may declare one name.** Registering a helper replaces an earlier one of the same name, so a plugin or the app may replace a core helper and declare it too.
