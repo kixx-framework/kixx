@@ -116,6 +116,7 @@ function makeContentStore() {
                 return { outcome: 'conflict' };
             }
             if (current?.rootHash === assignment.rootHash) {
+                current.liveSourceRevision = assignment.activation.sourceRevision ?? current.liveSourceRevision;
                 return {
                     outcome: 'unchanged',
                     pointer: current,
@@ -127,6 +128,7 @@ function makeContentStore() {
                 assignedAt: '2026-09-01T00:00:00.000Z',
                 assignmentId: crypto.randomUUID(),
                 code: current?.code ?? assignment.code ?? null,
+                liveSourceRevision: assignment.activation.sourceRevision,
             };
             builds.set(buildId, pointer);
             activations.push({
@@ -583,7 +585,7 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             const second = await store.createRelease({}, { staticAssets: { '/second': object } }, creation());
             contentStore.assignBuild = async () => ({
                 outcome: 'assigned',
-                pointer: { rootHash: first.releaseId, assignedAt: '2020-01-01T00:00:00.000Z', assignmentId: '00000000-0000-4000-8000-000000000001', code: null },
+                pointer: { rootHash: first.releaseId, assignedAt: '2020-01-01T00:00:00.000Z', assignmentId: '00000000-0000-4000-8000-000000000001', code: null, liveSourceRevision: null },
                 previousRootHash: null,
             });
             contentStore.getBuildPointer = async () => {
@@ -630,10 +632,11 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual(JSON.stringify(code), JSON.stringify(sent.code));
 
             assertEqual(
-                'assignedAt,assignmentId,buildId,code,isChanged,previousReleaseId,releaseId',
+                'assignedAt,assignmentId,buildId,code,isChanged,liveSourceRevision,previousReleaseId,releaseId',
                 Object.keys(result).sort().join(),
             );
             assertEqual(JSON.stringify(code), JSON.stringify(result.code));
+            assertEqual('abc123', result.liveSourceRevision);
             assertEqual(true, result.isChanged);
         });
 

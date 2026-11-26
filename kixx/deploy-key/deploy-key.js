@@ -15,6 +15,7 @@
 
 import { isNonEmptyString } from '../assertions/mod.js';
 import { TooManyRequestsError, UnauthenticatedError } from '../errors/mod.js';
+import { isDevelopmentEnvironment } from '../config/environment.js';
 import { generateSecretToken, sha256Hex, timingSafeEqual } from '../utils/crypto.js';
 
 
@@ -30,8 +31,8 @@ export const DEPLOY_KEY_PREFIX = 'kxdk_';
  */
 export const DEPLOY_KEY_HASH_SECRET = 'DEPLOY_KEY_HASH';
 
-// The one environment where an unset hash leaves the deploy key open.
-const DEVELOPMENT_ENVIRONMENT = 'development';
+// The actor id recorded when the deploy key is open in development.
+const DEVELOPMENT_ACTOR_ID = 'development';
 
 // Lowercase hex SHA-256, as sha256Hex() writes it.
 const DEPLOY_KEY_HASH_PATTERN = /^[0-9a-f]{64}$/;
@@ -102,7 +103,7 @@ export function createDeployKeyAuthentication({ now = () => Date.now() } = {}) {
     async function checkDeployKey(context, request) {
         const hash = context.env[DEPLOY_KEY_HASH_SECRET];
 
-        if (!isNonEmptyString(hash) && context.config.environment === DEVELOPMENT_ENVIRONMENT) {
+        if (!isNonEmptyString(hash) && isDevelopmentEnvironment(context.config)) {
             return { verified: true };
         }
 
@@ -225,7 +226,7 @@ export const requireDeployKey = defaultAuthentication.requireDeployKey;
  */
 export function deployKeyActor(context) {
     const hash = context.env[DEPLOY_KEY_HASH_SECRET];
-    const id = isNonEmptyString(hash) ? hash.slice(0, ACTOR_ID_LENGTH) : DEVELOPMENT_ENVIRONMENT;
+    const id = isNonEmptyString(hash) ? hash.slice(0, ACTOR_ID_LENGTH) : DEVELOPMENT_ACTOR_ID;
 
     return { type: 'deploy-key', id, name: 'Deploy key' };
 }

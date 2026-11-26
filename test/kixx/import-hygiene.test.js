@@ -94,6 +94,7 @@ const FIXTURE_PROJECT_DIRECTORY = path.join(TEST_DIRECTORY, 'fixtures/project/')
 // Nothing they reach may import a node:* or cloudflare:* module, a package,
 // or an adapter.
 const PLATFORM_NEUTRAL_ENTRIES = [
+    'code-fingerprint/mod.js',
     'content-compiler/mod.js',
     'tooling/mod.js',
 ];

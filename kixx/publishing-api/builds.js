@@ -8,7 +8,9 @@ import {
 import { isValidAssignmentId } from '../content-addressable-store/build-assignment.js';
 import { isValidHash } from '../content-addressable-store/addressing.js';
 import { ACTIVATION_REASONS } from '../content-addressable-store/publishing-history.js';
+import { isDevelopmentEnvironment } from '../config/environment.js';
 import { deployKeyActor } from '../deploy-key/mod.js';
+import { assignReleaseThroughGates, findBuildAssignmentProblems } from '../publish-gates/mod.js';
 import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
 import { assertJsonApiContentType, parseJsonApiResource } from './json-api.js';
 import { paginationParams } from './releases.js';
@@ -16,7 +18,18 @@ import { paginationParams } from './releases.js';
 
 // Every other attribute is refused, so a field a later protocol adds is never
 // silently ignored by a server that doesn't know it.
-const BUILD_ATTRIBUTES = new Set([ 'releaseId', 'expectedAssignmentId', 'reason' ]);
+const BUILD_ATTRIBUTES = new Set([
+    'releaseId',
+    'expectedAssignmentId',
+    'reason',
+    'intent',
+    'sourceRevision',
+    'summary',
+    'code',
+    'codeFingerprint',
+    'force',
+    'forceReason',
+]);
 
 
 /**
@@ -55,19 +68,24 @@ export async function getBuild(context, request, response) {
 }
 
 /**
- * Assigns a Release using a mandatory JSON assignment identity.
+ * Assigns a Release through the publish gates, using a mandatory JSON
+ * assignment identity. The write declares its intent: a pre-stage or a
+ * content-only publish (protocol 4).
  * @param {Object} context - Request context behind the deploy key.
  * @param {Object} request - JSON:API Build request with an expected assignment identity.
  * @param {Object} response - Response to populate.
- * @returns {Promise<Object>} Resulting JSON:API Build response.
+ * @returns {Promise<Object>} Resulting JSON:API Build response, with `liveSourceRevision`.
  * @throws {ValidationError} With code `InvalidBuildAssignment` for a bad or unknown attribute.
  * @throws {PreconditionFailedError} When the pointer precondition is stale.
+ * @throws {NotFoundError} With code `BuildNotFound` or `ReleaseNotFound`.
+ * @throws {ConflictError} With code `BuildCodeUnknown`, `CodeFingerprintMismatch`, or `BuildCodeMismatch`.
  */
 export async function putBuild(context, request, response) {
     assertJsonApiContentType(request);
     const buildId = request.pathnameParams.buildId;
     const { id, attributes } = await parseJsonApiResource(request, 'Build');
     const { releaseId, expectedAssignmentId, reason = 'publish' } = attributes;
+    const isDevelopment = isDevelopmentEnvironment(context.config);
     const error = new ValidationError('Invalid Build assignment', { code: 'InvalidBuildAssignment' });
     if (id !== buildId) {
         error.push('Build resource id must match the route build id', 'data.id');
@@ -85,6 +103,9 @@ export async function putBuild(context, request, response) {
     }
     if (Object.hasOwn(attributes, 'expectedAssignmentId') && expectedAssignmentId !== null && !isValidAssignmentId(expectedAssignmentId)) {
         error.push('Build attributes.expectedAssignmentId must be an assignment UUID or null', 'attributes.expectedAssignmentId');
+    }
+    for (const problem of findBuildAssignmentProblems(attributes, { isDevelopment })) {
+        error.push(`Build attributes.${ problem.message }`, `attributes.${ problem.source }`);
     }
     if (error.length) {
         throw error;
@@ -106,12 +127,19 @@ export async function putBuild(context, request, response) {
 
     let pointer;
     try {
-        pointer = await store.assignRelease(context, buildId, {
+        pointer = await assignReleaseThroughGates(context, store, buildId, {
+            intent: attributes.intent,
             releaseId,
             expectedAssignmentId,
             reason,
             actor: deployKeyActor(context),
-        });
+            sourceRevision: attributes.sourceRevision,
+            summary: attributes.summary,
+            code: attributes.code,
+            codeFingerprint: attributes.codeFingerprint,
+            force: attributes.force,
+            forceReason: attributes.forceReason,
+        }, { isDevelopment });
     } catch (cause) {
         if (cause.code === 'BuildPointerConflict') {
             throw new PreconditionFailedError(cause.message, {
@@ -161,10 +189,13 @@ function buildFromPointer(buildId, pointer) {
         assignedAt: pointer.assignedAt,
         assignmentId: pointer.assignmentId,
         code: pointer.code,
+        liveSourceRevision: pointer.liveSourceRevision,
     });
 }
 
-function buildResource({ buildId, releaseId, assignedAt, assignmentId, code }) {
+// liveSourceRevision is the commit the content was published from (CONT-7).
+// The store writes it with the pointer, so it always matches this assignment.
+function buildResource({ buildId, releaseId, assignedAt, assignmentId, code, liveSourceRevision }) {
     return {
         type: 'Build',
         id: buildId,
@@ -173,6 +204,7 @@ function buildResource({ buildId, releaseId, assignedAt, assignmentId, code }) {
             assignedAt,
             assignmentId,
             code: code ? { revision: code.revision, fingerprint: code.fingerprint } : null,
+            liveSourceRevision,
         },
     };
 }

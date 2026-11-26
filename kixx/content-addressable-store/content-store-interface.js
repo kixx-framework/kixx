@@ -196,6 +196,17 @@
  *   Activation, and the code info is stored. A caller that supplied code info
  *   is never told the call succeeded while the build still has none.
  *
+ * ### The live commit
+ * A pointer's `liveSourceRevision` is the commit its content was last
+ * published from. The adapter writes it inside the atomic operation:
+ *
+ * - `ASSIGNED` sets it to the Activation's `sourceRevision`, or `null` when
+ *   the Activation has none.
+ * - `UNCHANGED` sets it to the Activation's `sourceRevision` when one is
+ *   given, and keeps the stored value otherwise. A newer commit can compile
+ *   to the live Release; it is then the live commit, though no Activation
+ *   records it.
+ *
  * ### Outcome precedence
  * An adapter MUST decide the outcome in this order, inside the atomic
  * operation:
@@ -259,7 +270,8 @@
  * `listBuilds()` returns every pointer newest assignment first.
  *
  * Every pointer carries `code`: the build's `{ revision, fingerprint }`, or
- * `null` when the build has none.
+ * `null` when the build has none. It also carries `liveSourceRevision`, or
+ * `null` when the newest publish named no commit.
  *
  * `assignBuild()` resolves one of `BUILD_ASSIGNMENT_OUTCOME.ASSIGNED`,
  * `.UNCHANGED`, `.CONFLICT`, `.MISSING_CLOSURE`, or `.CODE_MISMATCH` rather
@@ -420,6 +432,7 @@
  * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
  * @property {string} assignmentId - Server-generated UUID unique to this assignment.
  * @property {(ContentBuildCodeInfo|null)} code - The build's code info, or `null` when it has none.
+ * @property {(string|null)} liveSourceRevision - The commit the content was last published from, or `null`.
  */
 
 /**
@@ -431,6 +444,7 @@
  * @property {string} assignedAt - ISO 8601 timestamp of the latest assignment.
  * @property {string} assignmentId - Server-generated UUID unique to this assignment.
  * @property {(ContentBuildCodeInfo|null)} code - The build's code info, or `null` when it has none.
+ * @property {(string|null)} liveSourceRevision - The commit the content was last published from, or `null`.
  */
 
 /**
@@ -631,7 +645,8 @@
  *   and appends the Activation in the same atomic operation. An `UNCHANGED`
  *   result means the explicit precondition passed and the target was already
  *   current; it preserves the stored timestamp and identity, appends no
- *   Activation, and stores `code` only when the build had none. On an
+ *   Activation, stores `code` only when the build had none, and updates
+ *   `liveSourceRevision` when the Activation names one. On an
  *   `ASSIGNED` outcome, makes a best effort to invalidate locally cached
  *   indexes for that build; concurrent reads and other instances may still
  *   serve the previous closure until their cache entries expire. A `CONFLICT`,

@@ -7,7 +7,9 @@ import {
 import { isValidHash } from '../content-addressable-store/addressing.js';
 import { validateReleaseManifest } from '../content-addressable-store/release-manifest.js';
 import { HISTORY_LIMITS, validateReleaseProvenance } from '../content-addressable-store/publishing-history.js';
+import { isDevelopmentEnvironment } from '../config/environment.js';
 import { deployKeyActor } from '../deploy-key/mod.js';
+import { findReleaseProvenanceProblems } from '../publish-gates/mod.js';
 import { JSON_API_CONTENT_TYPE } from '../http-router/http-router.js';
 import {
     assertJsonApiContentType,
@@ -25,7 +27,7 @@ import { MAX_MANIFEST_ENTRIES } from './constants.js';
  * @returns {Promise<Object>} Created JSON:API Release response.
  */
 export async function createRelease(context, request, response) {
-    const { manifest, provenance } = await parseReleaseRequest(request);
+    const { manifest, provenance } = await parseReleaseRequest(context, request);
     const store = context.getService('ContentAddressableStore');
 
     let release;
@@ -49,7 +51,7 @@ export async function createRelease(context, request, response) {
  * @returns {Promise<Object>} JSON:API ReleaseValidation response.
  */
 export async function validateRelease(context, request, response) {
-    const { manifest } = await parseReleaseRequest(request);
+    const { manifest } = await parseReleaseRequest(context, request);
     const store = context.getService('ContentAddressableStore');
 
     let result;
@@ -125,7 +127,7 @@ export async function getReleaseManifest(context, request, response) {
 
 // The service treats malformed input as a programmer error, so everything a
 // client sends is checked here first: provenance, then the manifest.
-async function parseReleaseRequest(request) {
+async function parseReleaseRequest(context, request) {
     assertJsonApiContentType(request);
     const { attributes } = await parseJsonApiResource(request, 'Release');
     if (!attributes.manifest || !Object.hasOwn(attributes, 'manifest')) {
@@ -133,13 +135,7 @@ async function parseReleaseRequest(request) {
     }
 
     const provenance = Object.hasOwn(attributes, 'provenance') ? attributes.provenance : {};
-    try {
-        validateReleaseProvenance(provenance);
-    } catch (cause) {
-        const error = new ValidationError(cause.message, { cause, code: 'InvalidProvenance' });
-        cause.errors.forEach((entry) => error.push(entry.message, entry.source));
-        throw error;
-    }
+    assertValidProvenance(provenance, isDevelopmentEnvironment(context.config));
 
     let files;
     try {
@@ -152,6 +148,30 @@ async function parseReleaseRequest(request) {
     }
 
     return { manifest: attributes.manifest, provenance };
+}
+
+// Every provenance problem in one 422: the store's field rules, then CONT-4's
+// commit id rule for any field the store didn't already report. Provenance
+// that isn't an object has no fields to check.
+function assertValidProvenance(provenance, isDevelopment) {
+    const error = new ValidationError('Invalid Release provenance', { code: 'InvalidProvenance' });
+
+    try {
+        validateReleaseProvenance(provenance);
+    } catch (cause) {
+        cause.errors.forEach((entry) => error.push(entry.message, entry.source));
+    }
+
+    const reported = new Set(error.errors.map((entry) => entry.source));
+    for (const problem of findReleaseProvenanceProblems(provenance, { isDevelopment })) {
+        if (!reported.has(problem.source) && !reported.has('provenance')) {
+            error.push(problem.message, problem.source);
+        }
+    }
+
+    if (error.length) {
+        throw error;
+    }
 }
 
 function classifyReleaseError(cause) {

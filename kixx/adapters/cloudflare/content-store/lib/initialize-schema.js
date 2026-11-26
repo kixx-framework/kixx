@@ -1,6 +1,6 @@
 import { assert } from '../../../../assertions/mod.js';
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * Initializes the fresh format namespace or verifies its persisted schema version.
@@ -37,7 +37,8 @@ export default function initializeSchema(sql) {
             assigned_at TEXT   NOT NULL,
             assignment_id TEXT NOT NULL UNIQUE,
             code_revision TEXT,
-            code_fingerprint TEXT
+            code_fingerprint TEXT,
+            live_source_revision TEXT
         )
     `);
 

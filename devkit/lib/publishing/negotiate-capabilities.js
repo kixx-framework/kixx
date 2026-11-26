@@ -16,6 +16,12 @@ export const CONTENT_CONTRACT_VERSION = 2;
 /**
  * Build pointer write protocol this client speaks.
  *
+ * Protocol 4 requires every build write to declare an `intent`, `prestage` or
+ * `publish`, and outside development requires a commit, code, and code
+ * fingerprint, which this v6 client doesn't send: its writes work only
+ * against a development server until the CLI is rebuilt. Protocol 3 added the
+ * deploy key and refused unknown build attributes.
+ *
  * Protocol 2 carries the compare-and-swap precondition in the request body as
  * `attributes.expectedAssignmentId`. Protocol 1 carried it in `If-Match` and
  * `If-None-Match`, which a protocol 2 server rejects outright. There is no
@@ -23,7 +29,7 @@ export const CONTENT_CONTRACT_VERSION = 2;
  * @type {number}
  * @readonly
  */
-export const BUILD_ASSIGNMENT_PROTOCOL_VERSION = 3;
+export const BUILD_ASSIGNMENT_PROTOCOL_VERSION = 4;
 
 /**
  * An application environment this client cannot safely write to.

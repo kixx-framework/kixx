@@ -22,9 +22,15 @@ import {
 
 
 const MISSING_ID = 'z'.repeat(26);
+const COMMIT = 'a'.repeat(40);
 
+// The harness runs outside development, where CONT-4 requires a commit, so a
+// request without provenance gets one. Pass `provenance` to send your own.
 function releaseRequest(attributes, options = {}) {
-    return makeJsonRequest({ type: 'Release', attributes, ...options });
+    const withProvenance = Object.hasOwn(attributes, 'provenance')
+        ? attributes
+        : { provenance: { sourceRevision: COMMIT }, ...attributes };
+    return makeJsonRequest({ type: 'Release', attributes: withProvenance, ...options });
 }
 
 // Writing to the store syncs blobs to disk, which is slow, so the tests share
@@ -59,7 +65,7 @@ describe('Publishing API Releases', ({ after, describe }) => {
         it('creates a Release recorded as the deploy key, with its provenance', async () => {
             const { context, service, object } = await setup();
             const manifest = manifestAt(object, '/created.css');
-            const provenance = { sourceRevision: 'abc123', message: 'First publish' };
+            const provenance = { sourceRevision: COMMIT, message: 'First publish' };
 
             const response = await createRelease(context, releaseRequest({ manifest, provenance }), new ServerResponse());
             const { data } = readDocument(response);
@@ -195,6 +201,93 @@ describe('Publishing API Releases', ({ after, describe }) => {
             assertEqual(415, wrongType.httpStatusCode);
             assertEqual(409, mismatch.httpStatusCode);
             assertEqual('JsonApiResourceTypeMismatch', mismatch.code);
+        });
+    });
+
+    describe('CONT-4: the Release names its commit', ({ it }) => {
+
+        const operations = [ [ 'POST /releases', createRelease ], [ 'POST /releases/validation', validateRelease ] ];
+
+        it('refuses a missing or non-commit sourceRevision outside development', async () => {
+            const { context, object } = await setup();
+            const manifest = manifestAt(object, '/cont-4.css');
+
+            for (const [ name, operation ] of operations) {
+                for (const provenance of [ {}, { message: 'No commit' }, { sourceRevision: 'main' }, { sourceRevision: 'A'.repeat(40) } ]) {
+                    const error = await catchError(() => operation(context, releaseRequest({ manifest, provenance }), new ServerResponse()));
+
+                    assertEqual(422, error?.httpStatusCode, name);
+                    assertEqual('InvalidProvenance', error.code);
+                    assertEqual('provenance.sourceRevision', error.errors.map((entry) => entry.source).join(','));
+                }
+
+                const missing = await catchError(() => operation(
+                    context,
+                    makeJsonRequest({ type: 'Release', attributes: { manifest } }),
+                    new ServerResponse(),
+                ));
+                assertEqual('provenance.sourceRevision', missing.errors.map((entry) => entry.source).join(','), name);
+            }
+        });
+
+        it('reports CONT-4 with the other provenance problems at once', async () => {
+            const { context, object } = await setup();
+            const manifest = manifestAt(object, '/cont-4.css');
+
+            const error = await catchError(() => createRelease(
+                context,
+                releaseRequest({ manifest, provenance: { unknown: 'x' } }),
+                new ServerResponse(),
+            ));
+
+            assertEqual('provenance.unknown,provenance.sourceRevision', error.errors.map((entry) => entry.source).join(','));
+        });
+
+        it('reports only the shape when provenance is not an object', async () => {
+            const { context, object } = await setup();
+            const manifest = manifestAt(object, '/cont-4-shape.css');
+
+            for (const provenance of [ null, 'main' ]) {
+                const error = await catchError(() => createRelease(
+                    context,
+                    releaseRequest({ manifest, provenance }),
+                    new ServerResponse(),
+                ));
+
+                assertEqual('InvalidProvenance', error?.code);
+                assertEqual('provenance', error.errors.map((entry) => entry.source).join(','));
+            }
+        });
+
+        it('accepts a missing sourceRevision in development but refuses a malformed one', async () => {
+            const { context, object } = await setup();
+            const development = { ...context, config: { environment: 'development' } };
+            const manifest = manifestAt(object, '/cont-4-development.css');
+
+            for (const [ name, operation ] of operations) {
+                const response = await operation(development, releaseRequest({ manifest, provenance: {} }), new ServerResponse());
+                assert(response.status === 200 || response.status === 201, name);
+
+                const error = await catchError(() => operation(
+                    development,
+                    releaseRequest({ manifest, provenance: { sourceRevision: 'main' } }),
+                    new ServerResponse(),
+                ));
+                assertEqual('InvalidProvenance', error?.code, name);
+                assertEqual('provenance.sourceRevision', error.errors.map((entry) => entry.source).join(','));
+            }
+        });
+
+        it('accepts a SHA-256 commit id', async () => {
+            const { context, object } = await setup();
+            const manifest = manifestAt(object, '/cont-4-sha256.css');
+
+            const response = await validateRelease(
+                context,
+                releaseRequest({ manifest, provenance: { sourceRevision: 'c'.repeat(64) } }),
+                new ServerResponse(),
+            );
+            assertEqual(200, response.status);
         });
     });
 

@@ -21,7 +21,7 @@ describe('Publishing API discovery', ({ it }) => {
         assertEqual('PublishingApi', data.type);
         assertEqual('v1', data.id);
         assertEqual('build-42', attributes.runningBuildId);
-        assertEqual(3, attributes.buildAssignmentProtocolVersion);
+        assertEqual(4, attributes.buildAssignmentProtocolVersion);
         assertEqual(2, attributes.contentContractVersion);
         assertEqual(4, attributes.addressingFormat);
         assertEqual(25 * 1024 * 1024, attributes.limits.maxObjectBytes);

@@ -337,7 +337,7 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
         });
 
-        it('initializes schema version four with required SQLite pragmas', async () => {
+        it('initializes schema version five with required SQLite pragmas', async () => {
             const rootDirectory = await makeTemporaryDirectory();
             const store = makeStore(rootDirectory);
 
@@ -345,7 +345,7 @@ describe('Node ContentStore', ({ after, describe }) => {
 
             const database = new DatabaseSync(path.join(rootDirectory, 'format-4', 'index.sqlite'));
             const tables = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all();
-            assertEqual(4, database.prepare('PRAGMA user_version').get().user_version);
+            assertEqual(5, database.prepare('PRAGMA user_version').get().user_version);
             assertEqual(1, database.prepare('PRAGMA foreign_keys').get().foreign_keys);
             assertEqual('wal', database.prepare('PRAGMA journal_mode').get().journal_mode);
             assertEqual('activations,builds,closures,releases', tables.map(({ name }) => name).join(','));
@@ -395,12 +395,12 @@ describe('Node ContentStore', ({ after, describe }) => {
             store.close();
 
             const newerDatabase = new DatabaseSync(':memory:');
-            newerDatabase.exec('PRAGMA user_version = 5');
+            newerDatabase.exec('PRAGMA user_version = 6');
             const newerStore = makeStore(rootDirectory, { database: newerDatabase });
             const newer = await catchAsyncError(() => newerStore.getBuild(makeContext(), 'build'));
             assertEqual('AssertionError', newer.name);
-            assertMatches('schema version 5 is newer than supported version 4', newer.message);
-            assertEqual(5, newerDatabase.prepare('PRAGMA user_version').get().user_version);
+            assertMatches('schema version 6 is newer than supported version 5', newer.message);
+            assertEqual(6, newerDatabase.prepare('PRAGMA user_version').get().user_version);
             assertEqual(0, newerDatabase.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
             newerStore.close();
             newerDatabase.close();
@@ -409,7 +409,7 @@ describe('Node ContentStore', ({ after, describe }) => {
         it('rejects every older schema instead of upgrading it', async () => {
             const rootDirectory = await makeTemporaryDirectory();
 
-            for (const version of [ 1, 2, 3 ]) {
+            for (const version of [ 1, 2, 3, 4 ]) {
                 const database = new DatabaseSync(':memory:');
                 database.exec(`PRAGMA user_version = ${ version }`);
                 const store = makeStore(rootDirectory, { database });
@@ -417,7 +417,7 @@ describe('Node ContentStore', ({ after, describe }) => {
                 const caught = await catchAsyncError(() => store.listBuilds(makeContext()));
 
                 assertEqual('AssertionError', caught.name);
-                assertMatches(`does not migrate schema version ${ version } to 4`, caught.message);
+                assertMatches(`does not migrate schema version ${ version } to 5`, caught.message);
                 assertEqual(version, database.prepare('PRAGMA user_version').get().user_version);
                 assertEqual(0, database.prepare('SELECT COUNT(*) AS count FROM sqlite_master').get().count);
                 store.close();

@@ -11,7 +11,7 @@ takes the deploy key, which is never printed.
 ## Server requirement
 
 These commands require a deployment serving content contract version 2,
-addressing format 4, and build assignment protocol 3. Before any write, they
+addressing format 4, and build assignment protocol 4. Before any write, they
 read the server's capabilities and refuse an older deployment, naming each
 mismatch. Upgrade the deployment, or target one that is already upgraded.
 

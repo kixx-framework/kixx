@@ -16,7 +16,7 @@ Each runner imports test files first, which register top-level `describe` blocks
 | Checks | Kixx code only. Every platform service under it is replaced by a fake. | Kixx code working with the real systems under it: Cloudflare, and Node.js and Deno hosts. |
 | Lives in | `test/` | `test-app/test/` |
 | Runs with | `run-tests.js` | `test-app/run-tests.js`, pointed at a test app that is already running or deployed |
-| Needs | Node.js or Deno and the dev dependencies. No network, credentials, account, emulator (wrangler, miniflare, workerd), container, or database server. | A running or deployed test app, and credentials for a deployed one. |
+| Needs | Node.js or Deno, git, and the dev dependencies. No network, credentials, account, emulator (wrangler, miniflare, workerd), container, or database server. | A running or deployed test app, and credentials for a deployed one. |
 | Takes | Seconds | Minutes |
 | Runs | On every change, in CI, and by agents | Before each release and after a change to platform-facing code. Agents write its tests. The operator runs them. |
 
@@ -28,6 +28,8 @@ Each runner imports test files first, which register top-level `describe` blocks
 - What only the platform can answer belongs in the integration suite: a limit Cloudflare enforces, data that must outlast a restart or a redeploy, a cache window, an entry point or a Durable Object class loading, or a difference between runtimes.
 
 A unit test never tests the platform. It makes no request off the machine.
+
+A test that runs git builds its repository in a temporary directory, isolates git from the user's and the system's configuration, and makes no commit or remote call. `test/kixx/code-fingerprint/git-tree.test.js` is the example.
 
 ## Running the Unit Suite
 
