@@ -14,6 +14,9 @@
  *
  * It passes both to `compileProjectContent()`.
  *
+ * The path classification (content, agent file, test, docs, or code) comes
+ * from the code fingerprint module and is re-exported here.
+ *
  * A running app needs no manifest read. It passes the `contentRoots` and
  * `templateHelpers` exports of its generated registry to `compileContent()`.
  * @module tooling
@@ -32,3 +35,4 @@ export { readInstallation, renderProjectFiles, writeProjectFiles } from './gener
 export { listPluginContentRoots } from './project-paths.js';
 export { compileProjectContent } from './compile-project-content.js';
 export { compileContent, serializeContentObject } from '../content-compiler/mod.js';
+export { PATH_CLASSES, classifyPath, createPathClassifier } from '../code-fingerprint/mod.js';
