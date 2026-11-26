@@ -6,3 +6,10 @@
  * @module code-fingerprint
  */
 export { PATH_CLASSES, classifyPath, createPathClassifier } from './classify-path.js';
+export {
+    CODE_FINGERPRINT_FORMAT,
+    GIT_FILE_MODES,
+    computeCodeFingerprint,
+    isValidCodeFingerprint,
+    isValidGitObjectId,
+} from './code-fingerprint.js';
