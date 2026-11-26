@@ -323,7 +323,8 @@ export default class ContentAddressableStore {
      * Assigns an existing Release to any build and records the Activation.
      *
      * The pointer and its Activation are written together by the store. An
-     * assignment which changes nothing writes no Activation.
+     * assignment which changes nothing writes no Activation, but a
+     * `sourceRevision` it names still becomes the `liveSourceRevision`.
      * @param {Object} context - Request or execution context
      * @param {string} buildId - Build identifier to assign
      * @param {Object} assignment - Release, precondition, and what to record
@@ -335,7 +336,7 @@ export default class ContentAddressableStore {
      * @param {string} [assignment.summary] - Plain-language summary of the change
      * @param {string} [assignment.forceReason] - Why a publish gate was overridden
      * @param {{revision: string, fingerprint: string}} [assignment.code] - The build's code info; set once per build
-     * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, assignmentId: string, isChanged: boolean, previousReleaseId: (string|null), code: ({revision: string, fingerprint: string}|null)}>} Assignment result
+     * @returns {Promise<{buildId: string, releaseId: string, assignedAt: string, assignmentId: string, isChanged: boolean, previousReleaseId: (string|null), code: ({revision: string, fingerprint: string}|null), liveSourceRevision: (string|null)}>} Assignment result
      * @throws {NotFoundError} When the Release does not exist
      * @throws {ConflictError} With code `BuildPointerConflict` when the assignment precondition fails,
      *   or `BuildCodeMismatch` when the build already has different code info
@@ -401,6 +402,10 @@ export default class ContentAddressableStore {
         assert(isValidAssignmentId(result.pointer.assignmentId), 'ContentAddressableStore#assignRelease: assignment result assignmentId');
         assert(result.previousRootHash === null || isValidHash(result.previousRootHash), 'ContentAddressableStore#assignRelease: assignment result previousRootHash');
         assert(isValidCodeInfoResult(result.pointer.code), 'ContentAddressableStore#assignRelease: assignment result code');
+        assert(
+            result.pointer.liveSourceRevision === null || isNonEmptyString(result.pointer.liveSourceRevision),
+            'ContentAddressableStore#assignRelease: assignment result liveSourceRevision',
+        );
 
         return {
             buildId,
@@ -410,6 +415,7 @@ export default class ContentAddressableStore {
             isChanged: result.outcome === BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
             previousReleaseId: result.previousRootHash,
             code: result.pointer.code,
+            liveSourceRevision: result.pointer.liveSourceRevision,
         };
     }
 

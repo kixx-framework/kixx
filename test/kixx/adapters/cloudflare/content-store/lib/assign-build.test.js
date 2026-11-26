@@ -94,7 +94,8 @@ describe('assignBuild', ({ after, it }) => {
         const statements = [
             'UPDATE content_schema SET version = 2',
             'UPDATE content_schema SET version = 3',
-            'UPDATE content_schema SET version = 5',
+            'UPDATE content_schema SET version = 4',
+            'UPDATE content_schema SET version = 6',
             'DROP TABLE content_schema',
         ];
         for (const statement of statements) {

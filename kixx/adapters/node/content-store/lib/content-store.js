@@ -30,13 +30,13 @@ import {
 import TraceLogger from '../../../../logger/trace-logger.js';
 
 const BUSY_TIMEOUT_MS = 5000;
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const GET_FILE_TYPES = [ 'text', 'arrayBuffer', 'stream' ];
 const GET_FILES_TYPES = [ 'text' ];
 const BULK_FILE_LIMIT = 100;
 const STREAM_CHUNK_SIZE = 64 * 1024;
 
-const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint';
+const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint, live_source_revision';
 const RELEASE_COLUMNS = `
     sequence, release_id, created_at, created_by_type, created_by_id, created_by_name,
     object_count, total_bytes, contract_version, provenance_json
@@ -605,13 +605,13 @@ export default class ContentStore {
         const effectiveCode = storedCode ?? code;
 
         if (current?.root_hash === rootHash) {
-            if (!storedCode && code) {
-                database.prepare('UPDATE builds SET code_revision = ?, code_fingerprint = ? WHERE build_id = ?')
-                    .run(code.revision, code.fingerprint, buildId);
-            }
+            const liveSourceRevision = activation.sourceRevision ?? current.live_source_revision;
+            database.prepare('UPDATE builds SET code_revision = ?, code_fingerprint = ?, live_source_revision = ? WHERE build_id = ?')
+                .run(effectiveCode?.revision ?? null, effectiveCode?.fingerprint ?? null, liveSourceRevision, buildId);
+
             return {
                 outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
-                pointer: { ...pointerFromRow(current), code: effectiveCode },
+                pointer: { ...pointerFromRow(current), code: effectiveCode, liveSourceRevision },
                 previousRootHash: rootHash,
             };
         }
@@ -621,14 +621,15 @@ export default class ContentStore {
         const assignedAt = new Date(this.#now()).toISOString();
 
         database.prepare(`
-            INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id, code_revision, code_fingerprint)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id, code_revision, code_fingerprint, live_source_revision)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(build_id) DO UPDATE SET
                 root_hash = excluded.root_hash,
                 assigned_at = excluded.assigned_at,
                 assignment_id = excluded.assignment_id,
                 code_revision = excluded.code_revision,
-                code_fingerprint = excluded.code_fingerprint
+                code_fingerprint = excluded.code_fingerprint,
+                live_source_revision = excluded.live_source_revision
         `).run(
             buildId,
             rootHash,
@@ -636,6 +637,7 @@ export default class ContentStore {
             assignmentId,
             effectiveCode?.revision ?? null,
             effectiveCode?.fingerprint ?? null,
+            activation.sourceRevision,
         );
 
         database.prepare(`
@@ -661,7 +663,7 @@ export default class ContentStore {
 
         return {
             outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
-            pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode },
+            pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode, liveSourceRevision: activation.sourceRevision },
             previousRootHash,
         };
     }
@@ -866,7 +868,8 @@ export default class ContentStore {
                         assigned_at TEXT NOT NULL,
                         assignment_id TEXT NOT NULL UNIQUE,
                         code_revision TEXT,
-                        code_fingerprint TEXT
+                        code_fingerprint TEXT,
+                        live_source_revision TEXT
                     );
                     CREATE TABLE releases (
                         sequence         INTEGER PRIMARY KEY,
@@ -1018,6 +1021,7 @@ function pointerFromRow(row) {
         assignedAt: row.assigned_at,
         assignmentId: row.assignment_id,
         code: codeFromRow(row),
+        liveSourceRevision: row.live_source_revision,
     };
 }
 

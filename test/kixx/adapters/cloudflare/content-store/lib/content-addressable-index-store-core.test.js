@@ -86,7 +86,7 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
             await core.ready;
 
             assertEqual(1, callCount);
-            assertEqual(4, state.storage.sql.exec('SELECT version FROM content_schema').one().version);
+            assertEqual(5, state.storage.sql.exec('SELECT version FROM content_schema').one().version);
             assertEqual(1, state.storage.sql.exec("SELECT count(*) AS n FROM sqlite_master WHERE type = 'index' AND name = 'activations_build'").one().n);
             assertEqual('activations,builds,closure_entries,content_schema,objects,releases', listTables(state.storage.sql));
         });
@@ -105,7 +105,7 @@ describe('ContentAddressableIndexStoreCore', ({ describe }) => {
         });
 
         it('rejects ready for an older or newer schema version and changes nothing', async () => {
-            for (const version of [ 3, 5 ]) {
+            for (const version of [ 4, 6 ]) {
                 const state = createFakeDurableObjectState();
                 const current = new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
                 await current.ready;

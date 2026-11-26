@@ -4,7 +4,7 @@ import { BUILD_ASSIGNMENT_OUTCOME } from '../../../../content-addressable-store/
 import { normalizeActivation, normalizeCodeInfo } from '../../../../content-addressable-store/publishing-history.js';
 
 
-export const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint';
+export const BUILD_POINTER_COLUMNS = 'root_hash, assigned_at, assignment_id, code_revision, code_fingerprint, live_source_revision';
 
 /**
  * @param {Object} row - A `builds` row holding the pointer columns
@@ -16,6 +16,7 @@ export function pointerFromRow(row) {
         assignedAt: row.assigned_at,
         assignmentId: row.assignment_id,
         code: codeFromRow(row),
+        liveSourceRevision: row.live_source_revision,
     };
 }
 
@@ -75,17 +76,18 @@ export default function assignBuild(sql, buildId, assignment, stamps) {
     const effectiveCode = storedCode ?? code;
 
     if (current?.root_hash === rootHash) {
-        if (!storedCode && code) {
-            sql.exec(
-                'UPDATE builds SET code_revision = ?, code_fingerprint = ? WHERE build_id = ?',
-                code.revision,
-                code.fingerprint,
-                buildId,
-            );
-        }
+        const liveSourceRevision = activation.sourceRevision ?? current.live_source_revision;
+        sql.exec(
+            'UPDATE builds SET code_revision = ?, code_fingerprint = ?, live_source_revision = ? WHERE build_id = ?',
+            effectiveCode?.revision ?? null,
+            effectiveCode?.fingerprint ?? null,
+            liveSourceRevision,
+            buildId,
+        );
+
         return {
             outcome: BUILD_ASSIGNMENT_OUTCOME.UNCHANGED,
-            pointer: { ...pointerFromRow(current), code: effectiveCode },
+            pointer: { ...pointerFromRow(current), code: effectiveCode, liveSourceRevision },
             previousRootHash: rootHash,
         };
     }
@@ -96,14 +98,15 @@ export default function assignBuild(sql, buildId, assignment, stamps) {
 
     sql.exec(
         `
-        INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id, code_revision, code_fingerprint)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO builds (build_id, root_hash, assigned_at, assignment_id, code_revision, code_fingerprint, live_source_revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(build_id) DO UPDATE SET
             root_hash = EXCLUDED.root_hash,
             assigned_at = EXCLUDED.assigned_at,
             assignment_id = EXCLUDED.assignment_id,
             code_revision = EXCLUDED.code_revision,
-            code_fingerprint = EXCLUDED.code_fingerprint
+            code_fingerprint = EXCLUDED.code_fingerprint,
+            live_source_revision = EXCLUDED.live_source_revision
         `,
         buildId,
         rootHash,
@@ -111,6 +114,7 @@ export default function assignBuild(sql, buildId, assignment, stamps) {
         assignmentId,
         effectiveCode?.revision ?? null,
         effectiveCode?.fingerprint ?? null,
+        activation.sourceRevision,
     );
 
     sql.exec(
@@ -137,7 +141,7 @@ export default function assignBuild(sql, buildId, assignment, stamps) {
 
     return {
         outcome: BUILD_ASSIGNMENT_OUTCOME.ASSIGNED,
-        pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode },
+        pointer: { rootHash, assignedAt, assignmentId, code: effectiveCode, liveSourceRevision: activation.sourceRevision },
         previousRootHash,
     };
 }

@@ -744,6 +744,59 @@ export default function contentStoreConformance(describe, makeContentStore) {
             assertEqual(1, (await store.listActivations(context)).items.length);
         });
     });
+
+    describe('contract: live commit', ({ it }) => {
+        it('sets liveSourceRevision from each changed assignment', async () => {
+            const { store, context } = makeContentStore();
+            for (const rootHash of [ 'hash-1', 'hash-2' ]) {
+                await store.saveIndex(context, rootHash, { '/': [ 'tree', rootHash ] });
+            }
+
+            const first = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-1', activation: activation('commit-1') }));
+            assertEqual('commit-1', first.pointer.liveSourceRevision);
+            assertEqual('commit-1', (await store.getBuildPointer(context, 'build-1')).liveSourceRevision);
+            assertEqual('commit-1', (await store.listBuilds(context))[0].liveSourceRevision);
+
+            // A changed assignment that names no commit clears it.
+            const second = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-2' }));
+            assertEqual(null, second.pointer.liveSourceRevision);
+            assertEqual(null, (await store.getBuildPointer(context, 'build-1')).liveSourceRevision);
+        });
+
+        it('updates liveSourceRevision on a same-target assignment without a new Activation', async () => {
+            const { store, context } = makeContentStore();
+            await store.saveIndex(context, 'hash-1', { '/': [ 'tree', 'hash-1' ] });
+
+            const assigned = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-1', activation: activation('commit-1') }));
+            const expectedAssignmentId = assigned.pointer.assignmentId;
+
+            const newer = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-1', expectedAssignmentId, activation: activation('commit-2') }));
+            assertEqual('unchanged', newer.outcome);
+            assertPointer(assigned.pointer, newer.pointer);
+            assertEqual('commit-2', newer.pointer.liveSourceRevision);
+            assertEqual('commit-2', (await store.getBuildPointer(context, 'build-1')).liveSourceRevision);
+
+            // A same-target assignment that names no commit keeps it.
+            const silent = await store.assignBuild(context, 'build-1', assignment({ rootHash: 'hash-1', expectedAssignmentId }));
+            assertEqual('commit-2', silent.pointer.liveSourceRevision);
+
+            const conflict = await store.assignBuild(context, 'build-1', assignment({
+                rootHash: 'hash-1',
+                expectedAssignmentId: null,
+                activation: activation('commit-3'),
+            }));
+            assertEqual('conflict', conflict.outcome);
+
+            const pointer = await store.getBuildPointer(context, 'build-1');
+            assertPointer(assigned.pointer, pointer);
+            assertEqual('commit-2', pointer.liveSourceRevision);
+            assertEqual(1, (await store.listActivations(context)).items.length);
+        });
+    });
+}
+
+function activation(sourceRevision) {
+    return { reason: 'publish', actor: { type: 'deploy-key', id: 'test-key' }, sourceRevision };
 }
 
 // Every existing assignment needs an Activation; most cases do not care what
