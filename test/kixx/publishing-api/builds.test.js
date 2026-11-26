@@ -455,21 +455,49 @@ describe('Publishing API builds', ({ after, describe }) => {
 
     describe('GET /builds and /builds/:buildId', ({ it }) => {
 
-        it('reports the same Build shape as PUT; the list has no liveSourceRevision', async () => {
+        it('reports the same Build shape from PUT, GET, and the list', async () => {
             const { context, releaseId, buildId } = await setup();
             const written = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
 
             const read = readDocument(await getBuild(context, getRequest(buildId), new ServerResponse())).data;
             const listed = readDocument(await listBuilds(context, getRequest(buildId), new ServerResponse())).data;
-            const { liveSourceRevision, ...listedAttributes } = written.attributes;
 
             assertEqual(JSON.stringify(written), JSON.stringify(read));
-            assertEqual(COMMIT, liveSourceRevision);
-            assertEqual(
-                JSON.stringify({ ...written, attributes: listedAttributes }),
-                JSON.stringify(listed.find((build) => build.id === buildId)),
-            );
+            assertEqual(JSON.stringify(written), JSON.stringify(listed.find((build) => build.id === buildId)));
+            assertEqual(COMMIT, written.attributes.liveSourceRevision);
             assertEqual(JSON.stringify(CODE), JSON.stringify(read.attributes.code));
+        });
+
+        it('reports a newer commit that compiles to the live Release as liveSourceRevision', async () => {
+            const { context, releaseId, buildId } = await setup();
+            const first = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+
+            const unchanged = await assign(context, buildId, publishAttributes({
+                releaseId,
+                expectedAssignmentId: first.attributes.assignmentId,
+            }), { bare: true });
+            const read = readDocument(await getBuild(context, getRequest(buildId), new ServerResponse())).data;
+
+            assertEqual(first.attributes.assignmentId, unchanged.attributes.assignmentId);
+            assertEqual(first.attributes.assignedAt, unchanged.attributes.assignedAt);
+            assertEqual(NEXT_COMMIT, unchanged.attributes.liveSourceRevision);
+            assertEqual(NEXT_COMMIT, read.attributes.liveSourceRevision);
+            assertEqual(1, (await activations(context, buildId)).length);
+        });
+
+        it('answers a committed write without reading history', async () => {
+            const { context, service, releaseId, buildId } = await setup();
+            const listActivations = service.listActivations;
+            service.listActivations = async () => {
+                throw new Error('history is unavailable');
+            };
+
+            try {
+                const written = await assign(context, buildId, { releaseId, expectedAssignmentId: null });
+                assertEqual(COMMIT, written.attributes.liveSourceRevision);
+            } finally {
+                service.listActivations = listActivations;
+            }
         });
 
         it('reports the newest Activation\'s commit as liveSourceRevision', async () => {

@@ -62,9 +62,8 @@ export async function getBuild(context, request, response) {
     if (!pointer) {
         throw new NotFoundError(`Build "${ buildId }" was not found.`, { code: 'BuildNotFound' });
     }
-    const liveSourceRevision = await readLiveSourceRevision(context, store, buildId);
     return response.respondWithJSON(200, {
-        data: buildFromPointer(buildId, pointer, liveSourceRevision),
+        data: buildFromPointer(buildId, pointer),
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
@@ -152,7 +151,7 @@ export async function putBuild(context, request, response) {
     }
 
     return response.respondWithJSON(200, {
-        data: buildResource(pointer, await readLiveSourceRevision(context, store, buildId)),
+        data: buildResource(pointer),
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
@@ -182,37 +181,32 @@ export async function listBuildActivations(context, request, response) {
     }, { contentType: JSON_API_CONTENT_TYPE });
 }
 
-// The live commit is the newest Activation's sourceRevision (CONT-7): the
-// Activation is written with the pointer, so it is the current assignment's.
-async function readLiveSourceRevision(context, store, buildId) {
-    const { items } = await store.listActivations(context, { buildId, limit: 1 });
-    return items[0]?.sourceRevision ?? null;
-}
-
 // A stored pointer names its Release `rootHash`; the wire calls it `releaseId`.
-function buildFromPointer(buildId, pointer, liveSourceRevision) {
+function buildFromPointer(buildId, pointer) {
     return buildResource({
         buildId,
         releaseId: pointer.rootHash,
         assignedAt: pointer.assignedAt,
         assignmentId: pointer.assignmentId,
         code: pointer.code,
-    }, liveSourceRevision);
+        liveSourceRevision: pointer.liveSourceRevision,
+    });
 }
 
-// Only single-build responses carry liveSourceRevision: reading it costs one
-// history read per build.
-function buildResource({ buildId, releaseId, assignedAt, assignmentId, code }, liveSourceRevision) {
-    const attributes = {
-        releaseId,
-        assignedAt,
-        assignmentId,
-        code: code ? { revision: code.revision, fingerprint: code.fingerprint } : null,
+// liveSourceRevision is the commit the content was published from (CONT-7).
+// The store writes it with the pointer, so it always matches this assignment.
+function buildResource({ buildId, releaseId, assignedAt, assignmentId, code, liveSourceRevision }) {
+    return {
+        type: 'Build',
+        id: buildId,
+        attributes: {
+            releaseId,
+            assignedAt,
+            assignmentId,
+            code: code ? { revision: code.revision, fingerprint: code.fingerprint } : null,
+            liveSourceRevision,
+        },
     };
-    if (liveSourceRevision !== undefined) {
-        attributes.liveSourceRevision = liveSourceRevision;
-    }
-    return { type: 'Build', id: buildId, attributes };
 }
 
 // Attributes are copied by name, so a field the store adds later can't reach

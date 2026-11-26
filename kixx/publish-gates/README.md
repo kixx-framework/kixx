@@ -73,6 +73,6 @@ The gate accepts `force` from any caller. Studio checks that only Developers may
 
 ## Studio
 
-Studio's publish (STU-18 step 5) calls `findReleaseProvenanceProblems()` before `createRelease()`, then `assignReleaseThroughGates()` with a user actor. On `CodeFingerprintMismatch` it shows "deploy pending" and retries once the running build's code matches (STU-19). It reads the live commit for its ancestry check with `store.listActivations(context, { buildId, limit: 1 })`: `items[0]?.sourceRevision ?? null`.
+Studio's publish (STU-18 step 5) calls `findReleaseProvenanceProblems()` before `createRelease()`, then `assignReleaseThroughGates()` with a user actor. On `CodeFingerprintMismatch` it shows "deploy pending" and retries once the running build's code matches (STU-19). It reads the live commit for its ancestry check from the build pointer: `(await store.getBuildPointer(context, buildId)).liveSourceRevision`.
 
 Fingerprints come from `computeCodeFingerprint()` in `kixx/code-fingerprint/` (see its README).

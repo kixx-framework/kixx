@@ -290,7 +290,7 @@ Protocol 4 is the current version. Against protocol 3 it:
   `codeFingerprint` on a content-only publish, and refuses a content-only
   publish whose fingerprint differs from the build's (CONT-6);
 - adds `409 BuildCodeUnknown` and `409 CodeFingerprintMismatch`;
-- reports `liveSourceRevision` on single-build responses.
+- reports `liveSourceRevision` on every Build.
 
 Protocol 3, against protocol 2:
 
@@ -459,7 +459,7 @@ the commit is pushed and the working tree clean. The same rule applies to
 
 A Release keeps its first record, so identical content published again from
 a newer commit keeps the older `sourceRevision`. The commit a build serves is
-the Activation's `sourceRevision`, reported as `liveSourceRevision`.
+reported as the Build's `liveSourceRevision`.
 
 Creation persists nothing if any check fails. The checks run in this order:
 
@@ -629,7 +629,8 @@ Lists every registered build pointer, newest assignment first:
                 "releaseId": "<release-id>",
                 "assignedAt": "2026-09-01T00:00:00.000Z",
                 "assignmentId": "<assignment-id>",
-                "code": null
+                "code": null,
+                "liveSourceRevision": null
             }
         }
     ]
@@ -644,9 +645,6 @@ sets it, once; it never changes afterwards. It is `null` only for a build
 pre-staged in development without code. See
 [`kixx/code-fingerprint/README.md`](../../kixx/code-fingerprint/README.md)
 for how a fingerprint is computed.
-
-The list carries no `liveSourceRevision`: it would cost one history read per
-build, and builds accumulate with every deploy. Read a single build for it.
 
 ```http
 GET /publishing-api/v1/builds/:buildId
@@ -678,9 +676,10 @@ even when returning to an earlier Release. Build responses carry no `ETag`:
 
 Use it to verify a pre-staged build before deploying it.
 
-`liveSourceRevision` is the commit the build's content was published from:
-the `sourceRevision` of its newest Activation, or `null` when that Activation
-recorded none. Before a publish or deploy, a client checks that its commit
+`liveSourceRevision` is the commit the build's content was last published
+from, or `null` when the newest publish named none. A changed assignment sets
+it to its `sourceRevision`. A no-op assignment that names a `sourceRevision`
+also sets it: a newer commit can compile to the live Release. Before a publish or deploy, a client checks that its commit
 contains `liveSourceRevision` (CONT-7), unless the user forces it. The server
 can't check ancestry; `expectedAssignmentId` closes the race between the
 check and the write.
@@ -806,12 +805,13 @@ conditional headers, the gates (`404 BuildNotFound`, `409 BuildCodeUnknown`,
 `412 BuildPointerConflict`, `409 BuildCodeMismatch`.
 
 Assigning the current Release is a success no-op only after its precondition
-passes. It preserves `assignedAt` and `assignmentId` and adds no Activation.
+passes. It preserves `assignedAt` and `assignmentId` and adds no Activation,
+but its `sourceRevision`, when given, becomes `liveSourceRevision`.
 A→B→A creates three distinct identities, so the first A identity remains stale.
 
 The response is `200 OK` with the resulting Build resource, including
-`liveSourceRevision`. Every Publishing
-API response is `Cache-Control: no-store`.
+`liveSourceRevision`. Every Publishing API response is
+`Cache-Control: no-store`.
 
 If a response is lost after a successful assignment, read the current Build
 and reconcile before acting. Retrying the same request may return `412`
