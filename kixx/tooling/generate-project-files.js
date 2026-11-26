@@ -2,7 +2,8 @@ import { assert, isFunction, isUndefined } from '../assertions/mod.js';
 import { OperationalError } from '../errors/mod.js';
 import { validatePluginManifest, validateAppManifest } from './plugin-manifest.js';
 import { resolveInstallation } from './resolve-installation.js';
-import { renderRegistryFiles, readCoreDirectoryOption } from './render-registries.js';
+import { readCoreDirectoryOption } from './project-paths.js';
+import { renderRegistryFiles } from './render-registries.js';
 
 
 const PLUGINS_DIRECTORY = 'plugins';
