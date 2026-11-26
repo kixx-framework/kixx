@@ -1,64 +1,72 @@
-import path from 'node:path';
-import { isPlainObject, isString } from '../vendor/kixx-assert/mod.js';
-
-import defaultFileSystem from '../file-system.js';
+import { isPlainObject, isString } from '../assertions/mod.js';
+import { OperationalError } from '../errors/mod.js';
 import {
     canonicalize,
     compareStrings,
-    getBlobSize,
     hashBlob,
-} from './addressing.js';
+} from '../content-addressable-store/addressing.js';
 import {
     RESERVED_PAGE_FILENAMES,
     isValidPathname,
     isValidTemplateFilepath,
-} from './content-layout.js';
+} from '../content-addressable-store/content-layout.js';
 import { bundleStylesheet } from './bundle-stylesheet.js';
+import { basename, dirname, extname } from './posix-path.js';
 import { stripJavaScriptComments } from './strip-asset-comments.js';
+
+/**
+ * @typedef {import('./content-source-interface.js').ContentSourceInterface} ContentSourceInterface
+ */
 
 const encoder = new TextEncoder();
 
+// Templates and page.json files keep a leading byte order mark, so a
+// page.json that starts with one is malformed JSON. Stylesheets and scripts
+// under static-assets/ lose it. Both rules are what published content has
+// always been hashed from, so changing either changes object ids.
+const sourceTextDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
+const assetTextDecoder = new TextDecoder();
+
 /**
  * @typedef {Object} ContentSourceResource
- * @property {string} type - Publishing API resource type
+ * @property {string} type - StaticAsset, GlobalTemplatePartials, BaseTemplates, PageMetadata, PagePartials, PageIncludes, or PageTemplate
  * @property {string} pathname - Logical resource pathname
  * @property {Object|Array<*>|string|ArrayBuffer} payload - Upload-ready payload
  * @property {string} hash - Framework-compatible blob digest
  * @property {number} size - Persisted blob size in bytes
- * @property {string[]} sourceFiles - Project-relative source paths
+ * @property {string[]} sourceFiles - Paths from the source's root
  */
 
 /**
- * Materializes all publishable content beneath a project directory.
- * @param {string} projectDirectory - Application project root
- * @param {Object} [options] - Scanner dependencies
- * @param {import('../file-system.js').FileSystem} [options.fileSystem] - Filesystem implementation
+ * Materializes all publishable content a content source holds: the `pages`,
+ * `templates`, `static-assets`, and `public` directories at its root.
+ *
+ * A problem in the content is returned as data. A failure of the source
+ * itself rejects.
+ *
+ * @param {ContentSourceInterface} source - Rooted at the project
  * @returns {Promise<{resources: ContentSourceResource[], unmatchedFiles: string[], problems: Object[]}>} Scanned resources and validation facts
  */
-export default async function scanContentSources(projectDirectory, options) {
-    const { fileSystem = defaultFileSystem } = options ?? {};
-    const scanner = new ContentSourceScanner(projectDirectory, fileSystem);
+export default async function scanContentSources(source) {
+    const scanner = new ContentSourceScanner(source);
     return await scanner.scan();
 }
 
 class ContentSourceScanner {
 
-    #projectDirectory;
-    #fileSystem;
+    #source;
     #resources = [];
     #problems = [];
+    // Every regular file found beneath a scanned root, by its path from the
+    // source's root.
     #files = new Map();
+    #symlinks = new Set();
     #matchedFiles = new Set();
     #staticAssets = new Map();
     #stylesheetProblemKeys = new Set();
 
-    constructor(projectDirectory, fileSystem) {
-        if (!isString(projectDirectory) || projectDirectory.length === 0) {
-            throw new TypeError('scanContentSources requires a project directory');
-        }
-
-        this.#projectDirectory = path.resolve(projectDirectory);
-        this.#fileSystem = fileSystem;
+    constructor(source) {
+        this.#source = source;
     }
 
     async scan() {
@@ -73,7 +81,6 @@ class ContentSourceScanner {
 
         const unmatchedFiles = Array.from(this.#files.keys())
             .filter((filepath) => !this.#matchedFiles.has(filepath))
-            .map((filepath) => this.#relativeProjectPath(filepath))
             .sort(compareStrings);
 
         return {
@@ -84,14 +91,13 @@ class ContentSourceScanner {
     }
 
     async #scanPages() {
-        const root = path.join(this.#projectDirectory, 'pages');
-        const { files } = await this.#walkFiles(root);
+        const { files } = await this.#walkFiles('pages');
         const manifests = files.filter(({ relativePath }) => {
-            return path.posix.basename(relativePath) === 'page.json';
+            return basename(relativePath) === 'page.json';
         });
 
         for (const file of manifests) {
-            this.#matchedFiles.add(file.filepath);
+            this.#matchedFiles.add(file.sourcePath);
 
             if (!this.#validateSourcePath(file)) {
                 continue;
@@ -102,9 +108,9 @@ class ContentSourceScanner {
                 continue;
             }
 
-            const pageDirectory = path.posix.dirname(file.relativePath);
-            const pathname = pageDirectory === '.' ? '/' : `/${ pageDirectory }`;
-            this.#resources.push(this.#makeResource(
+            const pageDirectory = dirname(file.relativePath);
+            const pathname = pageDirectory === '' ? '/' : `/${ pageDirectory }`;
+            this.#resources.push(await this.#makeResource(
                 'PageMetadata',
                 pathname,
                 metadata,
@@ -133,7 +139,7 @@ class ContentSourceScanner {
             return;
         }
 
-        const filename = path.posix.basename(template);
+        const filename = basename(template);
         if (RESERVED_PAGE_FILENAMES.has(filename)) {
             this.#addProblem({
                 code: 'reserved-template-filename',
@@ -172,7 +178,7 @@ class ContentSourceScanner {
             return;
         }
 
-        this.#resources.push(this.#makeResource(
+        this.#resources.push(await this.#makeResource(
             'PageTemplate',
             templatePathname,
             source.text,
@@ -197,7 +203,7 @@ class ContentSourceScanner {
             }
         }
 
-        this.#resources.push(this.#makeResource(
+        this.#resources.push(await this.#makeResource(
             'PagePartials',
             pathname,
             payload,
@@ -222,7 +228,7 @@ class ContentSourceScanner {
             }
         }
 
-        this.#resources.push(this.#makeResource(
+        this.#resources.push(await this.#makeResource(
             'PageIncludes',
             pathname,
             payload,
@@ -231,19 +237,24 @@ class ContentSourceScanner {
     }
 
     async #scanTemplates() {
-        const root = path.join(this.#projectDirectory, 'templates');
-        const { files } = await this.#walkFiles(root);
+        const { files, entries } = await this.#walkFiles('templates');
 
-        await this.#scanTemplateBundle(root, files, 'partials', 'GlobalTemplatePartials');
-        await this.#scanTemplateBundle(root, files, 'base', 'BaseTemplates');
+        await this.#scanTemplateBundle(files, entries, 'partials', 'GlobalTemplatePartials');
+        await this.#scanTemplateBundle(files, entries, 'base', 'BaseTemplates');
     }
 
-    async #scanTemplateBundle(root, files, directoryName, type) {
-        const directory = path.join(root, directoryName);
+    async #scanTemplateBundle(files, entries, directoryName, type) {
         const prefix = `${ directoryName }/`;
         const bundleFiles = files.filter(({ relativePath }) => relativePath.startsWith(prefix));
 
-        if (bundleFiles.length === 0 && !await this.#directoryExists(directory)) {
+        // A listing holds files and symbolic links, never directories, so
+        // the bundle directory exists when something is listed in it. An
+        // empty directory can't be seen, and yields no bundle.
+        const directoryExists = entries.some((entry) => {
+            return entry.path === directoryName || entry.path.startsWith(prefix);
+        });
+
+        if (!directoryExists) {
             return;
         }
 
@@ -251,48 +262,47 @@ class ContentSourceScanner {
         const sourceFiles = [];
 
         for (const file of bundleFiles) {
-            this.#matchedFiles.add(file.filepath);
+            this.#matchedFiles.add(file.sourcePath);
 
             const bundlePath = file.relativePath.slice(prefix.length);
             if (!this.#validateSourcePath({ ...file, relativePath: bundlePath })) {
                 continue;
             }
 
-            const source = await this.#fileSystem.readFile(file.filepath);
+            const source = await this.#readText(file.sourcePath);
             payload.push({ id: bundlePath, source });
             sourceFiles.push(file.sourcePath);
         }
 
-        this.#resources.push(this.#makeResource(type, '/', payload, sourceFiles));
+        this.#resources.push(await this.#makeResource(type, '/', payload, sourceFiles));
     }
 
     async #scanStaticAssets() {
-        const root = path.join(this.#projectDirectory, 'static-assets');
-        const { files } = await this.#walkFiles(root);
+        const { files } = await this.#walkFiles('static-assets');
         const assets = [];
         const stylesheets = new Map();
 
         for (const file of files) {
-            this.#matchedFiles.add(file.filepath);
+            this.#matchedFiles.add(file.sourcePath);
 
             if (!this.#validateSourcePath(file)) {
                 continue;
             }
 
-            const payload = await this.#fileSystem.readBinaryFile(file.filepath);
+            const payload = await this.#readBytes(file.sourcePath);
             assets.push({ file, payload });
 
-            if (path.posix.extname(file.relativePath) === '.css') {
+            if (extname(file.relativePath) === '.css') {
                 stylesheets.set(`/${ file.relativePath }`, {
                     sourcePath: file.sourcePath,
-                    text: new TextDecoder().decode(payload),
+                    text: assetTextDecoder.decode(payload),
                 });
             }
         }
 
         for (const asset of assets) {
             const { file } = asset;
-            const extension = path.posix.extname(file.relativePath);
+            const extension = extname(file.relativePath);
             let { payload } = asset;
             let sourceFiles = [ file.sourcePath ];
 
@@ -315,27 +325,26 @@ class ContentSourceScanner {
                 }
             }
 
-            this.#publishStaticAsset(file, payload, sourceFiles);
+            await this.#publishStaticAsset(file, payload, sourceFiles);
         }
     }
 
     async #scanStaticDirectory(directoryName) {
-        const root = path.join(this.#projectDirectory, directoryName);
-        const { files } = await this.#walkFiles(root);
+        const { files } = await this.#walkFiles(directoryName);
 
         for (const file of files) {
-            this.#matchedFiles.add(file.filepath);
+            this.#matchedFiles.add(file.sourcePath);
 
             if (!this.#validateSourcePath(file)) {
                 continue;
             }
 
-            const payload = await this.#fileSystem.readBinaryFile(file.filepath);
-            this.#publishStaticAsset(file, payload, [ file.sourcePath ]);
+            const payload = await this.#readBytes(file.sourcePath);
+            await this.#publishStaticAsset(file, payload, [ file.sourcePath ]);
         }
     }
 
-    #publishStaticAsset(file, payload, sourceFiles) {
+    async #publishStaticAsset(file, payload, sourceFiles) {
         if (payload.byteLength === 0) {
             this.#addProblem({
                 code: 'empty-static-asset',
@@ -345,7 +354,7 @@ class ContentSourceScanner {
             return;
         }
 
-        const resource = this.#makeResource(
+        const resource = await this.#makeResource(
             'StaticAsset',
             file.relativePath,
             payload,
@@ -369,7 +378,7 @@ class ContentSourceScanner {
     }
 
     #stripJavaScriptComments(file, payload) {
-        const source = new TextDecoder().decode(payload);
+        const source = assetTextDecoder.decode(payload);
         let stripped;
 
         try {
@@ -472,13 +481,7 @@ class ContentSourceScanner {
     }
 
     async #readManifest(file, name) {
-        let source;
-
-        try {
-            source = await this.#fileSystem.readFile(file.filepath);
-        } catch (cause) {
-            throw new Error(`Failed to read "${ file.sourcePath }"`, { cause });
-        }
+        const source = await this.#readText(file.sourcePath);
 
         let json;
         try {
@@ -506,14 +509,16 @@ class ContentSourceScanner {
 
     async #readReferencedText(args) {
         const { manifest, reference, role } = args;
-        const filepath = path.resolve(path.dirname(manifest.filepath), reference);
-        const sourcePath = this.#relativeProjectPath(filepath);
+        const sourcePath = resolveReference(dirname(manifest.sourcePath), reference);
 
-        if (this.#isInsideProject(filepath)) {
-            this.#matchedFiles.add(filepath);
+        // The target counts as matched even when the reference is refused
+        // below, so one mistake is reported once and not again as an
+        // unmatched file.
+        if (sourcePath !== null) {
+            this.#matchedFiles.add(sourcePath);
         }
 
-        if (path.isAbsolute(reference) || !isValidPathname(`/${ reference }`) || !this.#isInsideProject(filepath)) {
+        if (sourcePath === null || !isValidPathname(`/${ reference }`)) {
             this.#addProblem({
                 code: 'invalid-pathname',
                 filepath: manifest.sourcePath,
@@ -523,39 +528,29 @@ class ContentSourceScanner {
             return null;
         }
 
-        const symlinkPath = await this.#findSymlinkInProjectPath(filepath);
+        const symlinkPath = this.#findSymlinkInPath(sourcePath);
         if (symlinkPath) {
             this.#addProblem({
                 code: 'symlink-referenced-file',
                 filepath: manifest.sourcePath,
-                message: `${ role } reference "${ sourcePath }" cannot use symbolic link "${ this.#relativeProjectPath(symlinkPath) }"`,
+                message: `${ role } reference "${ sourcePath }" cannot use symbolic link "${ symlinkPath }"`,
                 referencedFile: sourcePath,
-                symlink: this.#relativeProjectPath(symlinkPath),
+                symlink: symlinkPath,
             });
             return null;
         }
 
-        let stats;
-        try {
-            stats = await this.#fileSystem.stat(filepath);
-        } catch (cause) {
-            if (isMissingPathError(cause)) {
-                this.#addProblem({
-                    code: 'missing-referenced-file',
-                    filepath: manifest.sourcePath,
-                    message: `${ role } references missing file "${ sourcePath }"`,
-                    referencedFile: sourcePath,
-                });
-                return null;
-            }
-            throw cause;
-        }
+        if (!this.#files.has(sourcePath)) {
+            // A valid reference can't leave its page's directory, so the
+            // listing of pages/ already holds everything it could name.
+            const message = this.#isDirectory(sourcePath)
+                ? `${ role } reference "${ sourcePath }" is not a file`
+                : `${ role } references missing file "${ sourcePath }"`;
 
-        if (!stats.isFile()) {
             this.#addProblem({
                 code: 'missing-referenced-file',
                 filepath: manifest.sourcePath,
-                message: `${ role } reference "${ sourcePath }" is not a file`,
+                message,
                 referencedFile: sourcePath,
             });
             return null;
@@ -563,35 +558,59 @@ class ContentSourceScanner {
 
         return {
             sourcePath,
-            text: await this.#fileSystem.readFile(filepath),
+            text: await this.#readText(sourcePath),
         };
     }
 
-    async #findSymlinkInProjectPath(filepath) {
-        const relativePath = path.relative(this.#projectDirectory, filepath);
-        const segments = relativePath.split(path.sep);
-        let candidate = this.#projectDirectory;
+    // Returns the first symbolic link that is the path or one of its
+    // parent directories.
+    #findSymlinkInPath(sourcePath) {
+        const segments = sourcePath.split('/');
 
-        for (const segment of segments) {
-            candidate = path.join(candidate, segment);
+        for (let length = 1; length <= segments.length; length += 1) {
+            const candidate = segments.slice(0, length).join('/');
 
-            try {
-                const stats = await this.#fileSystem.lstat(candidate);
-                if (stats.isSymbolicLink()) {
-                    return candidate;
-                }
-            } catch (cause) {
-                if (isMissingPathError(cause)) {
-                    return null;
-                }
-                throw cause;
+            if (this.#symlinks.has(candidate)) {
+                return candidate;
             }
         }
 
         return null;
     }
 
-    #makeResource(type, pathname, payload, sourceFiles) {
+    #isDirectory(sourcePath) {
+        const prefix = `${ sourcePath }/`;
+
+        for (const filepath of this.#files.keys()) {
+            if (filepath.startsWith(prefix)) {
+                return true;
+            }
+        }
+
+        for (const filepath of this.#symlinks) {
+            if (filepath.startsWith(prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    async #readBytes(sourcePath) {
+        const bytes = await this.#source.readFile(sourcePath);
+
+        if (bytes === null) {
+            throw new OperationalError(`Content source listed "${ sourcePath }" but has no such file`);
+        }
+
+        return bytes;
+    }
+
+    async #readText(sourcePath) {
+        return sourceTextDecoder.decode(await this.#readBytes(sourcePath));
+    }
+
+    async #makeResource(type, pathname, payload, sourceFiles) {
         const blob = isString(payload) || payload instanceof ArrayBuffer
             ? payload
             : canonicalize(payload);
@@ -600,7 +619,7 @@ class ContentSourceScanner {
             type,
             pathname,
             payload,
-            hash: hashBlob(blob),
+            hash: await hashBlob(blob),
             size: getBlobSize(blob),
             sourceFiles,
         };
@@ -619,110 +638,51 @@ class ContentSourceScanner {
         return false;
     }
 
+    // Lists one source root. A symbolic link is reported and never followed,
+    // which is what keeps content from outside the project out of a Release.
     async #walkFiles(root) {
         const files = [];
-        let exists = true;
+        const listing = await this.#source.listFiles(root);
 
-        // A symlinked source root would let readDirectory() follow it and
-        // publish content from outside the project. Reject it up front,
-        // matching the policy already applied to referenced files.
-        if (await this.#isSymlink(root)) {
+        if (listing.kind === 'symlink') {
             this.#addProblem({
                 code: 'symlink-source-root',
-                filepath: this.#relativeProjectPath(root),
-                message: `Source root "${ this.#relativeProjectPath(root) }" cannot be a symbolic link`,
+                filepath: root,
+                message: `Source root "${ root }" cannot be a symbolic link`,
             });
-            return { exists: false, files };
+            return { files, entries: [] };
         }
 
-        const visit = async (directory, relativeDirectory) => {
-            let entries;
-            try {
-                entries = await this.#fileSystem.readDirectory(directory);
-            } catch (cause) {
-                if (isMissingPathError(cause)) {
-                    if (directory === root) {
-                        exists = false;
-                    }
-                    return;
-                }
-                throw cause;
-            }
-
-            entries.sort((left, right) => compareStrings(left.name, right.name));
-
-            for (const entry of entries) {
-                const relativePath = relativeDirectory
-                    ? `${ relativeDirectory }/${ entry.name }`
-                    : entry.name;
-                const filepath = path.join(directory, entry.name);
-
-                // Dirent reflects the entry itself, so a symlink is neither a
-                // directory nor a file here regardless of what it targets.
-                // Report it instead of silently dropping it from the scan.
-                if (entry.isSymbolicLink()) {
-                    this.#addProblem({
-                        code: 'symlink-source-file',
-                        filepath: this.#relativeProjectPath(filepath),
-                        message: `Source path "${ relativePath }" cannot be a symbolic link`,
-                    });
-                    continue;
-                }
-
-                if (entry.isDirectory()) {
-                    await visit(filepath, relativePath);
-                    continue;
-                }
-                if (!entry.isFile()) {
-                    continue;
-                }
-
-                const file = {
-                    filepath,
-                    relativePath,
-                    sourcePath: this.#relativeProjectPath(filepath),
-                };
-                files.push(file);
-                this.#files.set(filepath, file);
-            }
-        };
-
-        await visit(root, '');
-        return { exists, files };
-    }
-
-    async #isSymlink(filepath) {
-        try {
-            const stats = await this.#fileSystem.lstat(filepath);
-            return stats.isSymbolicLink();
-        } catch (cause) {
-            if (isMissingPathError(cause)) {
-                return false;
-            }
-            throw cause;
+        if (listing.kind !== 'directory') {
+            return { files, entries: [] };
         }
-    }
 
-    async #directoryExists(directory) {
-        try {
-            return (await this.#fileSystem.stat(directory)).isDirectory();
-        } catch (cause) {
-            if (isMissingPathError(cause)) {
-                return false;
+        // A source may list in any order. Template bundles hold their
+        // templates in this order, so it decides their hashes.
+        const entries = listing.entries.slice().sort(compareWalkOrder);
+
+        for (const entry of entries) {
+            const sourcePath = `${ root }/${ entry.path }`;
+
+            if (entry.type === 'symlink') {
+                this.#symlinks.add(sourcePath);
+                this.#addProblem({
+                    code: 'symlink-source-file',
+                    filepath: sourcePath,
+                    message: `Source path "${ entry.path }" cannot be a symbolic link`,
+                });
+                continue;
             }
-            throw cause;
+
+            const file = {
+                relativePath: entry.path,
+                sourcePath,
+            };
+            files.push(file);
+            this.#files.set(sourcePath, file);
         }
-    }
 
-    #relativeProjectPath(filepath) {
-        return path.relative(this.#projectDirectory, filepath).split(path.sep).join('/');
-    }
-
-    #isInsideProject(filepath) {
-        const relativePath = path.relative(this.#projectDirectory, filepath);
-        return relativePath !== '..' &&
-            !relativePath.startsWith(`..${ path.sep }`) &&
-            !path.isAbsolute(relativePath);
+        return { files, entries };
     }
 
     #addProblem(problem) {
@@ -746,6 +706,55 @@ class ContentSourceScanner {
     }
 }
 
-function isMissingPathError(error) {
-    return error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
+// Orders paths as a depth-first walk that sorts each directory's entries by
+// name would visit them: segment by segment. A plain comparison of whole
+// paths differs, because "-" sorts before "/".
+function compareWalkOrder(left, right) {
+    const leftSegments = left.path.split('/');
+    const rightSegments = right.path.split('/');
+    const length = Math.min(leftSegments.length, rightSegments.length);
+
+    for (let index = 0; index < length; index += 1) {
+        const order = compareStrings(leftSegments[index], rightSegments[index]);
+
+        if (order !== 0) {
+            return order;
+        }
+    }
+
+    return leftSegments.length - rightSegments.length;
+}
+
+// Resolves a page.json reference against the directory that holds the
+// page.json. Returns the path from the source's root, or null when the
+// reference is absolute or climbs out of the root.
+function resolveReference(directory, reference) {
+    if (reference.startsWith('/')) {
+        return null;
+    }
+
+    const segments = directory.split('/');
+
+    for (const segment of reference.split('/')) {
+        if (segment === '' || segment === '.') {
+            continue;
+        }
+
+        if (segment === '..') {
+            if (segments.length === 0) {
+                return null;
+            }
+
+            segments.pop();
+            continue;
+        }
+
+        segments.push(segment);
+    }
+
+    return segments.join('/');
+}
+
+function getBlobSize(blob) {
+    return isString(blob) ? encoder.encode(blob).byteLength : blob.byteLength;
 }

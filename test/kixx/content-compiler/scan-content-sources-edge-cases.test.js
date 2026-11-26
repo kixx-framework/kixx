@@ -1,28 +1,17 @@
-import fsp from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { describe } from 'kixx-test';
 import {
     assert,
     assertEqual,
-    assertMatches,
-} from '../../../lib/vendor/kixx-assert/mod.js';
+} from 'kixx-assert';
 
-import scanContentSources from '../../../lib/publishing/scan-content-sources.js';
-import { assertPublishableContentSources } from '../../../lib/publishing/content-source-report.js';
+import { compileContent } from '../../../kixx/content-compiler/compile-content.js';
+import { createMemoryContentSource } from '../../../kixx/content-compiler/memory-content-source.js';
+import scanContentSources from '../../../kixx/content-compiler/scan-content-sources.js';
 
 
-describe('publishing/scan-content-sources', ({ after, it }) => {
-    const directories = [];
-
-    after(async () => {
-        await Promise.all(directories.map((directory) => {
-            return fsp.rm(directory, { recursive: true, force: true });
-        }));
-    });
-
+describe('content-compiler/scan-content-sources edge cases', ({ it }) => {
     it('bundles stylesheet entry points and still publishes library files', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'static-assets/stylesheets/stylesheet.css': [
                 '@import "lib/reset.css";',
                 '@import "/stylesheets/lib/layout.css";',
@@ -38,7 +27,7 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
             'static-assets/stylesheets/lib/admin.css': '.admin-shell {}',
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const stylesheet = findResource(
             result,
             'StaticAsset',
@@ -69,17 +58,17 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('changes entry hashes when an imported stylesheet changes', async () => {
-        const firstDirectory = await makeProject(directories, {
+        const firstSource = createMemoryContentSource({
             'static-assets/styles/main.css': '@import "lib/token.css";\na {}',
             'static-assets/styles/lib/token.css': ':root { --color: red; }',
         });
-        const secondDirectory = await makeProject(directories, {
+        const secondSource = createMemoryContentSource({
             'static-assets/styles/main.css': '@import "lib/token.css";\na {}',
             'static-assets/styles/lib/token.css': ':root { --color: blue; }',
         });
 
-        const first = await scanContentSources(firstDirectory);
-        const second = await scanContentSources(secondDirectory);
+        const first = await scanContentSources(firstSource);
+        const second = await scanContentSources(secondSource);
         const firstEntry = findResource(first, 'StaticAsset', 'styles/main.css');
         const secondEntry = findResource(second, 'StaticAsset', 'styles/main.css');
 
@@ -87,13 +76,13 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('deduplicates a library problem reached from several entries', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'static-assets/one.css': '@import "lib/shared.css";',
             'static-assets/two.css': '@import "lib/shared.css";',
             'static-assets/lib/shared.css': '@import "missing.css";',
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problems = result.problems.filter(({ code }) => {
             return code === 'css-import-missing';
         });
@@ -105,42 +94,34 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('makes stylesheet problems fail publishability', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'static-assets/main.css': '@import "missing.css";',
         });
-        const result = await scanContentSources(directory);
-        const caught = catchError(() => assertPublishableContentSources(result));
+        const result = await compileContent({ source, templateHelpers: [] });
 
-        assert(caught, 'expected stylesheet problems to prevent publishing');
-        assertMatches('css', result.problems[0].code);
-        assertMatches('Nothing was published.', caught.message);
+        assertEqual('css-import-missing', result.report.problems[0].code);
+        assertEqual(null, result.release);
     });
 
     it('leaves public stylesheets verbatim', async () => {
-        const source = '/* keep */\n@import "relative.css";';
-        const directory = await makeProject(directories, {
-            'public/site.css': source,
+        const css = '/* keep */\n@import "relative.css";';
+        const source = createMemoryContentSource({
+            'public/site.css': css,
         });
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const resource = findResource(result, 'StaticAsset', 'site.css');
 
-        assertEqual(source, decode(resource.payload));
+        assertEqual(css, decode(resource.payload));
         assertEqual('public/site.css', resource.sourceFiles.join(','));
     });
 
     it('rejects referenced symlinks which point outside the project', async () => {
-        const outsideDirectory = await makeProject(directories, {
-            'outside.html': 'Outside project',
-        });
-        const directory = await makeProject(directories, {
+        // A source never follows a link, so where it points doesn't matter.
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({ template: 'linked.html' }),
-        });
-        await fsp.symlink(
-            path.join(outsideDirectory, 'outside.html'),
-            path.join(directory, 'pages', 'linked.html'),
-        );
+        }, { symlinks: [ 'pages/linked.html' ] });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => {
             return code === 'symlink-referenced-file';
         });
@@ -153,16 +134,12 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('rejects symlinked directories in a referenced path', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({ template: 'linked/page.html' }),
             'pages/templates/page.html': 'Inside project',
-        });
-        await fsp.symlink(
-            path.join(directory, 'pages', 'templates'),
-            path.join(directory, 'pages', 'linked'),
-        );
+        }, { symlinks: [ 'pages/linked' ] });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => {
             return code === 'symlink-referenced-file';
         });
@@ -174,12 +151,12 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('rejects an empty page template as a source validation problem', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({ template: 'page.html' }),
             'pages/page.html': '',
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => code === 'empty-page-template');
 
         assert(problem, 'expected an empty page template problem');
@@ -189,16 +166,11 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('rejects a symlinked source root', async () => {
-        const outsideDirectory = await makeProject(directories, {
-            'secret.txt': 'Outside project',
-        });
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': '{}',
-        });
-        await fsp.rm(path.join(directory, 'public'), { recursive: true, force: true });
-        await fsp.symlink(outsideDirectory, path.join(directory, 'public'));
+        }, { symlinks: [ 'public' ] });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => code === 'symlink-source-root');
 
         assert(problem, 'expected a symlink source root problem');
@@ -208,16 +180,12 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('rejects a symlinked entry beneath a source root', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': '{}',
             'static-assets/real.txt': 'Real asset',
-        });
-        await fsp.symlink(
-            path.join(directory, 'static-assets', 'real.txt'),
-            path.join(directory, 'static-assets', 'linked.txt'),
-        );
+        }, { symlinks: [ 'static-assets/linked.txt' ] });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => code === 'symlink-source-file');
 
         assert(problem, 'expected a symlink source file problem');
@@ -226,36 +194,53 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
         assertEqual(0, result.unmatchedFiles.length);
     });
 
-    it('publishes empty page and existing template bundles deterministically', async () => {
-        const directory = await makeProject(directories, {
+    it('publishes empty page bundles deterministically, and no bundle for an empty template directory', async () => {
+        const memorySource = createMemoryContentSource({
             'pages/page.json': '{}',
         });
-        await fsp.mkdir(path.join(directory, 'templates', 'partials'), { recursive: true });
-        await fsp.mkdir(path.join(directory, 'templates', 'base'), { recursive: true });
 
-        const first = await scanContentSources(directory);
-        const second = await scanContentSources(directory);
+        // The Node.js source lists an empty directory as a directory with
+        // no entries. The in-memory source has no empty directories, and
+        // answers "missing". Neither yields a bundle.
+        const source = {
+            async listFiles(directory) {
+                if (directory === 'templates') {
+                    return { kind: 'directory', entries: [] };
+                }
+                return await memorySource.listFiles(directory);
+            },
+            readFile: memorySource.readFile,
+        };
 
-        assertEqual(5, first.resources.length);
+        const first = await scanContentSources(source);
+        const second = await scanContentSources(memorySource);
+
+        assertEqual(0, first.problems.length);
+        assertEqual(
+            'PageIncludes /,PageMetadata /,PagePartials /',
+            first.resources.map(({ type, pathname }) => `${ type } ${ pathname }`).join(','),
+        );
+        assertEqual('[]', JSON.stringify(first.resources[2].payload));
+        assertEqual('{}', JSON.stringify(first.resources[0].payload));
         assertEqual(
             first.resources.map(resourceIdentity).join(','),
             second.resources.map(resourceIdentity).join(','),
         );
     });
+
+    it('publishes an empty bundle for a template directory that holds only a symbolic link', async () => {
+        const source = createMemoryContentSource({}, {
+            symlinks: [ 'templates/partials/linked.html' ],
+        });
+
+        const result = await scanContentSources(source);
+        const bundle = findResource(result, 'GlobalTemplatePartials', '/');
+
+        assertEqual(0, bundle.payload.length);
+        assertEqual('symlink-source-file', result.problems.map(({ code }) => code).join(','));
+        assertEqual(false, result.resources.some(({ type }) => type === 'BaseTemplates'));
+    });
 });
-
-async function makeProject(directories, files) {
-    const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-publishing-'));
-    directories.push(directory);
-
-    for (const [ relativePath, contents ] of Object.entries(files)) {
-        const filepath = path.join(directory, relativePath);
-        await fsp.mkdir(path.dirname(filepath), { recursive: true });
-        await fsp.writeFile(filepath, contents);
-    }
-
-    return directory;
-}
 
 function findResource(result, type, pathname, index = 0) {
     const matches = result.resources.filter((resource) => {
@@ -266,30 +251,10 @@ function findResource(result, type, pathname, index = 0) {
     return matches[index];
 }
 
-function assertResourceAddress(resource) {
-    assertMatches(/^[a-z2-7]{26}$/, resource.hash);
-    assert(resource.size > 0);
-    assert(resource.sourceFiles.length > 0);
-}
-
 function decode(buffer) {
     return new TextDecoder().decode(buffer);
 }
 
-function count(values, expected) {
-    return values.filter((value) => value === expected).length;
-}
-
 function resourceIdentity(resource) {
     return `${ resource.type }:${ resource.pathname }:${ resource.hash }:${ resource.size }`;
-}
-
-function catchError(fn) {
-    try {
-        fn();
-    } catch (error) {
-        return error;
-    }
-
-    return null;
 }

@@ -1,27 +1,18 @@
-import fsp from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { describe } from 'kixx-test';
 import {
     assert,
     assertEqual,
     assertMatches,
-} from '../../../lib/vendor/kixx-assert/mod.js';
+} from 'kixx-assert';
 
-import scanContentSources from '../../../lib/publishing/scan-content-sources.js';
+import { hashBlob } from '../../../kixx/content-addressable-store/addressing.js';
+import { createMemoryContentSource } from '../../../kixx/content-compiler/memory-content-source.js';
+import scanContentSources from '../../../kixx/content-compiler/scan-content-sources.js';
 
 
-describe('publishing/scan-content-sources', ({ after, it }) => {
-    const directories = [];
-
-    after(async () => {
-        await Promise.all(directories.map((directory) => {
-            return fsp.rm(directory, { recursive: true, force: true });
-        }));
-    });
-
+describe('content-compiler/scan-content-sources', ({ it }) => {
     it('materializes every content convention into deterministic resources', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({
                 template: 'nested/page.html',
                 partials: [
@@ -52,7 +43,7 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
             'public/favicon.ico': Uint8Array.from([ 1, 2, 3 ]),
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
 
         assertEqual(0, result.problems.length);
         assertEqual(
@@ -67,6 +58,9 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
         const template = findResource(result, 'PageTemplate', '/page.html');
         assertEqual('<main>Home</main>', template.payload);
         assertResourceAddress(template);
+        assertEqual(await hashBlob('<main>Home</main>'), template.hash);
+        assertEqual(17, template.size);
+        assertEqual('pages/page.json,pages/nested/page.html', template.sourceFiles.join(','));
 
         const partials = findResource(result, 'PagePartials', '/');
         assertEqual('a-first,z-last', partials.payload.map(({ id }) => id).join(','));
@@ -104,6 +98,8 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
 
         const binary = findResource(result, 'StaticAsset', 'image.bin');
         assertEqual('0,127,255', new Uint8Array(binary.payload).join(','));
+        assertEqual(await hashBlob(Uint8Array.from([ 0, 127, 255 ]).buffer), binary.hash);
+        assertEqual(3, binary.size);
 
         assertEqual(
             'BaseTemplates,GlobalTemplatePartials,PageIncludes,PageMetadata,PagePartials,PageTemplate,StaticAsset',
@@ -112,7 +108,7 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('returns all mapping problems as data and keeps unmatched files separate', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': '{ invalid',
             'pages/orphan.txt': 'unmatched',
             'pages/missing/page.json': JSON.stringify({ template: 'absent.html' }),
@@ -126,7 +122,7 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
             'public/shared.txt': 'public version',
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const codes = result.problems.map(({ code }) => code);
 
         assertEqual(1, count(codes, 'malformed-json'));
@@ -148,7 +144,7 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
     });
 
     it('returns manifest shape problems without throwing', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({
                 template: 42,
                 partials: [
@@ -161,23 +157,19 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
             'pages/partial.html': 'partial',
         });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
 
         assertEqual(4, count(result.problems.map(({ code }) => code), 'invalid-manifest'));
         assert(result.resources.some(({ type }) => type === 'PageMetadata'));
     });
 
     it('rejects referenced symlinks which point inside the project', async () => {
-        const directory = await makeProject(directories, {
+        const source = createMemoryContentSource({
             'pages/page.json': JSON.stringify({ template: 'linked.html' }),
             'pages/real.html': 'Inside project',
-        });
-        await fsp.symlink(
-            path.join(directory, 'pages', 'real.html'),
-            path.join(directory, 'pages', 'linked.html'),
-        );
+        }, { symlinks: [ 'pages/linked.html' ] });
 
-        const result = await scanContentSources(directory);
+        const result = await scanContentSources(source);
         const problem = result.problems.find(({ code }) => {
             return code === 'symlink-referenced-file';
         });
@@ -188,20 +180,48 @@ describe('publishing/scan-content-sources', ({ after, it }) => {
         assertEqual('pages/linked.html', problem.symlink);
         assertEqual(false, result.resources.some(({ type }) => type === 'PageTemplate'));
     });
+
+    it('holds bundled templates in the order of a sorted depth-first walk', async () => {
+        // A plain sort of whole paths would put admin-nav.html first,
+        // because "-" sorts before "/".
+        const files = {
+            'templates/partials/admin-nav.html': 'nav',
+            'templates/partials/admin/notice.html': 'notice',
+            'templates/partials/admin/alert.html': 'alert',
+            'templates/partials/zebra.html': 'zebra',
+            'templates/base/site-wide.html': 'wide',
+            'templates/base/site/inner.html': 'inner',
+        };
+        const reversed = Object.fromEntries(Object.entries(files).reverse());
+
+        const result = await scanContentSources(createMemoryContentSource(files));
+        const fromReversed = await scanContentSources(createMemoryContentSource(reversed));
+
+        const globalPartials = findResource(result, 'GlobalTemplatePartials', '/');
+        assertEqual(
+            'admin/alert.html,admin/notice.html,admin-nav.html,zebra.html',
+            globalPartials.payload.map(({ id }) => id).join(','),
+        );
+        assertEqual(
+            [
+                'templates/partials/admin/alert.html',
+                'templates/partials/admin/notice.html',
+                'templates/partials/admin-nav.html',
+                'templates/partials/zebra.html',
+            ].join(','),
+            globalPartials.sourceFiles.join(','),
+        );
+
+        const baseTemplates = findResource(result, 'BaseTemplates', '/');
+        assertEqual(
+            'site/inner.html,site-wide.html',
+            baseTemplates.payload.map(({ id }) => id).join(','),
+        );
+
+        assertEqual(globalPartials.hash, findResource(fromReversed, 'GlobalTemplatePartials', '/').hash);
+        assertEqual(baseTemplates.hash, findResource(fromReversed, 'BaseTemplates', '/').hash);
+    });
 });
-
-async function makeProject(directories, files) {
-    const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-publishing-'));
-    directories.push(directory);
-
-    for (const [ relativePath, contents ] of Object.entries(files)) {
-        const filepath = path.join(directory, relativePath);
-        await fsp.mkdir(path.dirname(filepath), { recursive: true });
-        await fsp.writeFile(filepath, contents);
-    }
-
-    return directory;
-}
 
 function findResource(result, type, pathname, index = 0) {
     const matches = result.resources.filter((resource) => {
