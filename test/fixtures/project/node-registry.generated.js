@@ -74,3 +74,6 @@ export const contentRoots = [
         "pagesDirectory": "plugins/visits/pages"
     }
 ];
+
+// Every template helper name the installed code declares.
+export const templateHelpers = [];

@@ -42,7 +42,7 @@ const SECRETS_HEADER = [
 ].map((line) => `# ${ line }`.trimEnd());
 
 // The names each generated module declares itself. No import may take one.
-const REGISTRY_NAMES = [ 'LoggerWriter', 'ServerRequest', 'plugins', 'configDefaults', 'secrets', 'contentRoots' ];
+const REGISTRY_NAMES = [ 'LoggerWriter', 'ServerRequest', 'plugins', 'configDefaults', 'secrets', 'contentRoots', 'templateHelpers' ];
 const ROUTES_NAMES = [ 'mountRoutes', 'pluginRoutes' ];
 
 
@@ -126,6 +126,9 @@ function renderTargetRegistry(model, target) {
         entries.push(`    [ ${ JSON.stringify(`${ owner }:${ module }`) }, ${ identifier } ],`);
     }
 
+    // Sorted here too, so the file doesn't depend on the order of the model's list.
+    const templateHelpers = Array.from(new Set(installation.templateHelpers)).sort();
+
     const contentRoots = installation.contentRoots.map((root) => {
         const record = { plugin: root.owner };
 
@@ -156,6 +159,9 @@ function renderTargetRegistry(model, target) {
         '',
         '// Where plugin content lives, as paths from the project root.',
         `export const contentRoots = ${ JSON.stringify(contentRoots, null, 4) };`,
+        '',
+        '// Every template helper name the installed code declares.',
+        `export const templateHelpers = ${ JSON.stringify(templateHelpers, null, 4) };`,
     ]);
 }
 

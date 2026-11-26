@@ -367,7 +367,7 @@ describe('fixture project', ({ describe }) => {
     describe('registries', ({ it }) => {
         it('export the same names for both targets', () => {
             assertEqual(
-                'LoggerWriter,ServerRequest,configDefaults,contentRoots,plugins,secrets',
+                'LoggerWriter,ServerRequest,configDefaults,contentRoots,plugins,secrets,templateHelpers',
                 Object.keys(nodeRegistry).sort().join(','),
             );
             assertEqual(

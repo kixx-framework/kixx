@@ -20,6 +20,9 @@ const SECRET_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const CLASS_NAME_PATTERN = /^[A-Z][A-Za-z0-9_]*$/;
 const ROUTE_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 
+// What the template engine can parse as a helper name.
+const TEMPLATE_HELPER_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 // A mount is written into generated source and joined to route patterns, so
 // it holds no whitespace, quote, or backslash.
 const ROUTE_MOUNT_PATTERN = /^\/[^\s"'`\\]*$/;
@@ -60,8 +63,11 @@ const MANIFEST_KEYS = [
     'cloudflare',
     'routes',
     'content',
+    'templateHelpers',
     'whenInstalled',
 ];
+
+const APP_MANIFEST_KEYS = [ 'secrets', 'templateHelpers' ];
 
 const PLUGIN_ONLY_KEYS = [ 'core', 'dependencies', 'whenInstalled' ];
 const CORE_ONLY_ADAPTER_KEYS = [ 'loggerWriter', 'serverRequest' ];
@@ -124,12 +130,14 @@ const WHEN_INSTALLED_KEYS = [ 'lifecycle', 'routes', 'content' ];
  * @property {{ kvNamespaces: Array<{ config: string }>, durableObjects: Array<{ className: string, module: string, config: string }> }} cloudflare
  * @property {ManifestRoute[]} routes
  * @property {ManifestContent} content
+ * @property {string[]} templateHelpers - Names of the template helpers the plugin's code registers
  * @property {Object<string, ManifestWhenInstalledBlock>} whenInstalled - Contributions made only when the named plugin is installed
  */
 
 /**
  * @typedef {Object} AppManifest
  * @property {ManifestSecret[]} secrets
+ * @property {string[]} templateHelpers - Names of the template helpers the app's code registers
  */
 
 
@@ -184,10 +192,12 @@ export function validateAppManifest(manifest, options) {
 
     const problems = [];
     let secrets = [];
+    let templateHelpers = [];
 
     if (isPlainObject(manifest)) {
-        reportUnknownKeys(problems, manifest, '', [ 'secrets' ]);
+        reportUnknownKeys(problems, manifest, '', APP_MANIFEST_KEYS);
         secrets = readSecrets(problems, manifest.secrets);
+        templateHelpers = readTemplateHelpers(problems, manifest.templateHelpers);
     } else {
         report(problems, '', 'must be a JSON object');
     }
@@ -196,7 +206,7 @@ export function validateAppManifest(manifest, options) {
         throw createManifestError('app', file, problems, validateAppManifest);
     }
 
-    return deepFreeze({ secrets });
+    return deepFreeze({ secrets, templateHelpers });
 }
 
 function readPluginManifest(problems, manifest, options) {
@@ -238,6 +248,7 @@ function readPluginManifest(problems, manifest, options) {
         cloudflare: readCloudflare(problems, manifest.cloudflare, config.keys),
         routes: readRoutes(problems, manifest.routes, 'routes'),
         content: readContent(problems, manifest.content, 'content'),
+        templateHelpers: readTemplateHelpers(problems, manifest.templateHelpers),
         whenInstalled: isCore ? {} : readWhenInstalled(problems, manifest.whenInstalled, ownName),
     });
 
@@ -516,6 +527,10 @@ function readContent(problems, value, path) {
     }
 
     return content;
+}
+
+function readTemplateHelpers(problems, value) {
+    return readStringList(problems, value, 'templateHelpers', TEMPLATE_HELPER_NAME_PATTERN);
 }
 
 function readWhenInstalled(problems, value, ownName) {
