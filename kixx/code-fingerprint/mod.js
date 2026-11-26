@@ -13,3 +13,4 @@ export {
     isValidCodeFingerprint,
     isValidGitObjectId,
 } from './code-fingerprint.js';
+export { parseGitLsTree } from './parse-git-ls-tree.js';
