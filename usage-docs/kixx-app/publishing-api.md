@@ -64,7 +64,7 @@ operation**, assigning an existing Release to a build id:
 | `GET` | `/releases/:releaseId/manifest` | Complete manifest, for whole-site diffing |
 | `GET` | `/builds` | Every registered build pointer |
 | `GET` | `/builds/:buildId` | One build pointer, running or not |
-| `PUT` | `/builds/:buildId` | Assign a Release to that build |
+| `PUT` | `/builds/:buildId` | Pre-stage a build, or publish content to it |
 | `GET` | `/builds/:buildId/activations` | Activation history for that build |
 
 Only the methods shown are allowed on a recognized path. A different method
@@ -205,10 +205,13 @@ Error codes used by this API:
 | `400` | `InvalidCursor` | `cursor` is empty, or isn't one this API issued |
 | `401` | `DeployKeyRequired` | The deploy key is missing, malformed, or wrong |
 | `404` | `ReleaseNotFound` | No such Release, or the path id isn't a valid Release id |
-| `404` | `BuildNotFound` | No such build pointer |
+| `404` | `BuildNotFound` | No such build pointer, including the target of a content-only publish |
 | `405` | `METHOD_NOT_ALLOWED_ERROR` | The method is not allowed on the recognized path |
 | `409` | `JsonApiResourceTypeMismatch` | Request resource type is wrong |
 | `409` | `ObjectSizeMismatch` | A stored object's size disagrees with the manifest |
+| `409` | `BuildCodeUnknown` | A content-only publish targets a build with no `code`; pre-stage it with code first |
+| `409` | `CodeFingerprintMismatch` | A content-only publish's `codeFingerprint` differs from the build's `code.fingerprint`; deploy the commit's code first |
+| `409` | `BuildCodeMismatch` | A pre-stage's `code` differs from the code the build already has |
 | `411` | `LengthRequired` | An object upload omitted `Content-Length` |
 | `412` | `BuildPointerConflict` | The pointer precondition no longer holds |
 | `413` | `PAYLOAD_TOO_LARGE_ERROR` | An object upload's declared `Content-Length`, or its actual body, exceeds `maxObjectBytes` |
@@ -216,9 +219,9 @@ Error codes used by this API:
 | `422` | `ObjectIdMismatch` | Uploaded bytes do not match the object id in the URL |
 | `422` | `ObjectIdInvalid` | An object id (in the URL or `attributes.objectIds`) is not a valid content address |
 | `422` | `MissingContentObjects` | The manifest names objects the store does not hold |
-| `422` | `InvalidProvenance` | A Release's `attributes.provenance` is invalid |
+| `422` | `InvalidProvenance` | A Release's `attributes.provenance` is invalid, including a missing or non-commit-id `sourceRevision` outside development |
 | `422` | `InvalidReleaseManifest` | The manifest structure or content is invalid |
-| `422` | `InvalidBuildAssignment` | `data.id`, `attributes.releaseId`, `attributes.expectedAssignmentId`, or `attributes.reason` fails validation, or the request sends any other attribute |
+| `422` | `InvalidBuildAssignment` | `data.id` or any build-write attribute fails validation, a required attribute is missing (`intent` always; `sourceRevision`, `code`, or `codeFingerprint` outside development), an attribute is sent with the wrong intent, or the request sends an attribute protocol 4 doesn't define |
 | `428` | `PreconditionRequired` | A build pointer write omitted JSON `attributes.expectedAssignmentId` |
 | `429` | `TooManyFailedAttempts` | Too many failed deploy-key attempts from this IP; retry after the `Retry-After` delay with the correct key |
 | `503` | `ContentStoreOverloaded` | The content store is temporarily overloaded; retry after the `Retry-After` delay |
@@ -251,7 +254,7 @@ enforced limits. Like every endpoint, it requires the deploy key.
             "runningBuildId": "production",
             "contentContractVersion": 2,
             "addressingFormat": 4,
-            "buildAssignmentProtocolVersion": 3,
+            "buildAssignmentProtocolVersion": 4,
             "limits": {
                 "maxObjectBytes": 26214400,
                 "maxObjectStatusIds": 100,
@@ -275,7 +278,21 @@ the client speaks.** It is separate from `contentContractVersion`, which
 describes Release compatibility, and from `addressingFormat`, which describes
 object ids.
 
-Protocol 3 is the current version. Against protocol 2 it:
+Protocol 4 is the current version. Against protocol 3 it:
+
+- requires `intent` on every build write: `prestage` or `publish`
+  (content-only);
+- accepts `sourceRevision`, `summary`, `code` (pre-stage), `codeFingerprint`
+  (content-only), `force`, and `forceReason` on build writes, and refuses
+  every other new attribute;
+- outside development, requires `sourceRevision` on every build write and on
+  every Release's provenance (CONT-4), `code` on a pre-stage (CONT-5), and
+  `codeFingerprint` on a content-only publish, and refuses a content-only
+  publish whose fingerprint differs from the build's (CONT-6);
+- adds `409 BuildCodeUnknown` and `409 CodeFingerprintMismatch`;
+- reports `liveSourceRevision` on single-build responses.
+
+Protocol 3, against protocol 2:
 
 - authenticates with the deploy key;
 - reports `createdBy` on Releases and `actor` on Activations as
@@ -283,7 +300,7 @@ Protocol 3 is the current version. Against protocol 2 it:
   `forceReason` to Activations;
 - reports `code` on builds;
 - answers an empty `cursor` with `400 InvalidCursor`;
-- rejects any build-write attribute other than `releaseId`,
+- rejected any build-write attribute other than `releaseId`,
   `expectedAssignmentId`, and `reason`.
 
 Build writes use JSON `expectedAssignmentId` preconditions, with no
@@ -406,7 +423,7 @@ Content-Type: application/vnd.api+json
                 }
             },
             "provenance": {
-                "sourceRevision": "a1b2c3d",
+                "sourceRevision": "<40-or-64-hex-commit-id>",
                 "message": "Publish the About page",
                 "intendedForBuildId": "build-142"
             }
@@ -425,16 +442,29 @@ trailing slash. A non-canonical pathname is rejected, not normalized. Only
 `mediaType`. `pages.<path>.templates` is a filename-to-reference map, letting
 one page publish more than one template.
 
-`attributes.provenance` is optional, immutable, non-binding metadata. When
-present it must be an object. Its only fields are `sourceRevision`, `message`,
-`client`, and `intendedForBuildId`, each a non-empty string. `sourceRevision`,
-`client`, and `intendedForBuildId` may be at most 256 characters, and `message`
-at most 2,000. `intendedForBuildId` is a hint for audits; nothing stops
-assigning the Release to a different build.
+`attributes.provenance` is immutable metadata. When present it must be an
+object. Its only fields are `sourceRevision`, `message`, `client`, and
+`intendedForBuildId`, each a non-empty string. `client` and
+`intendedForBuildId` may be at most 256 characters, and `message` at most
+2,000. `intendedForBuildId` is a hint for audits; nothing stops assigning the
+Release to a different build.
+
+`sourceRevision` is the commit the Release was compiled from: 40 or 64
+lowercase hex characters. **Outside development it is required (CONT-4)**;
+in development it may be omitted, but a present value must still be a commit
+id. Either failure is `422 InvalidProvenance` with `source`
+`provenance.sourceRevision`. The server can't see git: the client checks that
+the commit is pushed and the working tree clean. The same rule applies to
+`POST /releases/validation`.
+
+A Release keeps its first record, so identical content published again from
+a newer commit keeps the older `sourceRevision`. The commit a build serves is
+the Activation's `sourceRevision`, reported as `liveSourceRevision`.
 
 Creation persists nothing if any check fails. The checks run in this order:
 
-1. provenance validation (`422 InvalidProvenance`);
+1. provenance validation, including CONT-4 (`422 InvalidProvenance`, every
+   provenance problem at once);
 2. manifest schema validation (`422 InvalidReleaseManifest`), then the
    `maxManifestEntries` (10,000) limit (`400`);
 3. object existence and size verification against every referenced object id,
@@ -474,7 +504,7 @@ The response is `201 Created`:
             "totalBytes": 1972,
             "contractVersion": 2,
             "provenance": {
-                "sourceRevision": "a1b2c3d",
+                "sourceRevision": "<40-or-64-hex-commit-id>",
                 "message": "Publish the About page",
                 "intendedForBuildId": "build-142"
             }
@@ -608,9 +638,15 @@ Lists every registered build pointer, newest assignment first:
 
 This includes build ids nothing is running yet.
 
-`code` identifies the server code a build was assigned for, as
-`{ revision, fingerprint }`, or `null` when it isn't known. Protocol 3 clients
-can't send it, so it stays `null` until a later protocol lets them.
+`code` identifies the server code a build was deployed with, as
+`{ revision, fingerprint }`: the commit and its code fingerprint. A pre-stage
+sets it, once; it never changes afterwards. It is `null` only for a build
+pre-staged in development without code. See
+[`kixx/code-fingerprint/README.md`](../../kixx/code-fingerprint/README.md)
+for how a fingerprint is computed.
+
+The list carries no `liveSourceRevision`: it would cost one history read per
+build, and builds accumulate with every deploy. Read a single build for it.
 
 ```http
 GET /publishing-api/v1/builds/:buildId
@@ -630,13 +666,24 @@ even when returning to an earlier Release. Build responses carry no `ETag`:
             "releaseId": "<release-id>",
             "assignedAt": "2026-09-01T00:00:00.000Z",
             "assignmentId": "<assignment-id>",
-            "code": null
+            "code": {
+                "revision": "<commit-id>",
+                "fingerprint": "kxfp1:<64-hex>"
+            },
+            "liveSourceRevision": "<commit-id>"
         }
     }
 }
 ```
 
 Use it to verify a pre-staged build before deploying it.
+
+`liveSourceRevision` is the commit the build's content was published from:
+the `sourceRevision` of its newest Activation, or `null` when that Activation
+recorded none. Before a publish or deploy, a client checks that its commit
+contains `liveSourceRevision` (CONT-7), unless the user forces it. The server
+can't check ancestry; `expectedAssignmentId` closes the race between the
+check and the write.
 
 ### Assign a Release to a build
 
@@ -645,32 +692,102 @@ PUT /publishing-api/v1/builds/:buildId
 Content-Type: application/vnd.api+json
 ```
 
+Every build write declares its **intent**:
+
+- `prestage` gives a build its code and a Release. It may create the build.
+  A deploy pre-stages the new build id before its code goes live.
+- `publish` is a content-only publish to a build that already exists.
+
+A content-only publish:
+
 ```json
 {
     "data": {
         "type": "Build",
         "id": "production",
         "attributes": {
+            "intent": "publish",
             "releaseId": "<release-id>",
             "expectedAssignmentId": "<observed-assignment-id>",
-            "reason": "publish"
+            "reason": "publish",
+            "sourceRevision": "<commit-id>",
+            "codeFingerprint": "kxfp1:<64-hex>",
+            "summary": "Updated the opening hours on the contact page."
         }
     }
 }
 ```
 
-The only attributes are `releaseId`, `expectedAssignmentId`, and `reason`.
-Any other attribute (for example `code`, `sourceRevision`, or `actor`) returns
-`422 InvalidBuildAssignment` with the attribute's path as its `source`. The
-actor is always the deploy key; a client can't choose one.
+A pre-stage:
 
-`data.id` must equal the route `:buildId`, and `attributes.releaseId` must be
-a syntactically valid content address; either failing, or an unrecognized
-`attributes.reason`, returns `422 InvalidBuildAssignment`. A well-formed
-`releaseId` that names a Release that was never created returns
-`404 ReleaseNotFound`. `attributes.reason` is optional audit metadata
-(`publish`, default; `rollback`; `carry-forward`; `restore`) and changes no
-behavior.
+```json
+{
+    "data": {
+        "type": "Build",
+        "id": "next",
+        "attributes": {
+            "intent": "prestage",
+            "releaseId": "<release-id>",
+            "expectedAssignmentId": null,
+            "reason": "carry-forward",
+            "sourceRevision": "<commit-id>",
+            "code": { "revision": "<commit-id>", "fingerprint": "kxfp1:<64-hex>" }
+        }
+    }
+}
+```
+
+| Attribute | `prestage` | `publish` | Rule |
+| --- | --- | --- | --- |
+| `intent` | `"prestage"` | `"publish"` | Required in every environment. |
+| `releaseId` | required | required | A valid Release id. |
+| `expectedAssignmentId` | required | required | See the precondition table below. |
+| `reason` | optional | optional | `publish` (default), `rollback`, `carry-forward`, or `restore`. Audit metadata only. |
+| `sourceRevision` | required outside development | required outside development | A commit id (40 or 64 lowercase hex). Recorded on the Activation. |
+| `summary` | optional | optional | A non-empty string, at most 2,000 characters. Recorded on the Activation. |
+| `code` | required outside development | refused | Exactly `{ revision, fingerprint }`: a commit id and a code fingerprint. |
+| `codeFingerprint` | refused | required outside development | The code fingerprint of the commit being published. |
+| `force` | optional | optional | `true` or `false`. `true` requires `forceReason`. |
+| `forceReason` | only with `force: true` | only with `force: true` | A non-empty string, at most 2,000 characters. Recorded on the Activation. |
+
+A fingerprint is `kxfp<version>:` followed by 64 lowercase hex characters
+(see [`kixx/code-fingerprint/README.md`](../../kixx/code-fingerprint/README.md)).
+`null` means absent for every optional attribute. Any other attribute (for
+example `actor`) returns `422 InvalidBuildAssignment`. Every problem is
+reported at once, each with its path as `source` (for example
+`attributes.code.fingerprint`). The actor is always the deploy key; a client
+can't choose one.
+
+`data.id` must equal the route `:buildId`. A well-formed `releaseId` that
+names a Release that was never created returns `404 ReleaseNotFound`.
+
+**The gates.** After validation and the precondition checks:
+
+- A content-only publish to a build that has never been assigned is
+  `404 BuildNotFound`. Pre-stage it instead.
+- Outside development, a content-only publish to a build without `code` is
+  `409 BuildCodeUnknown`.
+- A content-only publish whose `codeFingerprint` differs from the build's
+  `code.fingerprint` is `409 CodeFingerprintMismatch` (CONT-6). The commit
+  carries code the build doesn't run: deploy it first.
+- A pre-stage whose `code` differs from the build's stored code is
+  `409 BuildCodeMismatch`. Code is set once per build; a pre-stage that
+  repeats the stored code is accepted.
+
+A refused write changes nothing.
+
+**`force`.** A client that has checked ancestry (CONT-7) and been told to go
+ahead anyway sends `force: true` with a `forceReason`. The server records the
+reason on the Activation. It skips nothing: `force` never overrides
+`CodeFingerprintMismatch`, `BuildCodeUnknown`, or a missing `code`. A
+fingerprint mismatch is waited out with a deploy, so a pointer-only rollback
+can't go back past a code deploy; redeploy the older code instead.
+
+**Development.** In development nothing new is required: `sourceRevision`,
+`code`, and `codeFingerprint` may be omitted, but a present value is still
+checked. Fingerprints are compared only when both the build's `code` and the
+request's `codeFingerprint` are present, so a build pre-staged without code
+takes content-only publishes.
 
 **A JSON precondition is mandatory; there is no unconditional API form:**
 
@@ -683,14 +800,17 @@ behavior.
 | Valid UUID or null plus `If-Match` or `If-None-Match` | `400 BAD_REQUEST_ERROR`; write preconditions belong in JSON |
 | Stale UUID, or null when already assigned | `412 BuildPointerConflict`, even for the currently assigned Release |
 
-A valid request naming a missing Release returns `404 ReleaseNotFound` before
-checking for a stale identity.
+Errors are checked in this order: `422` validation, `428`, `400` for
+conditional headers, the gates (`404 BuildNotFound`, `409 BuildCodeUnknown`,
+`409 CodeFingerprintMismatch`), then the store: `404 ReleaseNotFound`,
+`412 BuildPointerConflict`, `409 BuildCodeMismatch`.
 
 Assigning the current Release is a success no-op only after its precondition
 passes. It preserves `assignedAt` and `assignmentId` and adds no Activation.
 A→B→A creates three distinct identities, so the first A identity remains stale.
 
-The response is `200 OK` with the resulting Build resource. Every Publishing
+The response is `200 OK` with the resulting Build resource, including
+`liveSourceRevision`. Every Publishing
 API response is `Cache-Control: no-store`.
 
 If a response is lost after a successful assignment, read the current Build
@@ -726,7 +846,7 @@ same-target no-op creates no entry. Returns
                     "id": "<first-12-hex-of-hash>",
                     "name": "Deploy key"
                 },
-                "sourceRevision": null,
+                "sourceRevision": "<commit-id>",
                 "summary": null,
                 "forceReason": null
             }
@@ -740,7 +860,8 @@ Entry `id` is `<buildId>:<assignmentId>`. Each changed assignment has exactly
 one entry, identified by its `assignmentId`. `fromReleaseId` is `null` for a
 build's first assignment. `actor` is who made the assignment, in the same form
 as a Release's `createdBy`. `sourceRevision`, `summary`, and `forceReason` are
-`null` for every assignment made through protocol 3.
+what the write sent, or `null`. A non-null `forceReason` records that the
+client overrode its ancestry check.
 
 **The pointer and its history entry are written together.** Every changed
 assignment has an entry, and an assignment that fails writes neither: the
@@ -749,45 +870,68 @@ deleted.
 
 ## Workflows
 
+Every write below runs from a clean working tree on a commit pushed to the
+environment's branch; the client checks that, since the server can't. Compute
+fingerprints with `kixx/code-fingerprint/` from the commit's tree.
+
 ### 1. Content-only publish
 
 Publish a change to the site the running build already serves.
 
-1. `POST /objects/status` with local content hashes; upload only the ones
+1. `GET /` for `runningBuildId`, then `GET /builds/:runningBuildId` for its
+   `assignmentId`, `code`, and `liveSourceRevision`.
+2. Check that the commit contains `liveSourceRevision` (CONT-7). Stop unless
+   the user forces it.
+3. Compare the commit's code fingerprint with `code.fingerprint`. When they
+   differ, the commit's code must be deployed first (workflow 2).
+4. `POST /objects/status` with local content hashes; upload only the ones
    missing with `PUT /objects/:objectId`.
-2. `POST /releases` with the complete manifest.
-3. `GET /builds/:buildId` for the running build to retrieve its current
-   JSON `assignmentId`.
-4. `PUT /builds/:buildId` with the new `releaseId` and JSON
-   `expectedAssignmentId: "<observed-assignment-id>"`.
+5. `POST /releases` with the complete manifest and
+   `provenance.sourceRevision`.
+6. `PUT /builds/:runningBuildId` with `intent: "publish"`, the new
+   `releaseId`, `expectedAssignmentId: "<observed-assignment-id>"`,
+   `sourceRevision`, and `codeFingerprint` (plus `force: true` and
+   `forceReason` when step 2 was forced).
 
 ### 2. Code-plus-content release (pre-staging)
 
 Ship server code and content as one atomic unit.
 
 1. Choose the `BUILD_ID` the next CI deploy will use — call it `next`.
-2. Upload objects and `POST /releases` as above. Neither touches a build
+2. Check ancestry against the running build's `liveSourceRevision`, as in
+   workflow 1.
+3. Upload objects and `POST /releases` as above. Neither touches a build
    pointer.
-3. `PUT /builds/next` with `expectedAssignmentId: null`. `next` has never been
-   assigned, so concurrent publishers can't both stage it.
-4. `GET /builds/next` to verify what was staged, before triggering anything.
-5. Deploy the code with `BUILD_ID=next`. The deploy is the activation.
+4. `PUT /builds/next` with `intent: "prestage"`, `expectedAssignmentId: null`,
+   `sourceRevision`, and `code: { revision, fingerprint }` for the commit.
+   `next` has never been assigned, so concurrent publishers can't both stage
+   it.
+5. `GET /builds/next` to verify what was staged, before triggering anything.
+6. Deploy the code with `BUILD_ID=next`. The deploy is the activation.
 
 ### 3. Code-only deploy
 
 Ship new server code with no content change.
 
 1. `GET /builds/:runningBuildId` to read the currently served `releaseId`.
-2. `PUT /builds/next` with that same `releaseId` and `expectedAssignmentId: null` in JSON.
+2. `PUT /builds/next` with `intent: "prestage"`, that same `releaseId`,
+   `expectedAssignmentId: null`, `reason: "carry-forward"`, `sourceRevision`,
+   and the new commit's `code`.
 3. Deploy the code with `BUILD_ID=next`.
 
 ### 4. Rollback
 
 1. `GET /releases` or `GET /builds/:buildId/activations` to find the Release
-   to restore.
+   to restore and the commit it was published from.
 2. `GET /builds/:buildId` for its current JSON `assignmentId`.
-3. `PUT /builds/:buildId` with the earlier `releaseId` and JSON
-   `expectedAssignmentId: "<observed-assignment-id>"`.
+3. `PUT /builds/:buildId` with `intent: "publish"`, `reason: "rollback"`, the
+   earlier `releaseId`, JSON `expectedAssignmentId: "<observed-assignment-id>"`,
+   that commit as `sourceRevision`, and its code fingerprint as
+   `codeFingerprint`. A rollback goes backwards, so the client skips its
+   ancestry check.
+
+A rollback past a code deploy is refused with `409 CodeFingerprintMismatch`,
+and `force` doesn't change that: redeploy the older code instead (workflow 2).
 
 On `412 BuildPointerConflict`, stop and investigate: something else moved the
 pointer, and a blind retry would overwrite that change.
@@ -797,7 +941,8 @@ pointer, and a blind retry would overwrite that change.
 No special endpoint is needed:
 
 1. Upload objects and `POST /releases`; neither needs a build pointer.
-2. `PUT /builds/:buildId` with `expectedAssignmentId: null` makes the first
+2. `PUT /builds/:buildId` with `intent: "prestage"`,
+   `expectedAssignmentId: null`, `sourceRevision`, and `code` makes the first
    assignment.
 
 A running build with no Release assigned serves `503` naming the build id
