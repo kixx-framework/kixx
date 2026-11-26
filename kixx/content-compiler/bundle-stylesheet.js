@@ -1,4 +1,4 @@
-import { isValidPathname } from './content-layout.js';
+import { isValidPathname } from '../content-addressable-store/content-layout.js';
 import {
     parseStylesheet,
     renderStylesheet,

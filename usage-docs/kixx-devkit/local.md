@@ -120,7 +120,7 @@ templates, or other published content.
 
 `publish` refuses an instance that is not seeded or not running.
 
-**`publish` doesn't work yet.** The Publishing API takes the deploy key, and
+**`publish` doesn't work in this version.** The content compiler moved into Kixx core, and the CLI that loads it isn't built yet, so the command stops with a message that says so. Separately, the Publishing API takes the deploy key, and
 a local instance has a random `DEPLOY_KEY_HASH` with no matching key, so the
 server answers `401`.
 

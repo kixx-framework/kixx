@@ -1,10 +1,11 @@
-import { parseJavaScript } from '../parse-javascript.js';
+import { parse } from '../vendor/acorn/mod.js';
+
 
 /**
  * Removes JavaScript comments while preserving syntax-bearing comment-like text.
  * @param {string} source - JavaScript source
  * @returns {string} Source with comments replaced by lexical whitespace
- * @throws {SyntaxError} When source is not valid JavaScript
+ * @throws {SyntaxError} When source is not valid JavaScript; carries `lineNumber` and `column`
  */
 export function stripJavaScriptComments(source) {
     const comments = [];
@@ -28,6 +29,21 @@ export function stripJavaScriptComments(source) {
     });
 
     return stripped;
+}
+
+// Acorn reports a syntax error's position on `loc`. Callers read
+// `lineNumber` (1-based) and `column` (0-based), so copy them over.
+function parseJavaScript(source, options) {
+    try {
+        return parse(source, options);
+    } catch (error) {
+        if (error?.loc && typeof error.lineNumber !== 'number') {
+            error.lineNumber = error.loc.line;
+            error.column = error.loc.column;
+        }
+
+        throw error;
+    }
 }
 
 function replaceJavaScriptCommentRanges(source, ranges) {

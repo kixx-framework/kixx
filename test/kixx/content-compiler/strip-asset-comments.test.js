@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
-import { stripJavaScriptComments } from '../../../lib/publishing/strip-asset-comments.js';
+import { assert, assertEqual } from 'kixx-assert';
+import { stripJavaScriptComments } from '../../../kixx/content-compiler/strip-asset-comments.js';
 
 
-describe('publishing/strip-asset-comments', ({ it }) => {
+describe('content-compiler/strip-asset-comments', ({ it }) => {
     it('replaces JavaScript comments with lexical whitespace', () => {
         const source = '// first\nconst value = /* middle */ 1;\n/** last */';
 

@@ -1,5 +1,7 @@
 # `kixx app` — Content Releases
 
+**`kixx app publish` doesn't work in this version.** The content compiler moved into Kixx core, and the CLI that loads it isn't built yet. The command stops with a message that says so.
+
 Commands that publish application content and assign it to a build through
 the Publishing API. See [configuration.md](configuration.md) for
 `--environment` (`-e`), the origin, and the deploy key these commands

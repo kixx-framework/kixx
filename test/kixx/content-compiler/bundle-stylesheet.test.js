@@ -1,9 +1,9 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
-import { bundleStylesheet } from '../../../lib/publishing/bundle-stylesheet.js';
+import { assert, assertEqual } from 'kixx-assert';
+import { bundleStylesheet } from '../../../kixx/content-compiler/bundle-stylesheet.js';
 
 
-describe('publishing/bundle-stylesheet', ({ it }) => {
+describe('content-compiler/bundle-stylesheet', ({ it }) => {
     it('flattens nested imports in cascade order', () => {
         const bundle = makeBundle('/stylesheets/admin.css', {
             '/stylesheets/admin.css': [

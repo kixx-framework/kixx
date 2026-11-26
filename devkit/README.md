@@ -57,7 +57,7 @@ Commands
 - `kixx admin accept-invite` — redeem an invite and create an admin account.
 - `kixx admin list-migrations` — list migrations and their status.
 - `kixx admin run-migration` — run one batch of a migration.
-- `kixx app publish` — publish content and assign it to a build.
+- `kixx app publish` — publish content and assign it to a build. Doesn't work in this version: the content compiler moved into Kixx core.
 - `kixx app assign-build` — assign an existing Release to a build.
 - `kixx cloudflare create-worker` — create a Worker.
 - `kixx cloudflare update-worker` — replace a Worker's settings.
@@ -67,7 +67,7 @@ Commands
 - `kixx local create` — create a throwaway local instance.
 - `kixx local seed` — create an instance's admin, token, and content.
 - `kixx local start` — run an instance under the devserver.
-- `kixx local publish` — republish content to a running instance.
+- `kixx local publish` — republish content to a running instance. Doesn't work in this version, for the same reason.
 - `kixx local list` — list instances.
 - `kixx local destroy` — delete a stopped instance.
 

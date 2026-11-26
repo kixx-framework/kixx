@@ -1,12 +1,12 @@
 import { describe } from 'kixx-test';
-import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
+import { assert, assertEqual } from 'kixx-assert';
 import {
     parseStylesheet,
     renderStylesheet,
-} from '../../../lib/publishing/parse-stylesheet.js';
+} from '../../../kixx/content-compiler/parse-stylesheet.js';
 
 
-describe('publishing/parse-stylesheet', ({ it }) => {
+describe('content-compiler/parse-stylesheet', ({ it }) => {
     it('recognizes supported import forms case-insensitively', () => {
         const source = [
             '@import "one.css";',

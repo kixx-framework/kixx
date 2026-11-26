@@ -21,7 +21,7 @@ lib/          all real logic, grouped by subsystem
 |---|---|---|
 | `lib/` (root) | everything | Settings layers (`config-loader.js`), `cloudflare-config.jsonc` loading, JSONC, `.env.<env>` parsing, terminal prompts, text wrapping, the `fileSystem` seam, `UsageError`, hashing, token generation, and JavaScript parsing over vendored `acorn` (`parse-javascript.js`) |
 | `lib/admin/` | `admin`, `local` | Admin API client, invite redemption, credential prompting, and environment resolution |
-| `lib/publishing/` | `app`, `local` | Scanning content sources, stylesheet bundling, content addressing, capability negotiation, Release creation, and build assignment over the Publishing API |
+| `lib/publishing/` | `app`, `local` | Content addressing, capability negotiation, Release creation, and build assignment over the Publishing API |
 | `lib/bundler/` | `cloudflare` | Crawls an app's static ES module graph and strips comments for upload, using `parse-javascript.js` |
 | `lib/cloudflare/` | `cloudflare` | Cloudflare API client, config validation, bindings, secrets parity, resource checks, Durable Object exports, and the Worker version and deploy pipelines |
 | `lib/devserver/` | `dev`, `local` | Proxy server, app child process, and restart decisions on file change |
@@ -56,7 +56,9 @@ The devkit talks to a Kixx application over wire formats and reads files in the 
 | `lib/publishing/addressing.js` | `kixx/content-addressable-store/addressing.js` | `test/conformance/addressing.test.js` |
 | `lib/publishing/content-layout.js` | `kixx/content-addressable-store/content-layout.js` | `test/conformance/content-layout.test.js` |
 
-`test/conformance/bundle-lib.test.js` and `scan-lib-content.test.js` also run the bundler and content scanner against the real `lib/` app, and `local-instance-env.test.js` checks generated instance files against `lib/`'s config reader and secrets manifest.
+`test/conformance/bundle-lib.test.js` also runs the bundler against the real `lib/` app, and `local-instance-env.test.js` checks generated instance files against `lib/`'s config reader and secrets manifest.
+
+The content scanner, the stylesheet bundler, and the asset comment stripper moved into Kixx core as the content compiler (`kixx/content-compiler/`). The devkit can't import core, so `publishRelease()` has no default scanner: `kixx app publish` and `kixx local publish` stop with a `UsageError` until the CLI that loads the compiler from the project's `kixx/` is built. A caller can still inject `scan`.
 
 Rules:
 
