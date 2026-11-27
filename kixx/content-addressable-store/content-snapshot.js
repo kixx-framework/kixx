@@ -76,18 +76,31 @@ export default class ContentSnapshot {
     #logger;
     #store;
     #index;
+    #suppliedContent;
 
     /**
      * @param {ContentStoreInterface} store - Platform adapter for blob and index persistence
      * @param {import('./content-addressable-index.js').default} index - The closure this snapshot is pinned to
      * @param {import('../logger/logger.js').default} logger - Logger used as-is; the owner creates the named child once
+     * @param {(import('./content-addressable-store.js').SuppliedContent|null)} [suppliedContent=null] - The supplied content this snapshot reads, when it isn't a Release
      * @throws {AssertionError} When logger is not provided
      */
-    constructor(store, index, logger) {
+    constructor(store, index, logger, suppliedContent = null) {
         assert(logger, 'ContentSnapshot requires a logger');
         this.#logger = logger;
         this.#store = store;
         this.#index = index;
+        this.#suppliedContent = suppliedContent;
+    }
+
+    /**
+     * The supplied content this snapshot reads, or null for a snapshot of a
+     * Release. A reader uses it to tell the two apart: content supplied for a
+     * request is not a published Release, so it must never be cached as one.
+     * @type {(import('./content-addressable-store.js').SuppliedContent|null)}
+     */
+    get suppliedContent() {
+        return this.#suppliedContent;
     }
 
     // Resolves a storage pathname through the pinned index and reads its blob.
