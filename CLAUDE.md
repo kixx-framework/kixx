@@ -36,6 +36,7 @@ node run-linter.js test-app        # lint the integration suite
 - `test/kixx/import-hygiene.test.js` enforces the import rules above.
 - The plugin guide is `plugins/README.md`: manifests, lifecycle modules, generated registries, entry points, and the ports-and-adapters rules.
 - Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A generated JavaScript file turns lint off for itself.
+- `node tools/build-project.js <directory>` builds a project with no plugins from the skeleton (`devkit/templates/project/`) and core, and runs the generator. Build one under `tmp/` to try a change in a real project. It replaces a directory it built before and refuses any other directory that isn't empty.
 - Every change must work on Node.js, Deno, and Cloudflare.
 - Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 
@@ -46,7 +47,6 @@ node run-linter.js test-app        # lint the integration suite
 - When a `test-v6/` file mixes cases for the current work with cases for code a later section reworks, split it. `git mv` the file into the active suite in a commit that holds only renames. Then trim the moved copy to the cases that cover the current work, and restore the rest at the old path unchanged. Delete cases that cover removed code. The parked rest waits for its own section.
 - The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Most of the devkit's conformance tests are still parked in `test-v6/devkit/conformance/` and don't run; `devkit/test/conformance/content-contract.test.js` runs. The devkit's contract pin (`devkit/lib/publishing/negotiate-capabilities.js`) and the manifest shape it composes must stay in step with core. The four ported modules needn't be kept in step until the devkit sections decide their fate.
 - The v6 integration suites wait in `test-v6/test-app/` until they are rewritten for v7. Their runner moved to `test-app/`.
-- `tools/build-test-app.js` is v6 and knowingly broken. Never run it: it would wipe `test-app/`.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 
 Kixx Devkit

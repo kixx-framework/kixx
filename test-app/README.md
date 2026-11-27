@@ -147,7 +147,3 @@ describeProbeSuite(describe, { client, suite: 'key-value-store', tests });
 The client sends the deploy key as a bearer token, to the probe's URL only. It follows no redirect, and no error it throws carries the key. An answer that isn't the probe's is an error named `ProbeRequestError`, never a passed test.
 
 To add a suite, import it in `probe/probe-suites.js` and add it to `PROBE_SUITES`. The rules a suite must follow to run inside a target are in `test/README.md`, under "Shared Conformance Suites".
-
-## Never Run `tools/build-test-app.js`
-
-`tools/build-test-app.js` is a v6 tool and is knowingly broken. It was written to rebuild this directory, and when its checks pass it wipes `test-app/`. Don't run it.

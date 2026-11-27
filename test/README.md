@@ -48,6 +48,7 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
 
 - Put unit tests under `test/`, mirroring the source tree: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`, adapters by `test/kixx/adapters/<platform>/<name>/…`, and plugins (once they exist) by `test/plugins/<name>/…`.
 - Unit tests for code under `test-app/` (the integration runner and the probe) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target.
+- Unit tests for the scripts' shared code in `tools/lib/` live in `test/tools/`: `tools/lib/assemble-project.js` is tested by `test/tools/assemble-project.test.js`. A test that assembles a project builds it in a temporary directory, removes it afterwards, and shares one assembly among the tests of a `describe`.
 - Integration tests live in `test-app/test/`.
 - Fakes of platform services live in `test/fakes/` (see "Fakes").
 - Name test files with the project convention `*.test.js`.
@@ -302,7 +303,7 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 
 ## Import Hygiene Rules
 
-`test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear:
+`test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear. Its import walker (`extractSpecifiers()` and `readImportGraph()`) is in `tools/lib/import-graph.js`, shared with the project assembly:
 
 - **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. No core module outside `kixx/adapters/` imports an adapter: adapters are reached through generated registries and entry points. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
 - **The content compiler and the tooling entry.** Nothing reachable from `kixx/content-compiler/mod.js` or `kixx/tooling/mod.js` imports a `node:*` or `cloudflare:*` module or a package, or is a file under `kixx/adapters/`. That is what lets the compiler run in a command line tool, a server, and a Worker. The rules above imply it. This one follows the imports and prints the chain of files that leads to a break. The entries are listed in `PLATFORM_NEUTRAL_ENTRIES`.

@@ -45,7 +45,8 @@ kixx/
 ├── test/                        # Unit tests mirroring kixx/ (and later plugins/)
 │   ├── fakes/                   # Shared fakes of platform services (KV, Durable Objects)
 │   ├── fixtures/                # A small project that boots from generated registries
-│   └── test-app/                # Unit tests for the integration runner and the probe
+│   ├── test-app/                # Unit tests for the integration runner and the probe
+│   └── tools/                   # Unit tests for tools/lib/
 ├── test-app/                    # Integration suite, run against a real target (see test-app/README.md)
 │   ├── run-tests.js             # Integration test runner (`node test-app/run-tests.js --local`)
 │   ├── probe/                   # Runs shared test suites inside a running server
@@ -63,7 +64,9 @@ kixx/
 ├── reference-app/               # What remains of the v6 starter app: source material, not runnable
 ├── test-v6/                     # v6 tests not yet brought back; never run or linted
 ├── tools/                       # Scripts for working on this repo
-│   └── generate-registries.js   # Writes a project's registries from its manifests
+│   ├── build-project.js         # Builds a project with no plugins from the skeleton and core
+│   ├── generate-registries.js   # Writes a project's registries from its manifests
+│   └── lib/                     # The project assembly and the import walker
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)
 ├── agents/plans/                # Structured implementation plans
 ├── run-tests.js                 # Unit test runner (`node run-tests.js [path]`)

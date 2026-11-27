@@ -334,8 +334,6 @@ export default [
             'devkit/',
             'docs/',
             'usage-docs/',
-            // v6, knowingly broken, and never run.
-            'tools/build-test-app.js',
             'agents/',
         ],
     },

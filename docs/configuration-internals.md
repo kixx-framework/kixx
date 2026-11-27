@@ -120,13 +120,10 @@ file.
 ## Config templates
 
 `node-config.jsonc` and `cloudflare-config.jsonc` can be rendered from
-templates in `lib/`. Today two things render them:
-`test/config-templates.test.js`, and `tools/build-test-app.js`
-(from the repo root), which renders `test-app`'s configs from its own
-context files. No devkit command uses them yet.
-
-`tools/build-test-app.js` is a v6 tool and knowingly broken. Don't run it:
-it would wipe `test-app/`, which now holds the integration suite.
+templates in `lib/`. This is v6 material: `test/config-templates.test.js`
+rendered them, and so did a v6 build tool that has been deleted. Nothing
+renders them today, and no devkit command uses them. The project skeleton
+(`devkit/templates/project/`) holds plain config files instead.
 
 | File | Purpose |
 | --- | --- |
@@ -249,6 +246,4 @@ Paths are below `environments.<envName>` unless marked root.
 Follow "Adding a new setting" in the usage configuration doc. For a
 per-environment setting, also add the key to the matching `.jsonc.template`,
 its example context, and the [Config templates](#config-templates) tables,
-or `config-templates.test.js` fails. Add it to `test-app`'s context files
-too, or `tools/build-test-app.js` fails to render. That tool is v6 and
-knowingly broken, and must not be run: it would wipe `test-app/`.
+or `config-templates.test.js` fails.
