@@ -137,9 +137,9 @@ export function readOptionalDotEnvFile(filepath, readFile = defaultReadFile) {
  * absolute path.
  *
  * Resolves against dataDirectory when it is a non-empty string, otherwise
- * against baseDirectory. This lets the `local` environment point every
- * store at its own directory (via the DATA_DIRECTORY environment variable)
- * while every other environment resolves against `lib/`.
+ * against baseDirectory. This lets a host point every store at its own
+ * directory (via the DATA_DIRECTORY environment variable), while a project
+ * that sets none keeps its stores under the project root.
  *
  * @param {Object} options
  * @param {string} options.baseDirectory - Default directory config-relative paths resolve against.

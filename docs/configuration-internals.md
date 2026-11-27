@@ -62,6 +62,25 @@ config and turns config-relative store paths into real paths.
 config path's POSIX-style segments against `DATA_DIRECTORY` when set, or
 against the project directory otherwise.
 
+**What boot needs (CORE-2).** A Node.js config needs only `name` and a
+section for the selected environment.
+
+- Core's manifest gives the Node.js target two store defaults:
+  `KEY_VALUE_STORE.path` is `data/key-value-store.sqlite` and
+  `CONTENT_STORE.rootDirectory` is `data/content-store`. Both go through
+  `resolveFilepath`, so they land under `DATA_DIRECTORY` when it is set and
+  under the project directory otherwise. The two store plugins still assert
+  the merged value and keep no fallback of their own.
+- `bootApplication()` passes `config.env.LOGGER?.level` to the `Logger`. A
+  missing block or level gives INFO. An invalid level name still throws.
+- A missing or empty `BUILD_ID` is not a boot failure.
+  `ContentAddressableStore#openSnapshot()` throws the expected
+  `OperationalError` with code `BuildNotServable` (503) without asking the
+  store for a build, and logs `build cannot serve content` once. Supplied
+  content (the development working tree) is served before the build id is
+  read. The check is in the platform-neutral store, so every platform
+  behaves alike.
+
 ## Environment merging
 
 `kixx/adapters/node/server/lib/node-environment.js` (`readEnvironment`,

@@ -95,9 +95,11 @@ export function bootApplication(options) {
         server: { name: config.name },
     });
 
+    // A project may leave out the LOGGER block or its level. The Logger then
+    // defaults to INFO. An invalid level still fails boot.
     const logger = new Logger({
         name: config.name,
-        level: config.env.LOGGER.level,
+        level: config.env.LOGGER?.level,
         writer: new LoggerWriter(),
     });
 

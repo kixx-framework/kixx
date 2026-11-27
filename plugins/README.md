@@ -257,6 +257,10 @@ Objects merge key by key. An array or any other value replaces the default whole
 
 So a project's config holds only what has no default, or what it wants to change. The manifest is the single source of a default: a lifecycle module reads the merged value from `context.config.env` and asserts it, with a message naming the config path. It keeps no fallback of its own.
 
+Core's Node.js defaults are the example: `KEY_VALUE_STORE.path` is `data/key-value-store.sqlite` and `CONTENT_STORE.rootDirectory` is `data/content-store`. A lifecycle module resolves such a path with `context.config.resolveFilepath()`, which puts it under `DATA_DIRECTORY` when that is set and under the project root otherwise.
+
+A project's config needs no `LOGGER` block: a missing block or level logs at INFO. And a server with no `BUILD_ID` still boots; it answers page requests with 503 `BuildNotServable` until it is deployed with one.
+
 ## Secrets
 
 Declare every secret the code reads: a plugin in its manifest, an app in `app/app.json`.

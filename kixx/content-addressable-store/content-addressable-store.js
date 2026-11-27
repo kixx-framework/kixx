@@ -330,8 +330,9 @@ export default class ContentAddressableStore {
      * @param {Object} context - Request or execution context, passed through to the store
      * @returns {Promise<ContentSnapshot>} A snapshot pinned to the supplied content or the current build's closure
      * @throws {AssertionError} When the stored index table is malformed
-     * @throws {OperationalError} When the build has no assigned Release, its Release's content
-     *   contract is unsupported by this code, or the backing store fails
+     * @throws {OperationalError} When the runtime has no build id, the build has no assigned
+     *   Release, its Release's content contract is unsupported by this code, or the backing
+     *   store fails
      */
     async openSnapshot(context) {
         const suppliedContent = await this.#resolveSuppliedContent(context);
@@ -346,6 +347,19 @@ export default class ContentAddressableStore {
         }
 
         const buildId = context.runtime.build.id ?? null;
+
+        // A deploy with no BUILD_ID can serve no Release. That is the same
+        // deploy configuration fault as a build with no Release, so it gets
+        // the same expected 503, and the store is never asked for a build
+        // it cannot name.
+        if (!isNonEmptyString(buildId)) {
+            this.#reportUnservableBuild(buildId, 'BUILD_ID is not set, so no build can be resolved');
+            throw new OperationalError('BUILD_ID is not set, so there is no build to serve', {
+                code: 'BuildNotServable',
+                httpStatusCode: 503,
+            });
+        }
+
         this.#logger.info('open-snapshot get-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
 
@@ -369,7 +383,8 @@ export default class ContentAddressableStore {
         return new ContentSnapshot(this.#store, index, this.#snapshotLogger);
     }
 
-    // Reports (once per build id) that a build has no assigned Release. Called
+    // Reports (once per build id, a missing one included) that a build cannot
+    // serve content: it has no id or no assigned Release. Called
     // only from openSnapshot(); getCurrentBuild() treats the same condition as
     // an expected, unlogged "null" outcome for its own callers.
     #reportUnservableBuild(buildId, reason) {

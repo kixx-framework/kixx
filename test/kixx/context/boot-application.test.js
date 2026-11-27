@@ -78,6 +78,42 @@ describe('bootApplication', ({ it, describe }) => {
         assert(logger, 'expected a logger to be returned');
     });
 
+    // CORE-2: boot needs no LOGGER block.
+    it('returns a logger at INFO when the config has no LOGGER block', () => {
+        const config = makeConfig();
+        delete config.env.LOGGER;
+
+        const { logger } = boot({ config });
+
+        assertEqual('INFO', logger.level);
+    });
+
+    it('returns a logger at INFO when the LOGGER block has no level', () => {
+        const config = makeConfig();
+        config.env.LOGGER = {};
+
+        const { logger } = boot({ config });
+
+        assertEqual('INFO', logger.level);
+    });
+
+    it('uses the configured log level', () => {
+        const { logger } = boot();
+
+        assertEqual('ERROR', logger.level);
+    });
+
+    it('throws when the configured log level is invalid', () => {
+        const config = makeConfig();
+        config.env.LOGGER = { level: 'LOUD' };
+
+        const caught = catchError(() => boot({ config }));
+
+        assert(caught, 'expected an error to be thrown');
+        assertEqual('AssertionError', caught.name);
+        assertMatches('"LOUD" is an invalid level name', caught.message);
+    });
+
     it('runs every plugin register() before any plugin initialize(), then app hooks, then finalizes the logger', () => {
         const calls = [];
 
