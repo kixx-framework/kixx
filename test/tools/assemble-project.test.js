@@ -239,6 +239,40 @@ describe('assembleProject', ({ before, after, describe }) => {
         });
     });
 
+    describe('after a build that failed part way', ({ before, it }) => {
+        let targetDirectory;
+        let error;
+        let leftBehind;
+        let written;
+
+        before(async () => {
+            targetDirectory = path.join(temporaryDirectory, 'failed');
+
+            // The closure is read after the skeleton and core are copied.
+            error = await catchAsyncError(() => {
+                return assembleProject({
+                    targetDirectory,
+                    closureEntries: [ path.join(temporaryDirectory, 'no-such-entry.js') ],
+                });
+            });
+
+            leftBehind = listFiles(targetDirectory);
+            written = await assembleProject({ targetDirectory });
+        });
+
+        it('leaves the marker beside what it copied', () => {
+            assertEqual('OperationalError', error.name);
+            assert(leftBehind.includes(MARKER_FILE_NAME));
+            assert(leftBehind.includes('node-server.js'));
+            assertFalsy(leftBehind.includes('routes.generated.js'));
+        });
+
+        it('is replaced by the next build', () => {
+            assertEqual(listFiles(targetDirectory).join('\n'), written.join('\n'));
+            assert(written.includes('routes.generated.js'));
+        });
+    });
+
     describe('into a directory it didn\'t build', ({ it }) => {
         it('refuses, and leaves the directory as it was', async () => {
             const targetDirectory = path.join(temporaryDirectory, 'someone-elses');

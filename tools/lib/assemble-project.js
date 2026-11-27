@@ -44,6 +44,10 @@ export async function assembleProject(options) {
 
     await prepareTargetDirectory(targetDirectory);
 
+    // The marker goes in first, so the next build may replace a build that
+    // failed part way.
+    await fsp.writeFile(path.join(targetDirectory, MARKER_FILE_NAME), MARKER_TEXT);
+
     // The skeleton stores its .gitignore as `gitignore`: a real one would
     // act on this repository, and npm leaves one out of a package.
     await fsp.cp(SKELETON_DIRECTORY, targetDirectory, { recursive: true });
@@ -73,8 +77,6 @@ export async function assembleProject(options) {
             await fsp.copyFile(filepath, destination);
         }
     }
-
-    await fsp.writeFile(path.join(targetDirectory, MARKER_FILE_NAME), MARKER_TEXT);
 
     await writeProjectFiles({ fileSystem: createProjectFileSystem(targetDirectory) });
 
