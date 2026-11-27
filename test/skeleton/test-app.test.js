@@ -5,6 +5,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import { createProbeClient } from '../../test-app/probe/probe-client.js';
+import { publishTestAppContent } from '../../test-app/test/test-helpers/publish.js';
 import { assembleTestApp } from '../../tools/lib/assemble-project.js';
 import {
     BUILD_ID,
@@ -20,6 +21,12 @@ const SKELETON_DIRECTORY = fileURLToPath(new URL('../../devkit/templates/project
 
 const PROBE_PATHNAME = '/integration-probe/probe';
 const ENVIRONMENT_PATHNAME = '/integration-probe/environment';
+
+// The page the plugin's content root supplies.
+const PLUGIN_PAGE_PATHNAME = '/integration-probe-page';
+
+// Hyperview's rendered-page cache keys, in the key/value store.
+const PAGE_CACHE_PREFIX = 'hyperview_page_cache#';
 
 // One test that only reads, and one that writes and reads back.
 const READ_TEST = 'resolves null for a missing key';
@@ -143,6 +150,13 @@ describe('test app', ({ before, after, describe, it }) => {
         }
     });
 
+    it('lists the plugin\'s pages as a content root', () => {
+        assertEqual(
+            JSON.stringify([ { plugin: 'integration-probe', pagesDirectory: 'plugins/integration-probe/pages' } ]),
+            JSON.stringify(project.nodeRegistry.contentRoots),
+        );
+    });
+
     it('wires the plugin through the generated registries', () => {
         assert(project.nodeRegistry.plugins.has('integration-probe:./adapters/node/plugin.js'));
         assert(project.cloudflareRegistry.plugins.has('integration-probe:./adapters/cloudflare/plugin.js'));
@@ -152,6 +166,11 @@ describe('test app', ({ before, after, describe, it }) => {
     describe('in production on the Node.js adapters', ({ before, after, it }) => {
         let booted;
         let used;
+        let published;
+        let home;
+        let pluginPage;
+        let held;
+        let cachedPages;
 
         before(async () => {
             booted = await bootOnNode(project, {
@@ -164,6 +183,24 @@ describe('test app', ({ before, after, describe, it }) => {
             });
 
             used = await useProbe(fetch, booted.origin, [ READ_TEST, WRITE_TEST ]);
+
+            // After the probe: a publish ends the 503 it looks for.
+            published = await publishTestAppContent({}, { baseUrl: booted.origin, deployKey: DEPLOY_KEY });
+
+            home = await fetch(`${ booted.origin }/`);
+            await home.arrayBuffer();
+
+            const response = await fetch(`${ booted.origin }${ PLUGIN_PAGE_PATHNAME }`);
+
+            pluginPage = { status: response.status, text: await response.text() };
+
+            held = await fetchJSON(fetch, `${ booted.origin }/integration-probe/hold?ms=20`, DEPLOY_KEY);
+
+            cachedPages = await fetchJSON(
+                fetch,
+                `${ booted.origin }/integration-probe/key-value-keys?prefix=${ encodeURIComponent(PAGE_CACHE_PREFIX) }`,
+                DEPLOY_KEY,
+            );
         });
 
         after(async () => {
@@ -174,9 +211,69 @@ describe('test app', ({ before, after, describe, it }) => {
             assertProbe(used, 'node');
         });
 
+        it('takes the integration suite\'s publish as a pre-stage of the running build', () => {
+            assertEqual('prestage', published.intent);
+            assertEqual(BUILD_ID, published.buildId);
+        });
+
+        it('renders the skeleton\'s home page and the plugin\'s page from the Release', () => {
+            assertEqual(200, home.status);
+            assertEqual(200, pluginPage.status);
+            assertMatches('<h1>Integration probe page</h1>', pluginPage.text);
+            assertMatches('<title>Integration probe page</title>', pluginPage.text);
+        });
+
+        it('holds a request for the time asked', () => {
+            assertEqual(200, held.status);
+            assertEqual(20, held.body.held);
+        });
+
+        it('counts no page cache key: the page cache is off by default', () => {
+            assertEqual(200, cachedPages.status);
+            assertEqual(0, cachedPages.body.count);
+        });
+
         it('keeps the server running', () => {
             assert(booted.server.listening);
             assertEqual(0, booted.fakeProcess.exitCodes.length);
+        });
+    });
+
+    // No BUILD_ID, no secret, and no publish: the working tree is the
+    // content, and the plugin's routes are open.
+    describe('in development on the Node.js adapters', ({ before, after, it }) => {
+        let booted;
+        let pluginPage;
+        let environment;
+
+        before(async () => {
+            booted = await bootOnNode(project, {
+                environment: 'development',
+                env: { DATA_DIRECTORY: path.join(project.temporaryDirectory, 'development-data') },
+            });
+
+            const response = await fetch(`${ booted.origin }${ PLUGIN_PAGE_PATHNAME }`);
+
+            pluginPage = { status: response.status, text: await response.text() };
+            environment = await fetchJSON(fetch, `${ booted.origin }${ ENVIRONMENT_PATHNAME }`, null);
+        });
+
+        after(async () => {
+            await booted.close();
+        });
+
+        it('renders the plugin\'s page from the working tree, in the project\'s base template', () => {
+            assertEqual(200, pluginPage.status);
+            assertMatches('<h1>Integration probe page</h1>', pluginPage.text);
+            assertMatches('<title>Integration probe page</title>', pluginPage.text);
+        });
+
+        it('opens the plugin\'s routes with no deploy key', () => {
+            assertEqual(200, environment.status);
+            assertEqual(
+                JSON.stringify({ target: 'node', environment: 'development', buildId: null }),
+                JSON.stringify(environment.body),
+            );
         });
     });
 

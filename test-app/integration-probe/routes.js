@@ -10,9 +10,14 @@
 // plugins/integration-probe/ sits two levels below a project's root. So
 // these imports are the same in the built test app.
 import { requireDeployKey, verifyDeployKey } from '../../kixx/deploy-key/mod.js';
+import { BadRequestError, NotFoundError } from '../../kixx/errors/mod.js';
 import { createProbeHandler } from '../../test-app/probe/probe-handler.js';
 import { BUILT_IN_FACTORIES, PROBE_SUITES } from '../../test-app/probe/probe-suites.js';
 
+
+// The longest /hold waits. A test's whole request must fit the runner's
+// 10-second ceiling.
+const MAX_HOLD_MS = 5000;
 
 const PORT_SUITES = [ 'content-store', 'key-value-store', 'logger-writer', 'server-request' ];
 
@@ -37,6 +42,42 @@ function showEnvironment(context, _request, response) {
     });
 }
 
+// Answers after `ms` milliseconds, so a test can have a request in flight
+// when it sends the server a signal.
+async function hold(_context, request, response) {
+    const asked = Number(request.url.searchParams.get('ms'));
+    const milliseconds = Number.isFinite(asked) ? Math.min(Math.max(asked, 0), MAX_HOLD_MS) : 0;
+
+    await new Promise((resolve) => {
+        setTimeout(resolve, milliseconds);
+    });
+
+    return response.respondWithJSON(200, { held: milliseconds });
+}
+
+// A bug, as a server sees one: an error nothing expected.
+function throwUnexpectedError() {
+    throw new Error('integration-probe: an unexpected error, thrown on purpose');
+}
+
+// How many keys the app's key/value store holds under a prefix. The port has
+// no listing, so only a target whose adapter can count answers.
+async function countKeyValueKeys(context, request, response) {
+    const count = context.getService('IntegrationProbe').countKeyValueKeys;
+
+    if (typeof count !== 'function') {
+        throw new NotFoundError('This target can\'t count key/value keys');
+    }
+
+    const prefix = request.url.searchParams.get('prefix');
+
+    if (!prefix) {
+        throw new BadRequestError('The prefix query parameter is required');
+    }
+
+    return response.respondWithJSON(200, { prefix, count: await count(prefix) });
+}
+
 
 export default {
     inboundMiddleware: [ requireDeployKey ],
@@ -53,6 +94,27 @@ export default {
             name: 'environment',
             targets: [
                 { name: 'show', methods: [ 'GET' ], requestHandlers: [ showEnvironment ] },
+            ],
+        },
+        {
+            pattern: '/hold',
+            name: 'hold',
+            targets: [
+                { name: 'hold', methods: [ 'GET' ], requestHandlers: [ hold ] },
+            ],
+        },
+        {
+            pattern: '/unexpected-error',
+            name: 'unexpected-error',
+            targets: [
+                { name: 'throw', methods: [ 'GET' ], requestHandlers: [ throwUnexpectedError ] },
+            ],
+        },
+        {
+            pattern: '/key-value-keys',
+            name: 'key-value-keys',
+            targets: [
+                { name: 'count', methods: [ 'GET' ], requestHandlers: [ countKeyValueKeys ] },
             ],
         },
     ],

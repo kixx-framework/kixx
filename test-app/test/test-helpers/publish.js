@@ -26,9 +26,15 @@ const JSON_API = 'application/vnd.api+json';
 export const DEFAULT_SOURCE_REVISION = '5131300000000000000000000000000000000000';
 export const DEFAULT_CODE_FINGERPRINT = `kxfp1:${ '51313'.padEnd(64, '0') }`;
 
-// The test app's content is the project skeleton's own. Its one plugin has
-// none, and adds no template helper to core's.
+// The test app's content is the project skeleton's own, plus the one page
+// of its plugin. The plugin adds no template helper to core's.
 const SKELETON_DIRECTORY = fileURLToPath(new URL('../../../devkit/templates/project', import.meta.url));
+const PLUGIN_DIRECTORY = fileURLToPath(new URL('../../integration-probe', import.meta.url));
+
+// As the built test app's registries export it (`contentRoots`).
+const PLUGIN_CONTENT_ROOTS = Object.freeze([
+    Object.freeze({ plugin: 'integration-probe', pagesDirectory: 'plugins/integration-probe/pages' }),
+]);
 const CORE_MANIFEST_FILE = fileURLToPath(new URL('../../../kixx/plugin.json', import.meta.url));
 
 let testAppContent = null;
@@ -36,13 +42,14 @@ let published = null;
 
 
 /**
- * Reads the test app's content: every content file of the project skeleton,
- * by its path from the project root. Read once for the run.
+ * Reads the test app's content: every content file of the project skeleton
+ * and of the plugin, by its path from the project root of the built test
+ * app. Read once for the run.
  *
  * @returns {Promise<Object<string, Uint8Array>>} A new object on each call, so a caller may add files to it
  */
 export async function readTestAppContent() {
-    testAppContent ??= readSkeletonContent();
+    testAppContent ??= readContent();
 
     return { ...await testAppContent };
 }
@@ -50,21 +57,27 @@ export async function readTestAppContent() {
 /**
  * Publishes the test app's content, with any extra files, to the build the
  * integration target runs, and assigns it. The target and the deploy key
- * come from the environment (see target.js).
+ * come from the environment (see target.js), unless a test names a server
+ * it started itself.
  *
  * Every test's Release holds the skeleton's files, so the skeleton's pages
  * render whichever Release was assigned last.
  *
  * @param {Object<string, Uint8Array|string>} [extraFiles] - Content files to add, by their path from the project root
+ * @param {Object} [target] - Another test app to publish to
+ * @param {string} [target.baseUrl] - Its origin
+ * @param {string|null} [target.deployKey] - Its deploy key
  * @returns {Promise<{ releaseId: string, buildId: string, assignmentId: string, intent: string, uploaded: number }>}
  */
-export async function publishTestAppContent(extraFiles = {}) {
+export async function publishTestAppContent(extraFiles = {}, target = {}) {
+    const { baseUrl = getBaseUrl(), deployKey = getDeployKey() } = target;
     const { templateHelpers } = JSON.parse(fs.readFileSync(CORE_MANIFEST_FILE, 'utf8'));
 
     return publishContent({
-        baseUrl: getBaseUrl(),
-        deployKey: getDeployKey(),
+        baseUrl,
+        deployKey,
         files: { ...await readTestAppContent(), ...extraFiles },
+        pluginContentRoots: PLUGIN_CONTENT_ROOTS,
         templateHelpers,
     });
 }
@@ -288,18 +301,26 @@ function describeErrors(text) {
     }
 }
 
-async function readSkeletonContent() {
-    const source = createFileSystemContentSource(SKELETON_DIRECTORY);
+async function readContent() {
     const files = {};
 
-    for (const directory of listContentDirectories([])) {
+    await readDirectories(files, SKELETON_DIRECTORY, listContentDirectories([]), '');
+
+    // In the built test app the plugin is at plugins/integration-probe/.
+    await readDirectories(files, PLUGIN_DIRECTORY, [ 'pages' ], 'plugins/integration-probe/');
+
+    return files;
+}
+
+async function readDirectories(files, root, directories, prefix) {
+    const source = createFileSystemContentSource(root);
+
+    for (const directory of directories) {
         const { entries } = await source.listFiles(directory);
 
         for (const entry of entries) {
             const filepath = `${ directory }/${ entry.path }`;
-            files[filepath] = new Uint8Array(await source.readFile(filepath));
+            files[`${ prefix }${ filepath }`] = new Uint8Array(await source.readFile(filepath));
         }
     }
-
-    return files;
 }

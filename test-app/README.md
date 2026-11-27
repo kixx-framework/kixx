@@ -4,7 +4,7 @@ The integration suite checks Kixx code against the real systems under it: Cloudf
 
 It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory. CI runs it in a job of its own, against a test app started on the runner. What belongs in each suite is in the Testing Guide, `test/README.md`.
 
-> **Status:** The suite checks that the test app is up with production settings, serves its pages from a published Release, takes a publish, and guards its Publishing API with the deploy key (`test/all-targets/`), and runs all six probe suites inside it (`test/probe/`). The tests run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
+> **Status:** The suite checks that the test app is up with production settings, serves its pages from a published Release, takes a publish, and guards its Publishing API with the deploy key (`test/all-targets/`), and runs all six probe suites inside it (`test/probe/`). On the local target it also starts servers of its own to check what only a process can show: signals, exit codes, boot failures, a restart, and development mode (`test/local/`). The tests run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
 
 ```
 test-app/
@@ -23,9 +23,11 @@ test-app/
 └── test/                         # Integration tests (*.test.js)
     ├── all-targets/              # Tests that run on every target
     ├── probe/                    # One file per probe suite; they run on every target
+    ├── local/                    # Tests that start their own server process; local target only
     └── test-helpers/
         ├── target.js             # getBaseUrl(), getDeployKey(), getTarget(), describeOnTarget(), fetchWithDeployKey()
-        └── publish.js            # publishContent(): a publish over HTTP
+        ├── publish.js            # publishContent(): a publish over HTTP
+        └── local-server.js       # startLocalServer(): a test app of a test's own, on a free port
 ```
 
 ## The Test App
@@ -42,12 +44,17 @@ It writes `test-app/build/`, replacing what it built before. The directory is gi
 - **The plugin is installed the way any plugin is.** `test-app/integration-probe/` is copied to `plugins/integration-probe/`, and the generator wires its routes and lifecycle modules through the registries. The source sits two levels below the repository root, as a plugin sits two levels below a project root, so its imports (`../../kixx/…`, `../../test-app/probe/…`) are the same in both places.
 - **What the plugin imports comes along.** The probe and the conformance suites it runs are copied to the same paths they have here (`test-app/probe/`, `test/kixx/…`), so the project root holds everything a Worker bundle needs.
 
-The plugin mounts two routes at `/integration-probe`, both behind the deploy key:
+The plugin mounts these routes at `/integration-probe`, all behind the deploy key:
 
 | Route | Answers |
 |---|---|
 | `GET` or `POST /integration-probe/probe` | The probe (see "The Probe"), with all six suites. |
 | `GET /integration-probe/environment` | `{ target, environment, buildId }`. `target` is `node` (Node.js and Deno) or `cloudflare`. |
+| `GET /integration-probe/hold?ms=<n>` | `{ held }`, after waiting `n` milliseconds, at most 5,000. A test uses it to have a request in flight when it sends a signal. |
+| `GET /integration-probe/unexpected-error` | Nothing: it throws a plain `Error`, as a bug would. A Node.js or Deno server answers 500 and exits with code 1. |
+| `GET /integration-probe/key-value-keys?prefix=<p>` | `{ prefix, count }`: how many keys the app's key/value store holds under the prefix. Node.js and Deno only; 404 on Cloudflare. The port has no listing, so the plugin's Node.js adapter reads the store's SQLite file through a read-only connection. |
+
+The plugin also ships one page, `/integration-probe-page` (`pages/integration-probe-page/`), so a development server has a plugin page to render and a published Release holds one.
 
 Its `routes.js` is platform-neutral. Each target's lifecycle module (`adapters/node/plugin.js`, `adapters/cloudflare/plugin.js`) registers the `IntegrationProbe` service, which holds the target's name and a factory for each port suite, built over that target's own adapters and bindings:
 
@@ -152,13 +159,15 @@ Tests read these through `test/test-helpers/target.js`:
 - `getTarget()` returns `local`, `cloudflare`, or `nodejs`, or `null` for a target given by URL.
 - `fetchWithDeployKey(pathname, init)` sends a request to the target with the key as a bearer token. It follows no redirect, and an error from it names only the method and the path.
 
+`test/test-helpers/local-server.js` is for the tests in `test/local/`. `startLocalServer(options)` starts a test app on a free port with the runtime the runner runs on, and resolves once it answers. By default it runs the build in `production` with a deploy key, a build id, and a data directory of its own. The server it resolves has `origin`, `fetch(pathname, init)` (with its deploy key), `signal(name)`, `exited`, `exitWithin(milliseconds)`, and `close()`, which stops it and removes its data directory. Call `close()` in a `finally`. `copyBuild()` copies the build for a test that edits a file: nothing writes into `test-app/build/`. Whatever a test leaves running is killed when the runner exits.
+
 `test/test-helpers/publish.js` publishes content to a target through its Publishing API: `publishContent({ baseUrl, deployKey, files, pluginContentRoots, templateHelpers })` compiles the files, uploads the objects the store lacks, creates the Release, and assigns it to the build the target runs. The first assignment pre-stages the build with a made-up commit and code fingerprint; later ones are content-only publishes. The unit suite uses the same helper against a project booted on `127.0.0.1` (`test/skeleton/`).
 
 Integration tests use three more functions from that file, which take the target and the key from the environment:
 
 - `ensurePublished()` publishes the test app's content once for the run. Call it in a `before`. Every test file shares the one publish, so no file depends on another having run first.
-- `publishTestAppContent(extraFiles)` publishes the test app's content with extra files and assigns that Release.
-- `readTestAppContent()` reads the test app's content, which is the project skeleton's own (`devkit/templates/project/`).
+- `publishTestAppContent(extraFiles, target)` publishes the test app's content with extra files and assigns that Release. `target` (`{ baseUrl, deployKey }`) names a server the test started itself.
+- `readTestAppContent()` reads the test app's content: the project skeleton's own (`devkit/templates/project/`) and the plugin's page, at the paths they have in the built test app.
 
 Every Release a test assigns holds the skeleton's files, so the skeleton's pages render whichever test published last.
 
@@ -171,6 +180,14 @@ Every Release a test assigns holds the skeleton's files, so the skeleton's pages
 | `test/all-targets/publishing-api.test.js` | Every | Discovery at protocol 4, an upload, a Release, an assignment, and the Activation in the build's history. |
 | `test/all-targets/deploy-key.test.js` | Every | A missing and a wrong key are refused with 401, and the right key passes. The rate limit: the 21st failure from one address gets 429 with `Retry-After`, and the right key still passes. |
 | `test/probe/*.test.js` | Every | The six conformance suites, inside the target. |
+| `test/local/server-shell.test.js` | `local` | A server process boots and answers; exits 0 on `SIGTERM`, at once with nothing in flight, and within 2 seconds of the response when a request was in flight on a keep-alive connection; drops a request and exits 0 on `SIGINT`; exits 1 when its port is taken; answers 500 and exits 1 after an unexpected error. |
+| `test/local/boot-failures.test.js` | `local` | `production` with no `DEPLOY_KEY_HASH`, or a malformed one, exits non-zero, names the secret, and prints no value. `development` boots with neither a hash nor a `BUILD_ID`. |
+| `test/local/build-id.test.js` | `local` | `production` with no `BUILD_ID` boots, answers 503 for a page twice, still answers discovery, and keeps running. |
+| `test/local/persistence.test.js` | `local` | A published page still renders after the server is stopped and started again on the same data directory. |
+| `test/local/page-cache.test.js` | `local` | Hyperview writes page cache entries to the key/value store only when `HYPERVIEW.usePageCache` is on. |
+| `test/local/development.test.js` | `local` | A development server renders a page, a plugin's page, a public file, and the fingerprinted stylesheet from the working tree; shows an edit on the next request, also one that keeps the file's size; answers the 500 problems page for a broken page while the others render. |
+
+**The `local` tests start their own servers.** They don't use the server `run-local.js` started. Each starts the built test app (`test-app/build/`), or a copy of it in a temporary directory when it edits a file, on a free port, with its own data directory and deploy key, on the runtime the runner runs on: a Node.js run tests Node.js servers and a Deno run tests Deno servers. They register nothing on any other target. They need the build, which `run-local.js` makes; before a bare `run-tests.js --local`, run `node tools/build-test-app.js`. The drain test prints the time it measured from the held response to the exit.
 
 **A rerun against the same running target passes.** A publish of content the store holds uploads nothing and assigns the same Release. The publishing test adds a file unique to the run, so each run makes a new Release. The pages test assigns the skeleton's content back before it looks for its extra page, and leaves the Release with the extra page assigned.
 
@@ -182,6 +199,7 @@ The other deploy key tests and the boot test make about three failed attempts a 
 
 - Put it in `test-app/test/`, named `*.test.js`. It uses `kixx-test` and `kixx-assert`, like a unit test.
 - A test that is the same on every target goes in `test/all-targets/`. A test for one target goes in `test/local/` or `test/cloudflare/`, and registers its block with `describeOnTarget([ 'local' ], name, fn)`, which registers nothing on any other target or on one given by URL.
+- A test that needs a server of its own starts it with `startLocalServer()` from `test/test-helpers/local-server.js`, and closes it in a `finally` or an `after`. Keep such a block flat: kixx-test runs a block's `after` before its child blocks.
 - Every test file is imported into one process, in path order. Don't depend on that order.
 - Drive the target over HTTP, from `getBaseUrl()`.
 - Touch only the test app's own resources.

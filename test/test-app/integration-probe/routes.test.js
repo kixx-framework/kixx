@@ -117,10 +117,16 @@ describe('integration-probe: routes', ({ describe, it }) => {
         assertEqual('DeployKeyRequired', error.code);
     });
 
-    it('mounts the probe for GET and POST, and the environment for GET', () => {
-        assertEqual('/environment,/probe', routes.routes.map(({ pattern }) => pattern).sort().join(','));
+    it('mounts the probe for GET and POST, and every other route for GET', () => {
+        assertEqual(
+            '/environment,/hold,/key-value-keys,/probe,/unexpected-error',
+            routes.routes.map(({ pattern }) => pattern).sort().join(','),
+        );
         assertEqual('GET,POST', findHandler('/probe').methods.join(','));
-        assertEqual('GET', findHandler('/environment').methods.join(','));
+
+        for (const pattern of [ '/environment', '/hold', '/key-value-keys', '/unexpected-error' ]) {
+            assertEqual('GET', findHandler(pattern).methods.join(','), pattern);
+        }
     });
 
     describe('/probe', ({ it }) => {
@@ -186,6 +192,109 @@ describe('integration-probe: routes', ({ describe, it }) => {
 
             assertEqual('passed', result.body.status);
             assertEqual(0, built.length);
+        });
+    });
+
+    describe('/hold', ({ it }) => {
+        const { handler } = findHandler('/hold');
+        const url = 'https://target.test/integration-probe/hold';
+
+        it('answers after the wait it was asked for', async () => {
+            const { context } = await makeContext();
+            const start = Date.now();
+            const result = await send(handler, context, makeRequest({ url: `${ url }?ms=40` }));
+
+            assertEqual(200, result.status);
+            assertEqual(40, result.body.held);
+
+            // A timer may fire a millisecond early.
+            assert(Date.now() - start >= 35, 'the answer came before the wait was over');
+        });
+
+        it('answers at once with no wait, a negative one, or one that is no number', async () => {
+            const { context } = await makeContext();
+
+            for (const query of [ '', '?ms=-5', '?ms=soon' ]) {
+                const result = await send(handler, context, makeRequest({ url: `${ url }${ query }` }));
+
+                assertEqual(0, result.body.held, query);
+            }
+        });
+
+        it('never waits longer than five seconds', async () => {
+            const { context } = await makeContext();
+            const waits = [];
+            const realSetTimeout = globalThis.setTimeout;
+
+            // Only for this call: the handler's wait is read, not waited out.
+            globalThis.setTimeout = (fn, milliseconds) => {
+                waits.push(milliseconds);
+                return realSetTimeout(fn, 0);
+            };
+
+            let result;
+
+            try {
+                result = await send(handler, context, makeRequest({ url: `${ url }?ms=60000` }));
+            } finally {
+                globalThis.setTimeout = realSetTimeout;
+            }
+
+            assertEqual(5000, result.body.held);
+            assertEqual('5000', waits.join(','));
+        });
+    });
+
+    describe('/unexpected-error', ({ it }) => {
+        const { handler } = findHandler('/unexpected-error');
+
+        it('throws an error nothing expects, so a server treats it as a bug', async () => {
+            const { context } = await makeContext();
+            const error = await catchAsyncError(() => handler(context, makeRequest(), new ServerResponse()));
+
+            assertEqual('Error', error.name);
+            assertFalsy(error.expected);
+            assertFalsy(error.httpStatusCode);
+        });
+    });
+
+    describe('/key-value-keys', ({ it }) => {
+        const { handler } = findHandler('/key-value-keys');
+        const url = 'https://target.test/integration-probe/key-value-keys';
+
+        it('answers the count the target\'s service gives for the prefix', async () => {
+            const { context } = await makeContext();
+            const prefixes = [];
+
+            context.getService('IntegrationProbe').countKeyValueKeys = (prefix) => {
+                prefixes.push(prefix);
+                return 3;
+            };
+
+            const result = await send(handler, context, makeRequest({ url: `${ url }?prefix=cache%23` }));
+
+            assertEqual(200, result.status);
+            assertEqual(JSON.stringify({ prefix: 'cache#', count: 3 }), JSON.stringify(result.body));
+            assertEqual('cache#', prefixes.join(','));
+        });
+
+        it('refuses a request with no prefix', async () => {
+            const { context } = await makeContext();
+
+            context.getService('IntegrationProbe').countKeyValueKeys = () => 0;
+
+            const error = await catchAsyncError(() => handler(context, makeRequest({ url }), new ServerResponse()));
+
+            assertEqual(400, error.httpStatusCode);
+        });
+
+        it('answers 404 on a target that can\'t count', async () => {
+            const { context } = await makeContext();
+            const error = await catchAsyncError(() => {
+                return handler(context, makeRequest({ url: `${ url }?prefix=cache` }), new ServerResponse());
+            });
+
+            assertEqual(404, error.httpStatusCode);
         });
     });
 

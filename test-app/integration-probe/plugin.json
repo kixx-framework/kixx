@@ -8,6 +8,7 @@
         "node": { "lifecycle": [ "./adapters/node/plugin.js" ] },
         "cloudflare": { "lifecycle": [ "./adapters/cloudflare/plugin.js" ] }
     },
+    "content": { "pagesDirectory": "./pages" },
     "routes": [
         { "module": "./routes.js", "mount": "/integration-probe", "name": "integration-probe" }
     ]
