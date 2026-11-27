@@ -1,6 +1,6 @@
-import { isNonEmptyString } from '../../../kixx/assertions/mod.js';
-import { sha256Hex } from '../../../kixx/utils/crypto.js';
-import { matchesIfNoneMatch } from './file-response.js';
+import { isNonEmptyString } from '../assertions/mod.js';
+import { sha256Hex } from '../utils/crypto.js';
+import matchesIfNoneMatch from '../http-router/matches-if-none-match.js';
 
 
 // Request headers which select a different render of the same URL.
@@ -21,13 +21,13 @@ const RENDER_MODE_HEADERS = [ 'kixx-partial', 'kixx-boosted' ];
  *
  * @param {Object} context - Active request context.
  * @param {Object} request - Incoming HTTP request with headers.
- * @param {import('../../../kixx/http-router/server-response.js').default} response - Response carrying template props and rendering options.
+ * @param {import('../http-router/server-response.js').default} response - Response carrying template props and rendering options.
  * @param {Object} [defaultOptions] - Route or caller render defaults; responseOptions remain presentation-only.
  * @param {Object} [defaultOptions.responseOptions] - Options used only when committing the response.
  * @param {string} [defaultOptions.responseOptions.contentType='text/html'] - Hypertext content type.
  * @param {Object} [defaultOptions.responseOptions.headers] - Additional hypertext response headers.
  * @param {string} [defaultOptions.responseOptions.cacheControl] - Cache-Control value for a successful GET or HEAD response.
- * @returns {Promise<import('../../../kixx/http-router/server-response.js').default>} Resolves to the committed response.
+ * @returns {Promise<import('../http-router/server-response.js').default>} Resolves to the committed response.
  */
 export default async function respondWithHyperviewPage(context, request, response, defaultOptions) {
     const options = Object.assign(

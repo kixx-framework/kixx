@@ -1,4 +1,4 @@
-import respondWithHyperviewPage from '../../lib/respond-with-hyperview-page.js';
+import respondWithHyperviewPage from './respond-with-hyperview-page.js';
 
 
 /**
