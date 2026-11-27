@@ -159,6 +159,11 @@ export default class ContentAddressableStore {
     // Holds a promise while a supplier is answering.
     #suppliedContentByContext = new WeakMap();
 
+    // The supplier's last non-null answer. A fingerprinted asset read checks
+    // it before calling the supplier again: a hash names its bytes, so an
+    // earlier answer that holds the hash gives the same asset.
+    #lastSuppliedContent = null;
+
     /**
      * Supplies the persistence port. Called by the plugin's `initialize()`
      * phase, once the platform adapter has registered its ContentStore.
@@ -253,6 +258,7 @@ export default class ContentAddressableStore {
     setContentSupplier(supplier) {
         if (supplier === null) {
             this.#contentSupplier = null;
+            this.#lastSuppliedContent = null;
             return;
         }
 
@@ -289,6 +295,11 @@ export default class ContentAddressableStore {
             }
 
             assertSuppliedContent(suppliedContent, 'The content supplier');
+
+            if (this.#contentSupplier === supplier) {
+                this.#lastSuppliedContent = suppliedContent;
+            }
+
             return suppliedContent;
         });
 
@@ -574,40 +585,54 @@ export default class ContentAddressableStore {
      * Reads a static asset blob directly by content hash, without loading an
      * index or resolving the running build's closure.
      *
-     * A request with supplied content reads it first and falls through to the
-     * store when the supplied content doesn't hold the hash. A hash names its
-     * bytes, so either source gives the same asset.
+     * A hash names its bytes, so every source gives the same asset. The
+     * cheapest sources are read first: the content this request already
+     * resolved, the supplier's last answer, then the store. The supplier is
+     * called only when none of them holds the hash, so a page's assets don't
+     * each make it check the working tree again.
      * @param {Object} context - Request or execution context, passed through to the store
      * @param {string} pathname - Logical asset pathname, used by pathname-backed adapters
      * @param {string} hash - Content address of the blob to read
      * @returns {Promise<ReadableStream|null>} The blob stream, or null when the blob is absent
      * @throws {AssertionError} When pathname or hash is invalid, or a present blob is not a stream
      * @throws {OperationalError} When the backing store fails
+     * @throws {Error} Whatever the content supplier rejects with, when it is called
      */
     async getStaticAssetByHash(context, pathname, hash) {
         assert(isValidPathname(pathname), 'getStaticAssetByHash() requires a valid pathname');
         assert(isValidHash(hash), 'getStaticAssetByHash() requires a valid hash');
 
-        const suppliedContent = await this.#resolveSuppliedContent(context);
+        const assetPath = getStaticAssetPath(pathname);
+        const read = (suppliedContent) => suppliedContent.objects.getFile(context, 'stream', assetPath, hash);
+
+        const known = [];
+
+        if (this.#suppliedContentByContext.has(context)) {
+            known.push(await this.#resolveSuppliedContent(context));
+        }
+
+        known.push(this.#lastSuppliedContent);
+
         let stream = null;
 
-        if (suppliedContent) {
-            stream = await suppliedContent.objects.getFile(
-                context,
-                'stream',
-                getStaticAssetPath(pathname),
-                hash,
-            );
+        for (const suppliedContent of new Set(known)) {
+            if (stream === null && suppliedContent) {
+                stream = await read(suppliedContent);
+            }
         }
 
         if (stream === null) {
             this.#logger.info('get-static-asset-by-hash get-file', { pathname, hash });
-            stream = await this.#store.getFile(
-                context,
-                'stream',
-                getStaticAssetPath(pathname),
-                hash,
-            );
+            stream = await this.#store.getFile(context, 'stream', assetPath, hash);
+        }
+
+        // Only now ask the supplier: the asset may be new in its content.
+        if (stream === null && this.#contentSupplier && !this.#suppliedContentByContext.has(context)) {
+            const suppliedContent = await this.#resolveSuppliedContent(context);
+
+            if (suppliedContent) {
+                stream = await read(suppliedContent);
+            }
         }
 
         assert(

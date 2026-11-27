@@ -1065,6 +1065,56 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual('stored bytes', await new Response(stream).text());
         });
 
+        it('reads a fingerprinted asset from the supplier\'s last answer without asking it again', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('supplied');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return supplied;
+            });
+
+            await store.openSnapshot(makeRequestContext());
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/site.css', supplied.assetHash);
+
+            assertEqual('body { content: "supplied"; }', await new Response(stream).text());
+            assertEqual(1, supplierCalls);
+        });
+
+        it('reads a fingerprinted asset from the store before asking the supplier', async () => {
+            const { store, contentStore } = makeStore();
+            const stored = await hashBlob('stored bytes');
+            contentStore.blobs.set(stored, new Response('stored bytes').body);
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                throw new Error('compile failed');
+            });
+
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/logo.png', stored);
+
+            assertEqual('stored bytes', await new Response(stream).text());
+            assertEqual(0, supplierCalls);
+        });
+
+        it('asks the supplier for a fingerprinted asset no other source holds', async () => {
+            const { store } = makeStore();
+            const supplied = await makeSuppliedContent('supplied');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return supplied;
+            });
+
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/site.css', supplied.assetHash);
+
+            assertEqual('body { content: "supplied"; }', await new Response(stream).text());
+            assertEqual(1, supplierCalls);
+        });
+
         it('rejects the read when the supplier rejects, and asks again for the next request', async () => {
             const { store, contentStore } = makeStore();
             const supplied = await makeSuppliedContent('recovered');
