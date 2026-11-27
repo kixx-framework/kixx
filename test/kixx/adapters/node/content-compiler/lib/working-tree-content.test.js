@@ -36,28 +36,23 @@ async function catchRejection(promise) {
     return null;
 }
 
-// Records what the supplier's child logger is told.
+// Records what the supplier logs. It has no createChild(): an application's
+// logger is finalized by the time the supplier is built.
 function makeLogger() {
     const entries = [];
-    const names = [];
-    const child = {};
-
-    for (const level of [ 'debug', 'info', 'warn', 'error' ]) {
-        child[level] = (message, info) => entries.push({ level, message, info });
-    }
-
-    return {
+    const logger = {
         entries,
-        names,
-        createChild(name) {
-            names.push(name);
-            return child;
-        },
         // One 'info' line is logged per compilation.
         get compileCount() {
             return entries.filter((entry) => entry.level === 'info').length;
         },
     };
+
+    for (const level of [ 'debug', 'info', 'warn', 'error' ]) {
+        logger[level] = (message, info) => entries.push({ level, message, info });
+    }
+
+    return logger;
 }
 
 // A real store over a content store port that is never reached, so every
@@ -174,9 +169,9 @@ describe('node working tree content', ({ before, after, describe }) => {
 
             await workingTree.getContent();
 
-            assertEqual('WorkingTreeContent', logger.names.join(','));
             assertEqual(1, logger.entries.length);
             assertEqual('info', logger.entries[0].level);
+            assertEqual('working tree content compiled', logger.entries[0].message);
             assertEqual(0, logger.entries[0].info.problems);
             assert(logger.entries[0].info.objects > 0, 'expected an object count');
             assertEqual('number', typeof logger.entries[0].info.milliseconds);

@@ -38,7 +38,7 @@ const MISSING_CODES = [ 'ENOENT', 'ENOTDIR' ];
  * @param {string} options.projectDirectory - The project root
  * @param {Object[]} [options.contentRoots=[]] - The installed plugins' content directories, as compileContent() takes them
  * @param {string[]} options.templateHelpers - Every declared template helper name, as compileContent() takes them
- * @param {Object} options.logger - A child of it logs each new compilation
+ * @param {Object} options.logger - Logs each new compilation. It is used as given: an application's logger can't make a child once boot is over.
  * @returns {{ getContent: function(): Promise<SuppliedContent> }}
  * @throws {AssertionError} When an option is missing or malformed
  */
@@ -50,14 +50,13 @@ export function createWorkingTreeContent(options) {
     assertNonEmptyString(projectDirectory, 'createWorkingTreeContent: options.projectDirectory');
     assertArray(contentRoots, 'createWorkingTreeContent: options.contentRoots');
     assert(
-        isObjectNotNull(logger) && isFunction(logger.createChild),
+        isObjectNotNull(logger) && isFunction(logger.info) && isFunction(logger.warn),
         'createWorkingTreeContent: options.logger must be a Logger',
     );
 
     const root = path.resolve(projectDirectory);
     const source = createFileSystemContentSource(root);
     const directories = listContentDirectories(contentRoots);
-    const log = logger.createChild('WorkingTreeContent');
 
     // The last compilation: { signature, promise }.
     let cached = null;
@@ -67,14 +66,14 @@ export function createWorkingTreeContent(options) {
         const compilation = await compileContent({ source, pluginContentRoots: contentRoots, templateHelpers });
         const content = await createCompiledContent(compilation);
 
-        log.info('compiled the working tree', {
+        logger.info('working tree content compiled', {
             objects: compilation.objects.length,
             problems: content.problems.length,
             milliseconds: Date.now() - start,
         });
 
         for (const { code, message, filepath } of content.problems) {
-            log.warn('content problem', { code, message, filepath });
+            logger.warn('working tree content problem', { code, message, filepath });
         }
 
         return content;

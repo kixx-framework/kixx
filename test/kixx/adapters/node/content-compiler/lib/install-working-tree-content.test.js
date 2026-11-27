@@ -6,6 +6,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
 import ContentAddressableStore from '../../../../../../kixx/content-addressable-store/content-addressable-store.js';
+import Logger from '../../../../../../kixx/logger/logger.js';
 import { installWorkingTreeContent } from '../../../../../../kixx/adapters/node/content-compiler/lib/install-working-tree-content.js';
 
 
@@ -60,7 +61,8 @@ function makeAppContext(config) {
         contentStoreCalls,
         appContext: {
             config,
-            logger: makeLogger(),
+            // As boot leaves it: finalized, so it can make no child.
+            logger: new Logger({ name: 'Test', level: 'NONE' }).finalize(),
             getService(name) {
                 requested.push(name);
                 return store;
