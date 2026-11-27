@@ -4,8 +4,14 @@
  * resolves its exit code and output, and stops it.
  *
  * `run-local.js` starts the local integration target with it, and the local
- * process tests start their own servers with it. It takes `spawn`, `fetch`,
- * and the clock from its caller, so the unit suite tests it with no process.
+ * process tests start their own servers with it. It takes `spawn`, `kill`,
+ * `fetch`, and the clock from its caller, so the unit suite tests it with no
+ * process.
+ *
+ * A signal is sent with `kill(pid, signal)` (`process.kill`), never with the
+ * child's own `kill()`. Deno's child process reports the signal it was asked
+ * to send as what ended the child, whatever the child did with it, so the
+ * exit code of a server that drains and exits with 0 would be lost.
  *
  * It never prints, and it reads no environment: the child gets exactly the
  * `env` it is given.
@@ -124,6 +130,7 @@ export async function isAnswering(options) {
  *
  * @param {Object} options
  * @param {Function} options.spawn - `spawn` from `node:child_process`.
+ * @param {function(number, string): void} options.kill - `process.kill`: sends a signal to a process id.
  * @param {Function} options.fetch
  * @param {Clock} [options.clock]
  * @param {{ command: string, args: string[] }} options.runtime - From getRuntimeCommand().
@@ -139,6 +146,7 @@ export async function isAnswering(options) {
 export function startServerProcess(options) {
     const {
         spawn,
+        kill: sendSignal,
         fetch: sendRequest,
         clock = SYSTEM_CLOCK,
         runtime,
@@ -151,6 +159,7 @@ export function startServerProcess(options) {
     } = options ?? {};
 
     assert(isFunction(spawn), 'startServerProcess: spawn must be a function');
+    assert(isFunction(sendSignal), 'startServerProcess: kill must be a function');
     assert(isFunction(sendRequest), 'startServerProcess: fetch must be a function');
     assert(isNonEmptyString(runtime?.command), 'startServerProcess: runtime.command must be a non-empty string');
     assert(Array.isArray(runtime.args), 'startServerProcess: runtime.args must be an array');
@@ -236,11 +245,21 @@ export function startServerProcess(options) {
     function signal(name) {
         assert(isNonEmptyString(name), 'ServerProcess#signal: the signal name must be a non-empty string');
 
-        if (exit) {
+        // A process that could not be started has no id.
+        if (exit || !Number.isInteger(child.pid)) {
             return false;
         }
 
-        child.kill(name);
+        try {
+            sendSignal(child.pid, name);
+        } catch (error) {
+            // It ended a moment ago, and its 'close' is still to come.
+            if (error.code === 'ESRCH') {
+                return false;
+            }
+
+            throw error;
+        }
 
         return true;
     }

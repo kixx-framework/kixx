@@ -146,7 +146,7 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
         });
 
         it('refuses a missing option', () => {
-            for (const name of [ 'spawn', 'fetch', 'runtime', 'projectDirectory', 'environment', 'port', 'env' ]) {
+            for (const name of [ 'spawn', 'kill', 'fetch', 'runtime', 'projectDirectory', 'environment', 'port', 'env' ]) {
                 const caught = catchError(() => start({ [name]: undefined }));
 
                 assert(caught, `expected an error for a missing ${ name }`);
@@ -358,6 +358,51 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
             assertEqual(false, server.signal('SIGTERM'));
             assertEqual(0, child.signals.length);
         });
+
+        // Deno's child.kill() makes the exit report the signal it sent, and
+        // not the code the server exited with.
+        it('sends it to the process id, never through the child\'s own kill()', () => {
+            const sent = [];
+            const { server, child } = start({ kill: (pid, signal) => sent.push([ pid, signal ]) });
+
+            server.signal('SIGTERM');
+
+            assertEqual(JSON.stringify([ [ child.pid, 'SIGTERM' ] ]), JSON.stringify(sent));
+            assertEqual(0, child.ownKills.length);
+        });
+
+        it('is false for a process that ended a moment ago', () => {
+            const { server } = start({
+                kill() {
+                    throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
+                },
+            });
+
+            assertEqual(false, server.signal('SIGTERM'));
+        });
+
+        it('throws any other failure to send it', () => {
+            const failure = Object.assign(new Error('kill EPERM'), { code: 'EPERM' });
+
+            const { server } = start({
+                kill() {
+                    throw failure;
+                },
+            });
+
+            assertEqual(failure, catchError(() => server.signal('SIGTERM')));
+        });
+
+        it('sends nothing to a process that could not be started', () => {
+            const sent = [];
+            const { server, child } = start({ kill: (pid, signal) => sent.push([ pid, signal ]) });
+
+            // No process, so no id. Its 'error' event is still to come.
+            child.pid = undefined;
+
+            assertEqual(false, server.signal('SIGTERM'));
+            assertEqual(0, sent.length);
+        });
     });
 
     describe('stop()', ({ it }) => {
@@ -455,8 +500,11 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
 // Starts a server process over fakes. An option given as undefined is left
 // out, to test a missing one.
 function start(overrides = {}) {
+    const spawn = createFakeSpawn();
+
     const options = {
-        spawn: createFakeSpawn(),
+        spawn,
+        kill: (pid, signal) => spawn.kill(pid, signal),
         fetch: createFakeFetch(() => ({ status: 200 })),
         clock: createFakeClock(),
         runtime: NODE,

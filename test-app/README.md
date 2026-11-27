@@ -99,9 +99,9 @@ It sets these in the server's environment, and nothing else. Variables named `IN
 
 The runner gets the key as `INTEGRATION_TESTS_DEPLOY_KEY`. The key and the hash travel in the two children's environments only. They are never printed and never on a command line.
 
-A passing run removes the data directory. A failing run keeps it, prints the path of the server's log, and prints the log's last 60 lines.
+A passing run removes the data directory. A failing run keeps it, prints the path of the server's log, and prints the log's last 60 lines, leaving out the requests the server answered.
 
-The logic is in `lib/local-target.js`. It starts the server through `lib/server-process.js`, which a test that needs a server of its own also uses: `startServerProcess()` starts a project's entry point on a port, `waitUntilReady()` waits for it to answer, `signal()` sends it a signal, `exited` resolves its exit code and output, and `stop()` ends it. A test that starts a server calls `stop()` in a `finally`.
+The logic is in `lib/local-target.js`. It starts the server through `lib/server-process.js`, which a test that needs a server of its own also uses: `startServerProcess()` starts a project's entry point on a port, `waitUntilReady()` waits for it to answer, `signal()` sends it a signal, `exited` resolves its exit code and output, and `stop()` ends it. A test that starts a server calls `stop()` in a `finally`. It sends a signal with `process.kill`, never the child's own `kill()`: under Deno that makes the exit report the signal sent in place of the server's exit code.
 
 ## Running the Suite Against a Target
 

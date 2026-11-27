@@ -5,6 +5,8 @@
 import { EventEmitter } from 'node:events';
 
 
+const FIRST_PROCESS_ID = 4000;
+
 // A turn of the event loop, without the millisecond a zero timeout costs.
 const defer = globalThis.setImmediate ?? ((fn) => setTimeout(fn, 0));
 
@@ -76,13 +78,17 @@ export function createFakeClock(start = 1000000) {
  *
  * - `write(name, text)` emits a chunk on `stdout` or `stderr`.
  * - `exit(code, signal)` ends it: 'exit', then 'close'.
- * - `kill(signal)` records the signal in `signals` and calls `onKill`, where
- *   a test decides what the signal does.
+ * - `receive(signal)` records the signal in `signals` and calls `onKill`,
+ *   where a test decides what the signal does. The fake spawn's `kill(pid,
+ *   signal)` calls it.
+ * - `kill()` is the child's own method, which nothing should call: it
+ *   records the call in `ownKills`.
  */
 export function createFakeChild({ piped = true } = {}) {
     const child = new EventEmitter();
 
     child.signals = [];
+    child.ownKills = [];
     child.exited = false;
     child.onKill = null;
 
@@ -101,13 +107,16 @@ export function createFakeChild({ piped = true } = {}) {
         }
     };
 
-    child.kill = (signal) => {
+    child.receive = (signal) => {
         child.signals.push(signal);
 
         if (child.onKill) {
             child.onKill(signal);
         }
+    };
 
+    child.kill = (signal) => {
+        child.ownKills.push(signal);
         return true;
     };
 
@@ -117,7 +126,9 @@ export function createFakeChild({ piped = true } = {}) {
 /**
  * A `spawn` that records each call in `spawn.calls` as `{ command, args,
  * options, child }` and hands the new child to `onSpawn(call)`, where a test
- * scripts it.
+ * scripts it. Each child gets a process id, and `spawn.kill(pid, signal)`
+ * stands in for `process.kill`: it throws ESRCH for a process that has
+ * exited, as the real one does.
  *
  * @param {function(Object): void} [onSpawn]
  */
@@ -125,6 +136,8 @@ export function createFakeSpawn(onSpawn) {
     function spawn(command, args, options) {
         const child = createFakeChild({ piped: options?.stdio !== 'inherit' });
         const call = { command, args, options, child };
+
+        child.pid = FIRST_PROCESS_ID + spawn.calls.length;
 
         spawn.calls.push(call);
 
@@ -136,6 +149,19 @@ export function createFakeSpawn(onSpawn) {
     }
 
     spawn.calls = [];
+
+    spawn.kill = (pid, signal) => {
+        const call = spawn.calls.find(({ child }) => child.pid === pid);
+
+        if (!call || call.child.exited) {
+            const error = new Error('kill ESRCH');
+
+            error.code = 'ESRCH';
+            throw error;
+        }
+
+        call.child.receive(signal);
+    };
 
     return spawn;
 }

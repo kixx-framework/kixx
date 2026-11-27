@@ -238,11 +238,30 @@ describe('test-app/lib/local-target.js', ({ describe, it }) => {
 
             const text = run.printed.join('\n');
 
-            assertMatches('Its last 60 lines:', text);
+            assertMatches('Its last 60 lines, but for the requests it answered:', text);
             // The 100 lines and the server's last, `closing`.
             assertFalsy(text.includes('line 41\n'));
             assertMatches('line 42\n', text);
             assertMatches('line 100\nclosing', text);
+        });
+    });
+
+    describe('the log a failing run prints', ({ it }) => {
+        it('leaves out the requests the server answered', async () => {
+            const answered = '{"level":"info","message":"trace http-request","info":{"pathname":"/a","status":"ok","duration":1}}';
+            const failed = '{"level":"info","message":"trace http-request","info":{"pathname":"/b","status":"error","duration":1}}';
+            const other = '{"level":"warn","message":"something else"}';
+
+            const run = await runWith({
+                runnerExitCode: 1,
+                serverStartOutput: `${ [ answered, failed, answered, other ].join('\n') }\n`,
+            });
+
+            const text = run.printed.join('\n');
+
+            assertFalsy(text.includes('"/a"'));
+            assertMatches(`${ failed }\n${ other }\nclosing`, text);
+            assertMatches('Its last 3 lines', text);
         });
     });
 
@@ -334,6 +353,7 @@ describe('test-app/lib/local-target.js', ({ describe, it }) => {
         it('refuses a missing option', async () => {
             const names = [
                 'spawn',
+                'kill',
                 'fetch',
                 'env',
                 'runtime',
@@ -362,6 +382,7 @@ describe('test-app/lib/local-target.js', ({ describe, it }) => {
 function makeOptions() {
     return {
         spawn: createFakeSpawn(),
+        kill: () => {},
         fetch: createFakeFetch(() => undefined),
         clock: createFakeClock(),
         env: {},
@@ -486,6 +507,7 @@ async function runWith(scenario = {}) {
 
     run.exitCode = await runLocalTarget({
         spawn: run.spawn,
+        kill: (pid, signal) => run.spawn.kill(pid, signal),
         fetch: run.fetch,
         clock,
         env,

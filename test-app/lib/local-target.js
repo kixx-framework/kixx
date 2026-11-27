@@ -33,6 +33,7 @@ const REDACTED = '[redacted]';
 /**
  * @param {Object} options
  * @param {Function} options.spawn - `spawn` from `node:child_process`.
+ * @param {function(number, string): void} options.kill - `process.kill`.
  * @param {Function} options.fetch
  * @param {import('./server-process.js').Clock} [options.clock]
  * @param {Object} options.env - This process's environment. Both children get a copy with their own additions.
@@ -53,6 +54,7 @@ const REDACTED = '[redacted]';
 export async function runLocalTarget(options) {
     const {
         spawn,
+        kill,
         fetch: sendRequest,
         clock = SYSTEM_CLOCK,
         env,
@@ -67,6 +69,7 @@ export async function runLocalTarget(options) {
     } = options ?? {};
 
     assert(isFunction(spawn), 'runLocalTarget: spawn must be a function');
+    assert(isFunction(kill), 'runLocalTarget: kill must be a function');
     assert(isFunction(sendRequest), 'runLocalTarget: fetch must be a function');
     assert(isPlainObject(env), 'runLocalTarget: env must be a plain object');
     assert(isNonEmptyString(runtime?.command), 'runLocalTarget: runtime.command must be a non-empty string');
@@ -104,10 +107,10 @@ export async function runLocalTarget(options) {
     }
 
     function reportFailure(server) {
-        const lines = server.output().trimEnd().split('\n');
+        const lines = server.output().trimEnd().split('\n').filter((line) => !isAnsweredRequest(line));
 
         say(`The server's log is kept at ${ logFile }`);
-        say(`Its last ${ Math.min(lines.length, LOG_TAIL_LINES) } lines:`);
+        say(`Its last ${ Math.min(lines.length, LOG_TAIL_LINES) } lines, but for the requests it answered:`);
         say(lines.slice(-LOG_TAIL_LINES).join('\n'));
     }
 
@@ -115,6 +118,7 @@ export async function runLocalTarget(options) {
 
     const server = startServerProcess({
         spawn,
+        kill,
         fetch: sendRequest,
         clock,
         runtime,
@@ -192,6 +196,13 @@ export async function runLocalTarget(options) {
     return exitCode;
 }
 
+
+// The server logs a line for every request, and a run makes hundreds. The
+// ones it answered say nothing about a failure and would push out the lines
+// that do.
+function isAnsweredRequest(line) {
+    return line.includes('"message":"trace http-request"') && line.includes('"status":"ok"');
+}
 
 // A target or a key set in the caller's shell is for some other target. The
 // local server needs neither.

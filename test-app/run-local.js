@@ -28,6 +28,7 @@ import { getRuntimeCommand } from './lib/server-process.js';
 
 process.exitCode = await runLocalTarget({
     spawn,
+    kill: (pid, signal) => process.kill(pid, signal),
     fetch: (...args) => fetch(...args),
     env: { ...process.env },
     runtime: getRuntimeCommand(process),
