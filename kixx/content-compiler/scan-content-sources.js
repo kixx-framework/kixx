@@ -84,6 +84,35 @@ const APP_CONTENT_ROOT = Object.freeze({
     publicDirectory: 'public',
 });
 
+// Every key of a content root that names a directory.
+const CONTENT_DIRECTORY_KEYS = [
+    'pagesDirectory',
+    'templatesDirectory',
+    'staticAssetsDirectory',
+    'publicDirectory',
+];
+
+/**
+ * Lists every directory a compile reads: the project's own, then each
+ * plugin's. A caller that watches for changes watches exactly these.
+ *
+ * @param {PluginContentRoot[]} [pluginContentRoots=[]] - The plugins' content directories, as compileContent() takes them
+ * @returns {string[]} POSIX paths from the project root, without duplicates
+ */
+export function listContentDirectories(pluginContentRoots = []) {
+    const directories = new Set();
+
+    for (const root of [ APP_CONTENT_ROOT, ...pluginContentRoots ]) {
+        for (const key of CONTENT_DIRECTORY_KEYS) {
+            if (root[key]) {
+                directories.add(root[key]);
+            }
+        }
+    }
+
+    return Array.from(directories);
+}
+
 /**
  * Materializes all publishable content a content source holds: the `pages`,
  * `templates`, `static-assets`, and `public` directories at its root, then

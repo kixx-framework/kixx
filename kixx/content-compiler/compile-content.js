@@ -236,15 +236,27 @@ function collectValidationProblems(problems, filepath, validate) {
             throw error;
         }
 
-        for (const item of error.errors) {
-            problems.push({
-                code: 'invalid-release',
-                filepath,
-                message: `${ item.message } (${ item.source })`,
-                source: item.source,
-            });
-        }
+        problems.push(...createInvalidReleaseProblems(error, filepath));
     }
+}
+
+/**
+ * Shapes a content store validator's failure as `invalid-release` problems,
+ * one for each thing it rejected.
+ *
+ * @param {ValidationError} error - What the validator threw
+ * @param {string} filepath - The file at fault, or an empty string when no one file is
+ * @returns {ContentProblem[]}
+ */
+export function createInvalidReleaseProblems(error, filepath) {
+    return error.errors.map((item) => {
+        return {
+            code: 'invalid-release',
+            filepath,
+            message: `${ item.message } (${ item.source })`,
+            source: item.source,
+        };
+    });
 }
 
 function validatePluginContentRoots(pluginContentRoots) {
