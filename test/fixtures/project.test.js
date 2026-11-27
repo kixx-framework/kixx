@@ -71,6 +71,11 @@ const MALFORMED_DEPLOY_KEY_HASH = 'not-a-hash';
 const MALFORMED_DEPLOY_KEY_HASH_MESSAGE = 'DEPLOY_KEY_HASH must be the SHA-256 of the deploy key, '
     + 'as 64 lowercase hex characters.';
 
+// What boot says on every target when CONTENT_STORE.workingTree is true
+// outside development. The fixture boots as `test`.
+const WORKING_TREE_REFUSED_MESSAGE = 'CONTENT_STORE.workingTree can be true only in the development environment, '
+    + 'and this is "test". Remove the key or set it to false.';
+
 const CATCH_ALL_BODY = 'fixture catch-all: not found\n';
 
 // Asks the server to close the connection after the response, so a drain that
@@ -223,6 +228,18 @@ function bootOnCloudflare(secrets, registry = cloudflareRegistry) {
         // Cloudflare hands fetch() the environment again on every request.
         fetch(pathname, headers = {}) {
             return worker.fetch(new Request(`https://localhost${ pathname }`, { headers }), env, executionContext);
+        },
+    };
+}
+
+// A copy of a registry whose config defaults set CONTENT_STORE.workingTree,
+// as a project's config would. The committed config files stay as they are.
+function withWorkingTreeAskedFor(registry) {
+    return {
+        ...registry,
+        configDefaults: {
+            ...registry.configDefaults,
+            CONTENT_STORE: { ...registry.configDefaults.CONTENT_STORE, workingTree: true },
         },
     };
 }
@@ -748,6 +765,47 @@ describe('fixture project', ({ describe }) => {
         });
     });
 
+    describe('booted on the Node.js adapters with the working tree asked for outside development', ({ before, after, it }) => {
+        let dataDirectory;
+        let fakeProcess;
+        let error;
+
+        before(async () => {
+            dataDirectory = await makeDataDirectory();
+
+            fakeProcess = makeProcess({
+                DATA_DIRECTORY: dataDirectory,
+                DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
+                FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+            });
+
+            error = await catchRejection(startNodeServer({
+                registry: withWorkingTreeAskedFor(nodeRegistry),
+                virtualHosts,
+                app,
+                baseDirectory: PROJECT_DIRECTORY,
+                process: fakeProcess,
+                hostname: '127.0.0.1',
+            }));
+        });
+
+        after(async () => {
+            await removeDataDirectory(dataDirectory);
+        });
+
+        it('rejects with core\'s boot check, naming the key and the environment', () => {
+            assertEqual('OperationalError', error.name);
+            assertEqual(WORKING_TREE_REFUSED_MESSAGE, error.message);
+        });
+
+        it('opens no store, registers no signal handler, and doesn\'t exit', () => {
+            assertEqual(0, fs.readdirSync(dataDirectory).length);
+            assertEqual(0, fakeProcess.handlers.size);
+            assertEqual(0, fakeProcess.exitCodes.length);
+        });
+    });
+
     // Unit coverage of the Cloudflare registry and adapters on fakes. It is
     // not the real boot: only Cloudflare can load the entry point and the
     // Durable Object classes.
@@ -931,6 +989,17 @@ describe('fixture project', ({ describe }) => {
             assertEqual(MALFORMED_DEPLOY_KEY_HASH_MESSAGE, error.message);
             assertNoSecretValue(error);
             assertFalsy(util.inspect(error, { depth: 8 }).includes(MALFORMED_DEPLOY_KEY_HASH));
+        });
+    });
+
+    describe('booted on the Cloudflare adapters with the working tree asked for outside development', ({ it }) => {
+        it('throws the error the Node.js boot rejects with', () => {
+            const error = catchError(() => {
+                bootOnCloudflare(SECRET_VALUES, withWorkingTreeAskedFor(cloudflareRegistry));
+            });
+
+            assertEqual('OperationalError', error.name);
+            assertEqual(WORKING_TREE_REFUSED_MESSAGE, error.message);
         });
     });
 

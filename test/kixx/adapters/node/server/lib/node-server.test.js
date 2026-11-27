@@ -543,6 +543,50 @@ describe('node server', ({ describe }) => {
             assertMatches('development', caught.message);
         });
 
+        it('rejects in development when the registry can\'t supply the working tree', async () => {
+            const events = [];
+
+            const { startOptions, fakeProcess } = makeStartOptions({
+                args: [ '--environment', 'development', '--port', '0' ],
+                sourceConfig: { name: 'node-server-test', environments: { development: { LOGGER: { level: 'DEBUG' } } } },
+                registry: {
+                    plugins: new Map([ [ 'recorder', makeRecordingPlugin('recorder', events) ] ]),
+                },
+            });
+
+            const caught = await catchRejection(startNodeServer(startOptions));
+
+            // Working-tree content is on by default in development, and
+            // this registry has no contentRoots export.
+            assert(caught, 'expected a rejection');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('contentRoots', caught.message);
+
+            // The application was booted, so its services are closed.
+            assertEqual('register:recorder,close:recorderService', events.join(','));
+            assertEqual(0, fakeProcess.handlers.size);
+            assertEqual(0, fakeProcess.exitCodes.length);
+        });
+
+        it('starts in development without the working tree when CONTENT_STORE.workingTree is false', async () => {
+            const options = {
+                args: [ '--environment', 'development', '--port', '0' ],
+                sourceConfig: {
+                    name: 'node-server-test',
+                    environments: {
+                        development: { LOGGER: { level: 'DEBUG' }, CONTENT_STORE: { workingTree: false } },
+                    },
+                },
+            };
+
+            await withTestServer(options, async ({ origin }) => {
+                const response = await fetch(`${ origin }/hello`, { headers: CLOSE_CONNECTION });
+
+                assertEqual(200, response.status);
+                assertEqual('hello', await response.text());
+            });
+        });
+
         it('rejects and exits 1 when the port can\'t be bound', async () => {
             const occupant = http.createServer();
 

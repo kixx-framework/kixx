@@ -6,9 +6,21 @@
 // adapter the running platform registered under 'ContentStore'.
 
 import ContentAddressableStore from './content-addressable-store.js';
+import { readWorkingTreeSwitch } from './working-tree-switch.js';
 
 
+/**
+ * Registers the store. First it checks `CONTENT_STORE.workingTree`, on every
+ * platform and before any store opens, so a server that can't render a
+ * working tree fails boot instead of ignoring the key.
+ *
+ * @param {Object} context - The application context
+ * @returns {void}
+ * @throws {OperationalError} When `CONTENT_STORE.workingTree` is malformed, or `true` outside development
+ */
 export function register(context) {
+    readWorkingTreeSwitch(context.config);
+
     context.registerService('ContentAddressableStore', new ContentAddressableStore());
 }
 
