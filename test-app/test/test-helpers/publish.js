@@ -5,8 +5,13 @@
 // The deploy key is a secret. It is sent only in the Authorization header,
 // and no error made here holds it.
 
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { compileContent, serializeContentObject } from '../../../kixx/tooling/mod.js';
-import { createMemoryContentSource } from '../../../kixx/content-compiler/mod.js';
+import { createMemoryContentSource, listContentDirectories } from '../../../kixx/content-compiler/mod.js';
+import { createFileSystemContentSource } from '../../../kixx/adapters/node/content-compiler/lib/file-system-content-source.js';
+import { getBaseUrl, getDeployKey } from './target.js';
 
 
 const PROTOCOL_VERSION = 4;
@@ -20,6 +25,65 @@ const JSON_API = 'application/vnd.api+json';
 // to one build passes the same values, or leaves them out.
 export const DEFAULT_SOURCE_REVISION = '5131300000000000000000000000000000000000';
 export const DEFAULT_CODE_FINGERPRINT = `kxfp1:${ '51313'.padEnd(64, '0') }`;
+
+// The test app's content is the project skeleton's own. Its one plugin has
+// none, and adds no template helper to core's.
+const SKELETON_DIRECTORY = fileURLToPath(new URL('../../../devkit/templates/project', import.meta.url));
+const CORE_MANIFEST_FILE = fileURLToPath(new URL('../../../kixx/plugin.json', import.meta.url));
+
+let testAppContent = null;
+let published = null;
+
+
+/**
+ * Reads the test app's content: every content file of the project skeleton,
+ * by its path from the project root. Read once for the run.
+ *
+ * @returns {Promise<Object<string, Uint8Array>>} A new object on each call, so a caller may add files to it
+ */
+export async function readTestAppContent() {
+    testAppContent ??= readSkeletonContent();
+
+    return { ...await testAppContent };
+}
+
+/**
+ * Publishes the test app's content, with any extra files, to the build the
+ * integration target runs, and assigns it. The target and the deploy key
+ * come from the environment (see target.js).
+ *
+ * Every test's Release holds the skeleton's files, so the skeleton's pages
+ * render whichever Release was assigned last.
+ *
+ * @param {Object<string, Uint8Array|string>} [extraFiles] - Content files to add, by their path from the project root
+ * @returns {Promise<{ releaseId: string, buildId: string, assignmentId: string, intent: string, uploaded: number }>}
+ */
+export async function publishTestAppContent(extraFiles = {}) {
+    const { templateHelpers } = JSON.parse(fs.readFileSync(CORE_MANIFEST_FILE, 'utf8'));
+
+    return publishContent({
+        baseUrl: getBaseUrl(),
+        deployKey: getDeployKey(),
+        files: { ...await readTestAppContent(), ...extraFiles },
+        templateHelpers,
+    });
+}
+
+/**
+ * Publishes the test app's content once for the run. Every test file is
+ * imported into one process, so they share the one publish through this
+ * module, and none depends on another having run first.
+ *
+ * It only makes sure the build has been staged and serves the skeleton's
+ * pages. A test that needs a particular Release assigned publishes it.
+ *
+ * @returns {Promise<{ releaseId: string, buildId: string, assignmentId: string, intent: string, uploaded: number }>}
+ */
+export function ensurePublished() {
+    published ??= publishTestAppContent();
+
+    return published;
+}
 
 
 /**
@@ -222,4 +286,20 @@ function describeErrors(text) {
     } catch {
         return 'no error document';
     }
+}
+
+async function readSkeletonContent() {
+    const source = createFileSystemContentSource(SKELETON_DIRECTORY);
+    const files = {};
+
+    for (const directory of listContentDirectories([])) {
+        const { entries } = await source.listFiles(directory);
+
+        for (const entry of entries) {
+            const filepath = `${ directory }/${ entry.path }`;
+            files[filepath] = new Uint8Array(await source.readFile(filepath));
+        }
+    }
+
+    return files;
 }

@@ -4,7 +4,7 @@ The integration suite checks Kixx code against the real systems under it: Cloudf
 
 It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory. CI runs it in a job of its own, against a test app started on the runner. What belongs in each suite is in the Testing Guide, `test/README.md`.
 
-> **Status:** The first integration tests exist: the test app is up with production settings (`test/all-targets/boot.test.js`), and all six probe suites run inside it (`test/probe/`). They run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
+> **Status:** The suite checks that the test app is up with production settings, serves its pages from a published Release, takes a publish, and guards its Publishing API with the deploy key (`test/all-targets/`), and runs all six probe suites inside it (`test/probe/`). The tests run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
 
 ```
 test-app/
@@ -140,6 +140,7 @@ node test-app/run-tests.js --local --skip test-app/test/some-file.test.js
 |---|---|
 | `INTEGRATION_TESTS_BASE_URL` | Required. The target's base URL, an absolute `http:` or `https:` URL. A target option sets it. |
 | `INTEGRATION_TESTS_TARGET` | Set by the runner to `local`, `cloudflare`, or `nodejs` when a named target is used. Otherwise the runner clears it. |
+| `INTEGRATION_TESTS_RATE_LIMIT` | Optional. Set to `1` to run the deploy key's rate-limit test on a target other than `local`, where it always runs. See "What the Suite Covers". |
 | `INTEGRATION_TESTS_DEPLOY_KEY` | The target's deploy key, for tests that call a protected route such as the probe. `run-local.js` sets it. For any other target, set it yourself. |
 
 The deploy key is a secret. Set it in the environment only. It has no command-line option, because a secret on the command line leaks into shell history and process listings, and it never goes in a tracked file. The runner never reads it.
@@ -152,6 +153,30 @@ Tests read these through `test/test-helpers/target.js`:
 - `fetchWithDeployKey(pathname, init)` sends a request to the target with the key as a bearer token. It follows no redirect, and an error from it names only the method and the path.
 
 `test/test-helpers/publish.js` publishes content to a target through its Publishing API: `publishContent({ baseUrl, deployKey, files, pluginContentRoots, templateHelpers })` compiles the files, uploads the objects the store lacks, creates the Release, and assigns it to the build the target runs. The first assignment pre-stages the build with a made-up commit and code fingerprint; later ones are content-only publishes. The unit suite uses the same helper against a project booted on `127.0.0.1` (`test/skeleton/`).
+
+Integration tests use three more functions from that file, which take the target and the key from the environment:
+
+- `ensurePublished()` publishes the test app's content once for the run. Call it in a `before`. Every test file shares the one publish, so no file depends on another having run first.
+- `publishTestAppContent(extraFiles)` publishes the test app's content with extra files and assigns that Release.
+- `readTestAppContent()` reads the test app's content, which is the project skeleton's own (`devkit/templates/project/`).
+
+Every Release a test assigns holds the skeleton's files, so the skeleton's pages render whichever test published last.
+
+## What the Suite Covers
+
+| Files | Target | Checks |
+|---|---|---|
+| `test/all-targets/boot.test.js` | Every | The app is up in `production`, and its test routes are behind the deploy key. |
+| `test/all-targets/pages.test.js` | Every | Pages through the base template, the fingerprinted stylesheet and its cache policy, a public file, a 404, a `HEAD`, and a new page from a second Release with no restart. |
+| `test/all-targets/publishing-api.test.js` | Every | Discovery at protocol 4, an upload, a Release, an assignment, and the Activation in the build's history. |
+| `test/all-targets/deploy-key.test.js` | Every | A missing and a wrong key are refused with 401, and the right key passes. The rate limit: the 21st failure from one address gets 429 with `Retry-After`, and the right key still passes. |
+| `test/probe/*.test.js` | Every | The six conformance suites, inside the target. |
+
+**A rerun against the same running target passes.** A publish of content the store holds uploads nothing and assigns the same Release. The publishing test adds a file unique to the run, so each run makes a new Release. The pages test assigns the skeleton's content back before it looks for its extra page, and leaves the Release with the extra page assigned.
+
+**The rate-limit test** makes 21 wrong-key requests from an address it makes up and sends in `X-Forwarded-For`. The local target trusts that header (`TRUST_PROXY=true`), so the test limits no other test and no rerun. Cloudflare sets the client address itself, so there the test would limit your own address for wrong-key requests for up to 15 minutes. It runs on `local` always, and on any other target only with `INTEGRATION_TESTS_RATE_LIMIT=1`. Run it last.
+
+The other deploy key tests and the boot test make about three failed attempts a run. On a target that doesn't trust `X-Forwarded-For` they count against your own address: more than six runs in 15 minutes reach the limit of 20, and those tests then get 429 until the window ends.
 
 ## Writing an Integration Test
 
