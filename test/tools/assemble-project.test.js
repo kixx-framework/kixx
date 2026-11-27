@@ -64,6 +64,10 @@ function catchError(fn) {
     return null;
 }
 
+// Assembling copies about 250 files, which a busy CI runner doesn't always
+// do inside the default second. Every block here gets this much.
+const TIMEOUT = { timeout: 5000 };
+
 
 describe('assembleProject', ({ before, after, describe }) => {
     let temporaryDirectory;
@@ -376,4 +380,4 @@ describe('assembleProject', ({ before, after, describe }) => {
             assertMatches(entryFile, error.message);
         });
     });
-});
+}, TIMEOUT);

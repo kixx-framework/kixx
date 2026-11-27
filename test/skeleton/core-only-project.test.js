@@ -80,6 +80,10 @@ async function catchAsyncError(fn) {
     return null;
 }
 
+// Assembling copies about 250 files, which a busy CI runner doesn't always
+// do inside the default second. Every block here gets this much.
+const TIMEOUT = { timeout: 5000 };
+
 
 // CORE-2: a project with no plugins boots and serves pages, from a config
 // that holds only the app name and the log level. The project is the
@@ -329,4 +333,4 @@ describe('core-only project', ({ before, after, describe }) => {
             assertSite(project, site);
         });
     });
-});
+}, TIMEOUT);

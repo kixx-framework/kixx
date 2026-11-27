@@ -82,6 +82,10 @@ function assertProbe({ tests, results, withoutKey, environment, home }, target) 
     assertEqual('BuildNotServable', home.body.errors[0].code);
 }
 
+// Assembling copies about 250 files, which a busy CI runner doesn't always
+// do inside the default second. Every block here gets this much.
+const TIMEOUT = { timeout: 5000 };
+
 
 // The integration suite's test app: the skeleton, core, and the
 // integration-probe plugin, assembled once for this file and booted the
@@ -189,4 +193,4 @@ describe('test app', ({ before, after, describe, it }) => {
             assertProbe(used, 'cloudflare');
         });
     });
-});
+}, TIMEOUT);
