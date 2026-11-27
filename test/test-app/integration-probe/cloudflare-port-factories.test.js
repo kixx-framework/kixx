@@ -38,7 +38,9 @@ function makeTarget() {
     const keyValueStore = new KeyValueStore();
 
     const context = {
-        logger: new Logger({ name: 'Test', level: 'NONE' }),
+        // As boot leaves the app's logger: it takes no new child, so a
+        // factory can't hand it to a store it builds during a request.
+        logger: new Logger({ name: 'Test', level: 'NONE' }).finalize(),
         config: { env: { CONTENT_STORE: CONTENT_STORE_CONFIG } },
         env: {
             KEY_VALUE_STORE: keyValueNamespace,

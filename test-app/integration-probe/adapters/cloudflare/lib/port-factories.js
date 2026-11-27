@@ -4,6 +4,7 @@
 import ContentStore from '../../../../../kixx/adapters/cloudflare/content-store/lib/content-store.js';
 import LoggerWriter from '../../../../../kixx/adapters/cloudflare/logger-writer/lib/logger-writer.js';
 import ServerRequest from '../../../../../kixx/adapters/cloudflare/server-request/lib/server-request.js';
+import Logger from '../../../../../kixx/logger/logger.js';
 
 
 // Workers KV allows one write per second to a key.
@@ -42,7 +43,7 @@ export function createPortFactories({ wait, createId }) {
 
             return {
                 store: new ContentStore({
-                    logger: context.logger,
+                    logger: createStoreLogger(context),
                     kvBindingName: storeConfig.kvNamespace.bindingName,
                     durableObjectBindingName: storeConfig.durableObject.bindingName,
                     wireFormat: `probe-${ createId() }`,
@@ -85,4 +86,11 @@ export function createPortFactories({ wait, createId }) {
             return new ServerRequest(new Request(`${ ORIGIN }${ path }`, init));
         },
     };
+}
+
+// A store builds a child of the logger it is given, and the app's logger
+// takes no new child once boot is over. So a store built during a request
+// gets a root logger of its own, at the app's level.
+function createStoreLogger(context) {
+    return new Logger({ name: 'integration-probe', level: context.logger.level });
 }

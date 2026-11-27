@@ -8,6 +8,7 @@ import { FORMAT } from '../../../../../kixx/content-addressable-store/addressing
 import ContentStore from '../../../../../kixx/adapters/node/content-store/lib/content-store.js';
 import LoggerWriter from '../../../../../kixx/adapters/node/logger-writer/lib/logger-writer.js';
 import ServerRequest from '../../../../../kixx/adapters/node/server-request/lib/server-request.js';
+import Logger from '../../../../../kixx/logger/logger.js';
 
 
 // Under the data directory, one directory per content store test.
@@ -40,7 +41,7 @@ export function createPortFactories({ resolveFilepath, createId }) {
             const rootDirectory = resolveFilepath(`${ CONTENT_STORE_DIRECTORY }/${ createId() }`);
 
             return {
-                store: new ContentStore({ logger: context.logger, rootDirectory, format: FORMAT }),
+                store: new ContentStore({ logger: createStoreLogger(context), rootDirectory, format: FORMAT }),
                 context,
                 createStoreWithoutLogger: () => new ContentStore({ rootDirectory, format: FORMAT }),
             };
@@ -95,4 +96,11 @@ function makeIncoming({ method = 'GET', path = '/', headers = {}, body }) {
     incoming.socket = { encrypted: false, remoteAddress: undefined };
 
     return incoming;
+}
+
+// A store builds a child of the logger it is given, and the app's logger
+// takes no new child once boot is over. So a store built during a request
+// gets a root logger of its own, at the app's level.
+function createStoreLogger(context) {
+    return new Logger({ name: 'integration-probe', level: context.logger.level });
 }

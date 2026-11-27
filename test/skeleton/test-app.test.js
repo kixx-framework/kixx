@@ -54,6 +54,12 @@ async function useProbe(fetch, origin, testNames) {
         results.push(await client.runTest('key-value-store', tests.find((testPath) => testPath.at(-1) === name)));
     }
 
+    // A content store is built inside the request, after boot. Its first
+    // test builds one.
+    const [ contentStoreTest ] = await client.listTests('content-store');
+
+    results.push(await client.runTest('content-store', contentStoreTest));
+
     return {
         tests,
         results,

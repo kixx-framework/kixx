@@ -40,6 +40,10 @@ describe('integration-probe: Node.js port factories', ({ before, after, describe
 
         keyValueStore = new KeyValueStore({ logger, path: path.join(dataDirectory, 'key-value-store.sqlite') });
 
+        // As boot leaves the app's logger: it takes no new child, so a
+        // factory can't hand it to a store it builds during a request.
+        logger.finalize();
+
         context = {
             logger,
             getService(name) {
