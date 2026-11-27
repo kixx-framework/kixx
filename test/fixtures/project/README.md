@@ -26,7 +26,7 @@ A small Kixx project the unit suite reads and boots: core, two tiny plugins, an 
   A test fails while the committed files differ from what the generator writes.
 - **No `*.test.js` file in here.** The test runner would collect it.
 - **No directory named `data` or `tmp`.** Git ignores them.
-- **Content compiles with no problem and no unmatched file.** A test compiles it through the tooling entry and the Node.js adapters. Keep each content file a few lines, with a lowercase name. Nothing serves the content: the fixture's content store isn't in developer mode.
+- **Content compiles with no problem and no unmatched file.** A test compiles it through the tooling entry and the Node.js adapters. Keep each content file a few lines, with a lowercase name. Nothing serves the content yet: the fixture mounts no page or static asset handler.
 - **Core is `../../../kixx` here.** A real project holds its own copy at `./kixx`.
 - **Nothing loads `cloudflare-server.js`.** It imports `cloudflare:workers`, and `./cloudflare-config.generated.js`, which a deploy writes and which isn't committed, as in a real project. Unit tests never import either entry point.
 - **Platform-neutral code stays platform-neutral.** `app/`, a plugin's files outside `adapters/`, and `virtual-hosts.js` import no `node:*` or `cloudflare:*` module and no adapter.

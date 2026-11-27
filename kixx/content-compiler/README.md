@@ -220,6 +220,15 @@ A render from supplied content never reads or writes the rendered-page cache, wh
 
 Both functions are platform-neutral, like the rest of the compiler.
 
+**The development server.** On Node.js and Deno, `startNodeServer()` calls `installWorkingTreeContent()` (`kixx/adapters/node/content-compiler/lib/install-working-tree-content.js`) after boot. When `CONTENT_STORE.workingTree` is on, which is the default in development, it registers a supplier built by `createWorkingTreeContent()` in `working-tree-content.js` beside it:
+
+- **Every request checks every content file's modified time and size**, and reads none. The directories checked are those `listContentDirectories()` returns.
+- **The tree is compiled again only when that check differs** from the last compile's. Requests that see the same state share one compile.
+- **Each new compilation is logged**: one line with the object count, the problem count, and the time, then one warning per problem.
+- **The first compile runs at boot**, so a tree that can't be compiled stops the server before it listens.
+
+`readWorkingTreeSwitch()` in `kixx/content-addressable-store/working-tree-switch.js` reads the key. Core's boot check refuses `true` outside development on every platform.
+
 ## Stylesheets
 
 Every `.css` file under a `static-assets/` directory is published as an entry point. Local, unconditioned `@import` rules are inlined recursively in cascade order, and each imported file is also published as its own asset. Changing an imported file changes the entry point's hash. Comments are removed. Stylesheets under `public/` are published as they are.

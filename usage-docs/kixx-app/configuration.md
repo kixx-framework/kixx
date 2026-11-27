@@ -275,16 +275,46 @@ optional; a missing key takes the default.
 
 ## Content store settings
 
-`CONTENT_STORE` names where published pages, templates, and static assets come
-from.
+`CONTENT_STORE` names where published pages, templates, and static assets are
+stored.
 
-On Node.js:
+On Node.js (and Deno, which runs the Node.js server):
 
-| Key | Meaning |
-| --- | --- |
-| `developerMode` | `true` reads content straight from the source directories below instead of a published store. Read-only, so the Publishing API cannot write to it. Allowed only in `development`; any other environment fails startup. Shipped: on in `development`. |
-| `pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory` | Developer mode only. Default `./pages`, `./templates`, `./static-assets`. Resolved like [store paths](#data_directory-and-store-paths). |
-| `rootDirectory` | Required unless developer mode is on. The published content store's directory, resolved like other store paths. |
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `rootDirectory` | — | Required in every environment, `development` included. The published content store's directory, resolved like other [store paths](#data_directory-and-store-paths). |
+| `workingTree` | on in `development`, off elsewhere | Render pages and assets from the project's working tree instead of a published Release. Leave it out; set `false` in `development` to try a published Release locally. |
+
+### Working-tree content in development
+
+In the `development` environment a Node.js or Deno server renders straight
+from the project's files, with no publish step and no config:
+
+- **What it reads.** `pages/`, `templates/`, `static-assets/`, and `public/`
+  in the project root, and the content directories of each installed plugin.
+  These names are fixed.
+- **It shows what a publish would produce.** The content goes through the
+  same compiler a publish uses: stylesheets are bundled, scripts have their
+  comments stripped, and assets get their real content hashes.
+- **Edits show on the next request.** Each request checks the modified time
+  and size of every content file, and the content is compiled again only when
+  one changed. No restart is needed.
+- **A page with a problem answers 500** with a page that lists its problems.
+  The problems are also logged. Other pages keep rendering.
+- **The page cache is never used** for working-tree content, whatever
+  `HYPERVIEW.usePageCache` says.
+- **Publishing still works.** A Release published to a development server is
+  stored and assigned in `rootDirectory` as anywhere else, but pages keep
+  showing the working tree. Set `workingTree` to `false` to see the Release.
+- **`workingTree: true` is refused outside `development`.** Startup fails on
+  every platform, with a message that names the key and the environment. So
+  does a value that isn't `true` or `false`.
+- **Cloudflare has no working-tree mode.** A Worker always renders a
+  published Release.
+
+The v6 developer-mode switch and its three source-directory keys
+(`pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory`) are removed.
+A config that still sets them is not refused; the keys are ignored.
 
 On Cloudflare:
 
