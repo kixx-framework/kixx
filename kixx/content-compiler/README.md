@@ -209,6 +209,13 @@ The problems are the report's own objects. A problem that belongs to no page and
 
 **A tree that can't be indexed serves nothing.** When the objects can't form an index, for example a file `static-assets/a` beside `public/a/b`, the result has an empty index. `getPageProblems()` then returns every problem for every pathname, with an `invalid-release` problem for each thing the index refused unless the compiler already reported it.
 
+**How a failing page is reported.** Hyperview asks both lookups before it reads a page. When either answers a problem, `HyperviewService#renderPage()` throws an expected `OperationalError` with code `ContentProblems` and HTTP status 500, in every environment. The problems are on `error.problems`, the page's first, and the page's pathname is on `error.pathname`. The base template is asked about only for a full-page render: a partial render, a render without the base template, and the `.json` response read none. Every other page keeps rendering.
+
+- **In development**, `HyperviewPageHandler` answers 500 with an HTML page that lists each problem's code, message, and file, with `Cache-Control: no-store`. The page uses nothing from the project, and every value is escaped.
+- **In every other environment** the handler rethrows the error, so the caller decides what a visitor or an editor sees. With no error handler, the router answers its standard response for an expected 500.
+
+A render from supplied content never reads or writes the rendered-page cache, whatever `HYPERVIEW.usePageCache` or the call says. Compiled templates are still cached by hash.
+
 `listContentDirectories(pluginContentRoots)` returns every directory a compile reads, as paths from the project root: `pages`, `templates`, `static-assets`, and `public`, then each plugin's directories. A caller that checks the content for changes checks exactly these.
 
 Both functions are platform-neutral, like the rest of the compiler.

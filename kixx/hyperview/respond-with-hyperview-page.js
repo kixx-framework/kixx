@@ -1,4 +1,6 @@
 import { isNonEmptyString } from '../assertions/mod.js';
+import { isDevelopmentEnvironment } from '../config/environment.js';
+import { escapeHTMLChars } from '../vendor/templating/mod.js';
 import { sha256Hex } from '../utils/crypto.js';
 import matchesIfNoneMatch from '../http-router/matches-if-none-match.js';
 
@@ -13,6 +15,11 @@ const RENDER_MODE_HEADERS = [ 'kixx-partial', 'kixx-boosted' ];
  * Route defaults are overridden by response rendering options, then by the
  * client-selected partial or boosted render mode. Every response varies on the
  * render mode request headers.
+ *
+ * When the content supplied for the request has problems in this page, the
+ * render fails with code `ContentProblems`. In the development environment
+ * the response is then a 500 HTML page listing the problems, with
+ * `Cache-Control: no-store`. In every other environment the error is rethrown.
  *
  * Set `responseOptions.cacheControl` to opt a public page into shared caching.
  * A successful GET or HEAD response then carries that Cache-Control value and
@@ -60,11 +67,26 @@ export default async function respondWithHyperviewPage(context, request, respons
         renderOptions.usePageCache = false;
     }
     const hyperviewService = context.getService('HyperviewService');
-    const result = await hyperviewService.renderPage(context, {
-        ...renderOptions,
-        props: response.props,
-        url: request.url,
-    });
+    let result;
+
+    try {
+        result = await hyperviewService.renderPage(context, {
+            ...renderOptions,
+            props: response.props,
+            url: request.url,
+        });
+    } catch (error) {
+        // In development the developer is looking at the page, so the page
+        // says what is wrong with it. Anywhere else the caller decides what
+        // a visitor or an editor sees.
+        if (error?.code === 'ContentProblems' && isDevelopmentEnvironment(context.config)) {
+            return response.respondWithHTML(500, renderContentProblems(error), {
+                headers: { 'cache-control': 'no-store' },
+            });
+        }
+
+        throw error;
+    }
 
     if (result.type === 'hypertext') {
         response.respondWithUtf8(response.status, result.hypertext, responseOptions);
@@ -103,4 +125,37 @@ async function applyCacheValidator(request, response, cacheControl) {
         response.headers.delete('content-length');
         response.respondWithStream(304, null);
     }
+}
+
+// A complete document with nothing from the project in it: the project's
+// stylesheets and templates may be what is broken. A problem's message can
+// quote file content, so every value is escaped.
+function renderContentProblems(error) {
+    const items = error.problems.map((problem) => {
+        return [
+            '<li>',
+            `<p><strong>${ escapeHTMLChars(String(problem.code)) }</strong></p>`,
+            `<p>${ escapeHTMLChars(String(problem.message)) }</p>`,
+            `<p><code>${ escapeHTMLChars(String(problem.filepath)) }</code></p>`,
+            '</li>',
+        ].join('');
+    });
+
+    return [
+        '<!doctype html>',
+        '<html lang="en">',
+        '<head>',
+        '<meta charset="utf-8">',
+        '<meta name="robots" content="noindex">',
+        '<title>This page has content problems</title>',
+        '</head>',
+        '<body>',
+        '<h1>This page can\'t be shown because its content has problems</h1>',
+        `<p>Page: <code>${ escapeHTMLChars(String(error.pathname)) }</code></p>`,
+        `<ul>${ items.join('') }</ul>`,
+        '<p>Fix the files listed above, then reload this page.</p>',
+        '</body>',
+        '</html>',
+        '',
+    ].join('\n');
 }

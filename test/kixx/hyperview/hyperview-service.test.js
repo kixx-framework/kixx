@@ -5,6 +5,7 @@ import {
     assertFalsy,
     assertMatches,
     assertNotEqual,
+    assertNotMatches,
 } from 'kixx-assert';
 
 import HyperviewService from '../../../kixx/hyperview/hyperview-service.js';
@@ -66,6 +67,7 @@ function makeContentSnapshot(spec) {
         baseTemplatesHash = 'base-templates-hash-1',
         staticAssets = null,
         staticAssetsHash = 'static-assets-hash-1',
+        suppliedContent,
     } = spec ?? {};
 
     const calls = [];
@@ -77,6 +79,10 @@ function makeContentSnapshot(spec) {
 
     return {
         calls,
+
+        // Left undefined unless a test supplies content, as on the fakes
+        // written before supplied content existed.
+        suppliedContent,
 
         get listStaticAssetsCalls() {
             return listStaticAssetsCalls;
@@ -1391,8 +1397,230 @@ describe('HyperviewService', ({ describe }) => {
             assertMatches('usePageCache', caught.message);
             assertMatches('page cache', caught.message);
             assertMatches('key-value store', caught.message);
-            assertEqual(0, contentAddressableStore.openSnapshotCalls.length);
+
+            // The snapshot has to be opened first: content supplied for the
+            // request turns the page cache off. Nothing is read from it.
+            assertEqual(1, contentAddressableStore.openSnapshotCalls.length);
             assertEqual(0, snapshot.calls.length);
+            assertEqual(0, snapshot.listStaticAssetsCalls);
+        });
+    });
+
+    // R10 and STU-16: a render from content supplied for the request (a
+    // working tree or a draft) never enters the page cache, and a page the
+    // compiler found problems in is refused instead of rendered.
+    describe('renderPage() from supplied content', ({ it }) => {
+
+        function makeSuppliedContent(problems) {
+            const { pages = {}, baseTemplates = {} } = problems ?? {};
+
+            return {
+                getPageProblems: (pathname) => pages[pathname] ?? [],
+                getBaseTemplateProblems: (id) => baseTemplates[id] ?? [],
+            };
+        }
+
+        function makeSuppliedSpec(problems) {
+            const spec = makeDefaultSpec();
+            spec.pages['/about'] = {
+                pageData: [{ page: { title: 'About' } }],
+                template: '<main>About</main>',
+                partials: [ { id: 'byline', source: '<p>About</p>' } ],
+            };
+            spec.suppliedContent = makeSuppliedContent(problems);
+            return spec;
+        }
+
+        function makeProblem(filepath) {
+            return { code: 'template-syntax-error', message: `Bad template in ${ filepath }`, filepath };
+        }
+
+        function render(service, options, href) {
+            return service.renderPage(CONTEXT, {
+                props: {},
+                url: makeRequest(href).url,
+                ...options,
+            });
+        }
+
+        const RENDER_MODES = [
+            { name: 'full page', options: { baseTemplateId: 'main' } },
+            { name: 'page template', options: { skipBaseRender: true } },
+            { name: 'partial', options: { partial: 'byline' } },
+            { name: '.json', options: { baseTemplateId: 'main', allowJsonResponse: true }, href: 'https://www.example.com/index.json' },
+        ];
+
+        it('neither reads nor writes the page cache when it is on by default', async () => {
+            const { service, kvStore } = makeSubject(makeSuppliedSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            const first = await render(service, makeFullPageOptions());
+            const second = await render(service, makeFullPageOptions());
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                first.hypertext,
+            );
+            assertEqual(first.hypertext, second.hypertext);
+        });
+
+        it('neither reads nor writes the page cache when the call turns it on', async () => {
+            const { service, kvStore } = makeSubject(makeSuppliedSpec());
+
+            for (const { options } of RENDER_MODES.slice(0, 3)) {
+                const result = await render(service, { ...options, usePageCache: true });
+                assertEqual('hypertext', result.type);
+            }
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+        });
+
+        it('serves a cached page to nobody: a seeded cache entry is not read', async () => {
+            // Every key is seeded with the same poison, so any read would show.
+            const { service, kvStore } = makeSubject(makeSuppliedSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+            kvStore.get = async () => 'STALE';
+
+            const result = await render(service, makeFullPageOptions());
+
+            assertNotEqual('STALE', result.hypertext);
+        });
+
+        it('renders with no KV store at all, even when the call asks for the page cache', async () => {
+            const { service } = makeSubject(makeSuppliedSpec(), { withoutKvStore: true });
+
+            const result = await render(service, makeFullPageOptions({ usePageCache: true }));
+
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                result.hypertext,
+            );
+        });
+
+        it('refuses a page with problems before any page read, in every render mode', async () => {
+            const problem = makeProblem('pages/page.html');
+
+            for (const { name, options, href } of RENDER_MODES) {
+                const { service, snapshot } = makeSubject(makeSuppliedSpec({ pages: { '/': [ problem ] } }));
+
+                const caught = await catchAsyncError(() => render(service, options, href));
+
+                assert(caught, `expected the ${ name } render to throw`);
+                assertEqual('OperationalError', caught.name, name);
+                assertEqual('ContentProblems', caught.code, name);
+                assertEqual(500, caught.httpStatusCode, name);
+                assertEqual(true, caught.expected, name);
+                assertEqual('/', caught.pathname, name);
+                assertEqual(1, caught.problems.length, name);
+                assertEqual(problem, caught.problems[0], name);
+                assertEqual(0, snapshot.calls.length, `${ name }: no content read`);
+                assertEqual(0, snapshot.listStaticAssetsCalls, `${ name }: no asset listing`);
+            }
+        });
+
+        it('names the page and the count in the message, never file content', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ makeProblem('pages/page.html'), makeProblem('pages/byline.html') ] },
+            }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertMatches('"/"', caught.message);
+            assertMatches('2 problem', caught.message);
+            assertNotMatches('Bad template', caught.message);
+            assertNotMatches('pages/page.html', caught.message);
+        });
+
+        it('refuses a page whose metadata is missing instead of answering not found', async () => {
+            // A malformed page.json leaves the page with no metadata object.
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/broken': [ makeProblem('pages/broken/page.json') ] },
+            }));
+
+            const caught = await catchAsyncError(() => {
+                return render(service, makeFullPageOptions(), 'https://www.example.com/broken');
+            });
+
+            assertEqual('ContentProblems', caught.code);
+            assertEqual('/broken', caught.pathname);
+        });
+
+        it('renders a page without problems from the same supplied content', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ makeProblem('pages/page.html') ] },
+            }));
+
+            for (const { name, options, href } of RENDER_MODES) {
+                const result = await render(
+                    service,
+                    options,
+                    href ? 'https://www.example.com/about.json' : 'https://www.example.com/about',
+                );
+
+                assert(result.hypertext || result.pageContext, name);
+            }
+        });
+
+        it('refuses a full-page render whose base template has problems', async () => {
+            const problem = makeProblem('templates/base/main.html');
+            const { service, snapshot } = makeSubject(makeSuppliedSpec({ baseTemplates: { main: [ problem ] } }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertEqual('ContentProblems', caught.code);
+            assertEqual(problem, caught.problems[0]);
+            assertEqual(0, snapshot.calls.length);
+        });
+
+        it('lets a base template\'s problems block no render that reads no base template', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                baseTemplates: { main: [ makeProblem('templates/base/main.html') ] },
+            }));
+
+            const pageTemplate = await render(service, { skipBaseRender: true });
+            const partial = await render(service, { partial: 'byline' });
+            const json = await render(
+                service,
+                { baseTemplateId: 'main', allowJsonResponse: true },
+                'https://www.example.com/index.json',
+            );
+
+            assertEqual('<main><p>Home</p><footer>Home</footer></main>', pageTemplate.hypertext);
+            assertEqual('<p>Home</p>', partial.hypertext);
+            assertEqual('page-context', json.type);
+        });
+
+        it('lists the page\'s problems first, and a shared problem once', async () => {
+            const page = makeProblem('pages/page.html');
+            const shared = makeProblem('templates/partials/footer.html');
+            const base = makeProblem('templates/base/main.html');
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ page, shared ] },
+                baseTemplates: { main: [ base, shared ] },
+            }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertEqual(3, caught.problems.length);
+            assertEqual(page, caught.problems[0]);
+            assertEqual(shared, caught.problems[1]);
+            assertEqual(base, caught.problems[2]);
+        });
+
+        it('keeps the page cache for a snapshot of a Release', async () => {
+            const spec = makeSuppliedSpec();
+            spec.suppliedContent = null;
+            const { service, kvStore } = makeSubject(spec, { serviceOptions: { usePageCache: true } });
+
+            await render(service, makeFullPageOptions());
+
+            assertEqual(1, kvStore.gets.length);
+            assertEqual(1, kvStore.puts.length);
         });
     });
 

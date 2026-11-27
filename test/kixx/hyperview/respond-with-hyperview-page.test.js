@@ -1,5 +1,5 @@
 import { describe } from 'kixx-test';
-import { assertEqual } from 'kixx-assert';
+import { assert, assertEqual } from 'kixx-assert';
 
 import respondWithHyperviewPage from '../../../kixx/hyperview/respond-with-hyperview-page.js';
 import ServerResponse from '../../../kixx/http-router/server-response.js';
@@ -40,7 +40,7 @@ function makeSubject() {
 }
 
 
-describe('respondWithHyperviewPage', ({ it }) => {
+describe('respondWithHyperviewPage', ({ describe: group, it }) => {
 
     it('applies defaults, response rendering options, and client render modes in order', async () => {
         const { calls, context } = makeSubject();
@@ -215,5 +215,135 @@ describe('respondWithHyperviewPage', ({ it }) => {
 
         assertEqual(undefined, calls[0].options.responseOptions);
         assertEqual(undefined, calls[0].options.cacheControl);
+    });
+
+    // OP-D: in development a page that fails the compiler's checks answers
+    // 500 with its problems. Everywhere else the caller decides (D35).
+    group('a page with content problems', ({ it: test }) => {
+
+        function makeProblemsError() {
+            const error = new Error('The page "/about" can\'t be rendered: its content has 2 problem(s)');
+            error.code = 'ContentProblems';
+            error.httpStatusCode = 500;
+            error.pathname = '/about';
+            error.problems = [
+                {
+                    code: 'template-syntax-error',
+                    message: 'Unexpected "<script>alert(1)</script>" & \'more\'',
+                    filepath: 'pages/about/<b>"page".html',
+                },
+                {
+                    code: 'missing-partial',
+                    message: 'The partial "nav.html" does not exist',
+                    filepath: 'templates/base/default.html',
+                },
+            ];
+            return error;
+        }
+
+        function makeFailingContext(error, environment) {
+            return {
+                config: { environment },
+                getService() {
+                    return {
+                        async renderPage() {
+                            throw error;
+                        },
+                    };
+                },
+            };
+        }
+
+        async function catchAsyncError(fn) {
+            try {
+                await fn();
+            } catch (error) {
+                return error;
+            }
+            return null;
+        }
+
+        test('answers 500 with every problem listed in development', async () => {
+            const response = new ServerResponse();
+
+            const returned = await respondWithHyperviewPage(
+                makeFailingContext(makeProblemsError(), 'development'),
+                makeRequest(),
+                response,
+                { baseTemplateId: 'default.html' },
+            );
+
+            assertEqual(response, returned);
+            assertEqual(500, response.status);
+            assertEqual('text/html; charset=utf-8', response.headers.get('content-type'));
+            assertEqual('no-store', response.headers.get('cache-control'));
+
+            assert(response.body.startsWith('<!doctype html>'));
+            assert(response.body.includes('/about'));
+            assert(response.body.includes('template-syntax-error'));
+            assert(response.body.includes('missing-partial'));
+            assert(response.body.includes('The partial &quot;nav.html&quot; does not exist'));
+            assert(response.body.includes('templates/base/default.html'));
+        });
+
+        test('escapes every value it writes', async () => {
+            const response = new ServerResponse();
+
+            await respondWithHyperviewPage(
+                makeFailingContext(makeProblemsError(), 'development'),
+                makeRequest(),
+                response,
+            );
+
+            assertEqual(false, response.body.includes('<script>'));
+            assertEqual(false, response.body.includes('<b>'));
+            assertEqual(false, response.body.includes('"page"'));
+            // Values are written only as element text, where an apostrophe is inert.
+            assert(response.body.includes('&lt;script&gt;alert(1)&lt;/script&gt;&quot; &amp; '));
+            assert(response.body.includes('pages/about/&lt;b&gt;'));
+        });
+
+        test('references nothing from the project', async () => {
+            const response = new ServerResponse();
+
+            await respondWithHyperviewPage(
+                makeFailingContext(makeProblemsError(), 'development'),
+                makeRequest(),
+                response,
+            );
+
+            assertEqual(false, response.body.includes('<link'));
+            assertEqual(false, response.body.includes('<script'));
+            assertEqual(false, response.body.includes('<img'));
+        });
+
+        test('rethrows the same error outside development and lists nothing', async () => {
+            for (const environment of [ 'production', 'staging', 'local', undefined ]) {
+                const error = makeProblemsError();
+                const response = new ServerResponse();
+
+                const caught = await catchAsyncError(() => respondWithHyperviewPage(
+                    makeFailingContext(error, environment),
+                    makeRequest(),
+                    response,
+                ));
+
+                assertEqual(error, caught);
+                assertEqual(null, response.body ?? null);
+            }
+        });
+
+        test('rethrows any other error in development', async () => {
+            const error = new Error('Something else');
+            error.code = 'SomethingElse';
+
+            const caught = await catchAsyncError(() => respondWithHyperviewPage(
+                makeFailingContext(error, 'development'),
+                makeRequest(),
+                new ServerResponse(),
+            ));
+
+            assertEqual(error, caught);
+        });
     });
 });
