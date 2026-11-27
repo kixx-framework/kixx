@@ -321,6 +321,26 @@ describe('content-compiler/compiled-content', ({ describe: group }) => {
             assertEqual('<main>{{> nav.html }}</main>', home.template.text);
         });
 
+        it('blocks the pages made from a file with a problem the template check didn\'t find', async () => {
+            // A content limit or a validator names only the file at fault.
+            const compilation = await compile(makeProjectFiles());
+            const tooLarge = { code: 'object-too-large', filepath: 'pages/about/bio.html', message: 'too large' };
+            const invalid = { code: 'invalid-release', filepath: 'pages/page.json', message: 'invalid' };
+            const wholeTree = { code: 'too-many-objects', filepath: '', message: 'too many' };
+            compilation.report.problems.push(tooLarge, invalid, wholeTree);
+
+            const content = await createCompiledContent(compilation);
+
+            const about = content.getPageProblems('/about');
+            assertEqual(2, about.length);
+            assert(about.includes(tooLarge));
+            assert(about.includes(invalid));
+
+            // Every page inherits the metadata of the root page.json.
+            assertList([ 'invalid-release' ], content.getPageProblems('/').map(({ code }) => code));
+            assertList([ 'invalid-release' ], content.getPageProblems('/admin').map(({ code }) => code));
+        });
+
         it('blocks exactly the pages that reach a broken global partial', async () => {
             const files = makeProjectFiles();
             files['templates/partials/nav.html'] = '<nav>{{#if}}</nav>';
@@ -391,7 +411,7 @@ describe('content-compiler/compiled-content', ({ describe: group }) => {
             assertEqual(null, snapshot.statGlobalTemplatePartials());
         });
 
-        it('reports the same problems for every pathname', async () => {
+        it('reports the same problems for every page, and none for a pathname that is no page', async () => {
             const compilation = await compile(makeUnservableFiles());
             const content = await createCompiledContent(compilation);
             const problems = content.getPageProblems('/');
@@ -399,7 +419,7 @@ describe('content-compiler/compiled-content', ({ describe: group }) => {
             assert(problems.length > 0);
             assert(problems.some(({ code }) => code === 'invalid-release'));
             assertEqual(problems, content.getPageProblems('/about'));
-            assertEqual(problems, content.getPageProblems('/no/such/page'));
+            assertList([], content.getPageProblems('/no/such/page'));
             assertEqual(problems, content.problems);
 
             for (const problem of compilation.report.problems) {

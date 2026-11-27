@@ -23,8 +23,12 @@ import { createReleaseManifest } from './create-release-manifest.js';
  * the functions a publish uses, so a request served from the result sees what
  * a publish of the same tree would produce.
  *
+ * A page's problems are those the report lists for it, then every other
+ * problem in one of its files: a content limit, or a validator's refusal.
+ *
  * When the objects can't form an index at all, the result has an empty index
- * and reports every problem for every page.
+ * and reports every problem for every page. A pathname that is no page has
+ * none, so it is not found.
  *
  * @param {Object} compilation - What compileContent() resolved
  * @param {Object[]} compilation.objects - The content objects
@@ -70,7 +74,8 @@ export async function createCompiledContent(compilation) {
         problems = [ ...report.problems, ...unreported ];
     }
 
-    const pageProblems = new Map(report.pages.map((page) => [ page.pathname, page.problems ]));
+    const pagePathnames = new Set(graph.pages.map(({ pathname }) => pathname));
+    const pageProblems = collectPageProblems(report, graph);
     const baseTemplateProblems = collectBaseTemplateProblems(report, graph);
 
     return {
@@ -81,7 +86,7 @@ export async function createCompiledContent(compilation) {
 
         getPageProblems(pathname) {
             if (!isServable) {
-                return problems;
+                return pagePathnames.has(pathname) ? problems : [];
             }
 
             return pageProblems.get(pathname) ?? [];
@@ -91,6 +96,53 @@ export async function createCompiledContent(compilation) {
             return baseTemplateProblems.get(id) ?? [];
         },
     };
+}
+
+// The report lists each page's template problems. A problem found later, by
+// the content limits or the Release validators, names only a file, so it is
+// added to every page made from that file.
+function collectPageProblems(report, graph) {
+    const byPathname = new Map(report.pages.map((page) => [ page.pathname, page.problems ]));
+    const byFile = new Map();
+
+    for (const problem of report.problems) {
+        if (problem.filepath) {
+            byFile.set(problem.filepath, [ ...(byFile.get(problem.filepath) ?? []), problem ]);
+        }
+    }
+
+    if (byFile.size === 0) {
+        return byPathname;
+    }
+
+    const partialFiles = new Map(graph.globalPartials.map(({ id, file }) => [ id, file ]));
+
+    for (const page of graph.pages) {
+        const files = [
+            ...page.metadataFiles,
+            page.templateFile,
+            ...page.partialFiles,
+            ...page.includeFiles,
+            ...page.globalPartials.map((id) => partialFiles.get(id)),
+        ];
+
+        const listed = byPathname.get(page.pathname) ?? [];
+        const seen = new Set(listed);
+        const added = [];
+
+        for (const problem of files.flatMap((file) => byFile.get(file) ?? [])) {
+            if (!seen.has(problem)) {
+                seen.add(problem);
+                added.push(problem);
+            }
+        }
+
+        if (added.length > 0) {
+            byPathname.set(page.pathname, [ ...listed, ...added ]);
+        }
+    }
+
+    return byPathname;
 }
 
 // A base template has no link to pages, so its problems are found by file:

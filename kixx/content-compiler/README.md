@@ -200,14 +200,14 @@ It is built from `objects`, never from `release`, so it works for a tree with pr
 | Field | Meaning |
 |---|---|
 | `index`, `objects` | What the store reads: the index of every object, and a reader that returns an object's bytes by hash as text, an `ArrayBuffer`, or a new stream. |
-| `getPageProblems(pathname)` | The problems that block a page: those `report.pages` lists for its pathname. Empty when none. |
+| `getPageProblems(pathname)` | The problems that block a page: those `report.pages` lists for its pathname, then every other problem in one of its files, such as a content limit or a validator's refusal. Empty when none. |
 | `getBaseTemplateProblems(id)` | The problems that block a base template: those in its own file and in the file of each global partial it reaches. Empty when none. |
 | `report` | The compilation's report, unchanged. |
 | `problems` | Every problem to log: `report.problems`, plus any added for a tree that can't be indexed. |
 
-The problems are the report's own objects. A problem that belongs to no page and no base template blocks nothing: a global partial nothing reaches, a static asset, a collision, or a limit. A static asset the compiler couldn't build is absent.
+The problems are the report's own objects. A problem that belongs to no page and no base template blocks nothing: a global partial nothing reaches, a static asset, a collision, or a limit on the whole tree. A static asset the compiler couldn't build is absent.
 
-**A tree that can't be indexed serves nothing.** When the objects can't form an index, for example a file `static-assets/a` beside `public/a/b`, the result has an empty index. `getPageProblems()` then returns every problem for every pathname, with an `invalid-release` problem for each thing the index refused unless the compiler already reported it.
+**A tree that can't be indexed serves nothing.** When the objects can't form an index, for example a file `static-assets/a` beside `public/a/b`, the result has an empty index. `getPageProblems()` then returns every problem for every page, with an `invalid-release` problem for each thing the index refused unless the compiler already reported it. A pathname that is no page has none, so it answers 404.
 
 **How a failing page is reported.** Hyperview asks both lookups before it reads a page. When either answers a problem, `HyperviewService#renderPage()` throws an expected `OperationalError` with code `ContentProblems` and HTTP status 500, in every environment. The problems are on `error.problems`, the page's first, and the page's pathname is on `error.pathname`. The base template is asked about only for a full-page render: a partial render, a render without the base template, and the `.json` response read none. Every other page keeps rendering.
 
