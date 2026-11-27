@@ -145,6 +145,15 @@ const CLOUDFLARE_ONLY_MODULES = [
     'devkit/templates/project/cloudflare-server.js',
 ];
 
+// The integration suite's test-only Durable Object classes, as
+// repository-relative paths. These are the only files under test-app/ that
+// import a cloudflare:* module. Each is a thin shell over a plain class named
+// `<shell>-core.js` beside it, and the integration-probe plugin's manifest
+// declares it. No unit test reaches one.
+const TEST_APP_DURABLE_OBJECT_SHELLS = [
+    'test-app/integration-probe/adapters/cloudflare/lib/integration-probe-sql-store.js',
+];
+
 // Entry points, as repository-relative paths. An entry point starts a server
 // when it loads, so no test file may import one: the integration suite
 // covers them. List the entry points of a fixture or a project template here.
@@ -566,7 +575,7 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
-    it('reaches only relative imports from the integration-probe plugin, but for node:* in its Node.js adapter', () => {
+    it('reaches only relative imports from the integration-probe plugin, but for node:* in its Node.js adapter and cloudflare:workers in its shell', () => {
         const violations = [];
         const nodeAdapterDirectory = path.join(INTEGRATION_PROBE_DIRECTORY, 'adapters/node/');
 
@@ -582,7 +591,8 @@ describe('import hygiene', ({ it }) => {
 
             for (const specifier of specifiers) {
                 const allowed = specifier.startsWith('.')
-                    || (specifier.startsWith('node:') && isInsideDirectory(nodeAdapterDirectory, file));
+                    || (specifier.startsWith('node:') && isInsideDirectory(nodeAdapterDirectory, file))
+                    || (specifier === 'cloudflare:workers' && TEST_APP_DURABLE_OBJECT_SHELLS.includes(toRepositoryPath(file)));
 
                 if (!allowed) {
                     violations.push({ file: trail, specifier });
@@ -611,7 +621,7 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
-    it('imports no cloudflare:* module in test-app/', () => {
+    it('imports cloudflare:* modules in test-app/ only in its Durable Object shells', () => {
         // The runner, its helpers, the integration tests, and the test-only
         // plugin. The built test app is skipped: its Cloudflare entry point
         // is the skeleton's, which CLOUDFLARE_ONLY_MODULES lists.
@@ -619,11 +629,84 @@ describe('import hygiene', ({ it }) => {
             return !isInsideDirectory(TEST_APP_BUILD_DIRECTORY, filepath);
         });
 
-        const violations = files.flatMap((filepath) => {
+        const cloudflareImports = files.flatMap((filepath) => {
             return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
                 .filter((specifier) => specifier.startsWith('cloudflare:'))
                 .map((specifier) => ({ file: toRepositoryPath(filepath), specifier }));
         });
+
+        // The importers must be exactly the listed shells, so an entry that
+        // no longer imports a cloudflare:* module fails too.
+        const problems = cloudflareImports
+            .filter(({ file }) => !TEST_APP_DURABLE_OBJECT_SHELLS.includes(file))
+            .map(({ file, specifier }) => `${ file } -> ${ specifier } (not in TEST_APP_DURABLE_OBJECT_SHELLS)`);
+
+        for (const shell of TEST_APP_DURABLE_OBJECT_SHELLS) {
+            if (!cloudflareImports.some(({ file }) => file === shell)) {
+                problems.push(`TEST_APP_DURABLE_OBJECT_SHELLS lists ${ shell }, which imports no cloudflare:* module`);
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('keeps every Durable Object shell in test-app/ thin', () => {
+        const problems = [];
+
+        for (const shell of TEST_APP_DURABLE_OBJECT_SHELLS) {
+            const source = fs.readFileSync(path.join(REPOSITORY_DIRECTORY, shell), 'utf8');
+            const specifiers = extractSpecifiers(source);
+
+            // cloudflare:workers, and the plain class beside it that holds
+            // the behavior.
+            const core = `./${ path.basename(shell, '.js') }-core.js`;
+
+            if (specifiers.slice().sort().join(',') !== [ core, 'cloudflare:workers' ].sort().join(',')) {
+                problems.push(`${ shell } imports ${ specifiers.join(', ') }; a shell imports cloudflare:workers and ${ core }`);
+            }
+
+            // Each method hands its arguments to the plain class in one
+            // line. Anything else in a method body is behavior.
+            const bodies = [ ...source.matchAll(/^ {4}(\w+)\(([^)]*)\) \{\n([\s\S]*?)\n {4}\}/gm) ]
+                .filter(([ , name ]) => name !== 'constructor');
+
+            if (bodies.length === 0) {
+                problems.push(`${ shell } declares no method`);
+            }
+
+            for (const [ , name, parameters, body ] of bodies) {
+                if (body.trim() !== `return this.#core.${ name }(${ parameters });`) {
+                    problems.push(`${ shell }: ${ name }() does more than delegate to the plain class`);
+                }
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('declares exactly the test-app Durable Object shells in the integration-probe plugin\'s manifest', () => {
+        const manifest = JSON.parse(fs.readFileSync(path.join(INTEGRATION_PROBE_DIRECTORY, 'plugin.json'), 'utf8'));
+
+        const declared = (manifest.cloudflare?.durableObjects ?? []).map(({ module }) => {
+            return toRepositoryPath(path.join(INTEGRATION_PROBE_DIRECTORY, module));
+        });
+
+        assertEqual(TEST_APP_DURABLE_OBJECT_SHELLS.slice().sort().join('\n'), declared.sort().join('\n'));
+    });
+
+    it('reaches no test-app Durable Object shell from the plugin\'s other files', () => {
+        // The Cloudflare registry imports the plugin's lifecycle module and
+        // routes, and must load in a unit test. Only the generated Durable
+        // Object registry imports a shell.
+        const shells = TEST_APP_DURABLE_OBJECT_SHELLS.map((shell) => path.join(REPOSITORY_DIRECTORY, shell));
+        const entryFiles = listJavaScriptFiles(INTEGRATION_PROBE_DIRECTORY).filter((filepath) => !shells.includes(filepath));
+        const violations = [];
+
+        for (const { file, chain } of readImportGraph(entryFiles)) {
+            if (shells.includes(file)) {
+                violations.push({ file: chain.map(toRepositoryPath).join(' -> '), specifier: '(a Durable Object shell)' });
+            }
+        }
 
         assertEqual('', formatViolations(violations));
     });

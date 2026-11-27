@@ -8,6 +8,23 @@
         "node": { "lifecycle": [ "./adapters/node/plugin.js" ] },
         "cloudflare": { "lifecycle": [ "./adapters/cloudflare/plugin.js" ] }
     },
+    "config": {
+        "keys": [ "INTEGRATION_PROBE" ],
+        "defaults": {
+            "cloudflare": {
+                "INTEGRATION_PROBE": { "durableObject": { "bindingName": "INTEGRATION_PROBE_SQL_STORE" } }
+            }
+        }
+    },
+    "cloudflare": {
+        "durableObjects": [
+            {
+                "className": "IntegrationProbeSqlStore",
+                "module": "./adapters/cloudflare/lib/integration-probe-sql-store.js",
+                "config": "INTEGRATION_PROBE.durableObject"
+            }
+        ]
+    },
     "content": { "pagesDirectory": "./pages" },
     "routes": [
         { "module": "./routes.js", "mount": "/integration-probe", "name": "integration-probe" }

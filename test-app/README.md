@@ -4,7 +4,7 @@ The integration suite checks Kixx code against the real systems under it: Cloudf
 
 It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory. CI runs it in a job of its own, against a test app started on the runner. What belongs in each suite is in the Testing Guide, `test/README.md`.
 
-> **Status:** The suite checks that the test app is up with production settings, serves its pages from a published Release, takes a publish, and guards its Publishing API with the deploy key (`test/all-targets/`), and runs all six probe suites inside it (`test/probe/`). On the local target it also starts servers of its own to check what only a process can show: signals, exit codes, boot failures, a restart, and development mode (`test/local/`). The tests run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
+> **Status:** The suite checks that the test app is up with production settings, serves its pages from a published Release, takes a publish, and guards its Publishing API with the deploy key (`test/all-targets/`), and runs all six probe suites inside it (`test/probe/`). On the local target it also starts servers of its own to check what only a process can show: signals, exit codes, boot failures, a restart, and development mode (`test/local/`). The tests run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run: the Cloudflare-only tests (`test/cloudflare/`) are written, and checked against the fakes in the unit suite, but have never met the platform. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
 
 ```
 test-app/
@@ -24,6 +24,7 @@ test-app/
     ├── all-targets/              # Tests that run on every target
     ├── probe/                    # One file per probe suite; they run on every target
     ├── local/                    # Tests that start their own server process; local target only
+    ├── cloudflare/               # Platform checks; Cloudflare target only
     └── test-helpers/
         ├── target.js             # getBaseUrl(), getDeployKey(), getTarget(), describeOnTarget(), fetchWithDeployKey()
         ├── publish.js            # publishContent(): a publish over HTTP
@@ -54,6 +55,8 @@ The plugin mounts these routes at `/integration-probe`, all behind the deploy ke
 | `GET /integration-probe/unexpected-error` | Nothing: it throws a plain `Error`, as a bug would. A Node.js or Deno server answers 500 and exits with code 1. |
 | `GET /integration-probe/key-value-keys?prefix=<p>` | `{ prefix, count }`: how many keys the app's key/value store holds under the prefix. Node.js and Deno only; 404 on Cloudflare. The port has no listing, so the plugin's Node.js adapter reads the store's SQLite file through a read-only connection. |
 
+| `POST /integration-probe/platform-checks/<name>` | `{ name, observation }`: one platform check, run against the target's real bindings (see "Platform Checks"). Cloudflare only; 404 on Node.js and Deno. |
+
 The plugin also ships one page, `/integration-probe-page` (`pages/integration-probe-page/`), so a development server has a plugin page to render and a published Release holds one.
 
 Its `routes.js` is platform-neutral. Each target's lifecycle module (`adapters/node/plugin.js`, `adapters/cloudflare/plugin.js`) registers the `IntegrationProbe` service, which holds the target's name and a factory for each port suite, built over that target's own adapters and bindings:
@@ -66,6 +69,8 @@ Its `routes.js` is platform-neutral. Each target's lifecycle module (`adapters/n
 | `server-request` | The adapter over a stand-in for `http.IncomingMessage`. | The adapter over a `Request`. |
 
 **What a Cloudflare probe run leaves behind.** The content store has no delete. Each content store test's wire format names one Durable Object instance and a few KV keys that nothing else shares, and they stay after the test. Nothing here cleans them up. The operator clears them by deleting and re-creating the test app's namespaces when it matters. On Node.js and Deno each test leaves one directory under the data directory.
+
+On Cloudflare the plugin declares one Durable Object class of its own, `IntegrationProbeSqlStore` (config `INTEGRATION_PROBE.durableObject`, binding `INTEGRATION_PROBE_SQL_STORE` by default), for the `sql.exec` platform checks. Its file is a thin shell over `integration-probe-sql-store-core.js`, and `test/kixx/import-hygiene.test.js` lists it: it is the only file under `test-app/` that imports a `cloudflare:*` module.
 
 To add a test route, add it to `test-app/integration-probe/routes.js`. A route that needs a platform service takes it from the `IntegrationProbe` service, never from an import.
 
@@ -187,6 +192,8 @@ Every Release a test assigns holds the skeleton's files, so the skeleton's pages
 | `test/local/page-cache.test.js` | `local` | Hyperview writes page cache entries to the key/value store only when `HYPERVIEW.usePageCache` is on. |
 | `test/local/development.test.js` | `local` | A development server renders a page, a plugin's page, a public file, and the fingerprinted stylesheet from the working tree; shows an edit on the next request, also one that keeps the file's size; answers the 500 problems page for a broken page while the others render. |
 
+| `test/cloudflare/platform-checks.test.js` | `cloudflare` | Every platform check reports what the unit suite's fakes report. See "Platform Checks". |
+
 **The `local` tests start their own servers.** They don't use the server `run-local.js` started. Each starts the built test app (`test-app/build/`), or a copy of it in a temporary directory when it edits a file, on a free port, with its own data directory and deploy key, on the runtime the runner runs on: a Node.js run tests Node.js servers and a Deno run tests Deno servers. They register nothing on any other target. They need the build, which `run-local.js` makes; before a bare `run-tests.js --local`, run `node tools/build-test-app.js`. The drain test prints the time it measured from the held response to the exit.
 
 **A rerun against the same running target passes.** A publish of content the store holds uploads nothing and assigns the same Release. The publishing test adds a file unique to the run, so each run makes a new Release. The pages test assigns the skeleton's content back before it looks for its extra page, and leaves the Release with the extra page assigned.
@@ -194,6 +201,33 @@ Every Release a test assigns holds the skeleton's files, so the skeleton's pages
 **The rate-limit test** makes 21 wrong-key requests from an address it makes up and sends in `X-Forwarded-For`. The local target trusts that header (`TRUST_PROXY=true`), so the test limits no other test and no rerun. Cloudflare sets the client address itself, so there the test would limit your own address for wrong-key requests for up to 15 minutes. It runs on `local` always, and on any other target only with `INTEGRATION_TESTS_RATE_LIMIT=1`. Run it last.
 
 The other deploy key tests and the boot test make about three failed attempts a run. On a target that doesn't trust `X-Forwarded-For` they count against your own address: more than six runs in 15 minutes reach the limit of 20, and those tests then get 429 until the window ends.
+
+## Platform Checks
+
+The unit suite's fakes of Workers KV and Durable Object storage (`test/fakes/`) guess where Cloudflare's documentation is silent, and take the stricter reading. A platform check asks the platform. Each runs one call against a real binding, inside the Worker, and answers what happened as data, an observation: `{ outcome: 'resolved', value }` or `{ outcome: 'rejected', errorName, message }`. A check never asserts.
+
+- The checks are in `integration-probe/adapters/cloudflare/lib/platform-checks.js` (Workers KV and the environment) and `integration-probe-sql-store-core.js` (`sql.exec`, inside the plugin's Durable Object).
+- `integration-probe/lib/platform-expectations.js` holds what each check should report, written from what the fakes do today, and `comparePlatformObservation(name, observation)`.
+- The unit suite runs every check against the fakes and compares (`test/test-app/integration-probe/platform-checks.test.js`). `test/cloudflare/platform-checks.test.js` runs every check through the route on Cloudflare and compares with the same module, and prints each observation.
+
+So a failing check on Cloudflare names a fake that differs from the platform. Fix the fake, then the expectation, and pin the difference with a unit test.
+
+| Check | Asks | The fakes say | Documented |
+|---|---|---|---|
+| `kv-put-array-buffer-view` | Does `put` take a typed array, and store only its window on the buffer? | Yes: the view's bytes | No |
+| `kv-get-empty-array` | `get([])` | Rejects | No |
+| `kv-put-expiration-and-ttl` | A `put` with both `expiration` and `expirationTtl` | Rejects | No |
+| `kv-put-expiration-under-60-seconds` | An `expiration` a whole second, 59 to 60 seconds away | Rejects | Yes, but not how exactly it counts |
+| `kv-put-twice-within-a-second` | A second `put` to one key at once | Rejects with `KV PUT failed: 429 Too Many Requests` | Yes |
+| `environment-bindings` | Does the environment `fetch()` gets hold the names the module-scope `env` held at boot? Names only. | The same names | No |
+| `sql-too-few-bindings` | Two placeholders, one binding | Binds `NULL` (the fake doesn't model it) | No |
+| `sql-unsupported-binding-type` | A boolean binding | Rejects | No |
+| `sql-blob-2000001-bytes`, `-4194304-`, `-8000000-`, `-8388609-` | A row holding a BLOB of that size | Rejects with `SQLITE_TOOBIG`: the fake's limit is 2,000,000 bytes | The limits page gives 8 MB |
+| `sql-transaction-rollback` | Does `transactionSync` roll back when its callback throws? | Yes | Yes |
+
+The four row-limit checks are measurements. The fake is stricter than the platform on purpose, so a size the platform accepts doesn't fail the test: its observation is printed, and the largest size accepted is the measurement to record.
+
+**What a run leaves behind.** Every key a check writes carries a 60 to 120 second expiration, so none stays. The `sql.exec` checks share one Durable Object instance, `integration-probe-platform-checks`, with one empty table. A check removes the rows it wrote.
 
 ## Writing an Integration Test
 

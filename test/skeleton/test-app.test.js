@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from 'kixx-assert';
 
+import IntegrationProbeSqlStoreCore from '../../test-app/integration-probe/adapters/cloudflare/lib/integration-probe-sql-store-core.js';
+import { comparePlatformObservation } from '../../test-app/integration-probe/lib/platform-expectations.js';
+import { createFakeDurableObjectNamespace } from '../fakes/durable-object.js';
 import { createProbeClient } from '../../test-app/probe/probe-client.js';
 import { publishTestAppContent } from '../../test-app/test/test-helpers/publish.js';
 import { assembleTestApp } from '../../tools/lib/assemble-project.js';
@@ -21,6 +24,9 @@ const SKELETON_DIRECTORY = fileURLToPath(new URL('../../devkit/templates/project
 
 const PROBE_PATHNAME = '/integration-probe/probe';
 const ENVIRONMENT_PATHNAME = '/integration-probe/environment';
+
+const PLATFORM_CHECKS_PATHNAME = '/integration-probe/platform-checks';
+const PLATFORM_CHECKS = [ 'kv-get-empty-array', 'sql-transaction-rollback', 'environment-bindings' ];
 
 // The page the plugin's content root supplies.
 const PLUGIN_PAGE_PATHNAME = '/integration-probe-page';
@@ -157,6 +163,29 @@ describe('test app', ({ before, after, describe, it }) => {
         );
     });
 
+    // Read as text: only Cloudflare can load it.
+    it('exports core\'s Durable Object class and the plugin\'s from the generated registry', () => {
+        const source = project.readFile('cloudflare-durable-objects.generated.js');
+        const exported = [ ...source.matchAll(/^export \{ default as (\w+) \} from "([^"]+)";$/gm) ]
+            .map(([ , className, module ]) => `${ className } ${ module }`);
+
+        assertEqual(
+            [
+                'ContentAddressableIndexStore ./kixx/adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
+                'IntegrationProbeSqlStore ./plugins/integration-probe/adapters/cloudflare/lib/integration-probe-sql-store.js',
+            ].join('\n'),
+            exported.join('\n'),
+        );
+    });
+
+    it('gives the plugin\'s Durable Object a binding name on Cloudflare only', () => {
+        assertEqual(
+            'INTEGRATION_PROBE_SQL_STORE',
+            project.cloudflareRegistry.configDefaults.INTEGRATION_PROBE.durableObject.bindingName,
+        );
+        assertEqual(undefined, project.nodeRegistry.configDefaults.INTEGRATION_PROBE);
+    });
+
     it('wires the plugin through the generated registries', () => {
         assert(project.nodeRegistry.plugins.has('integration-probe:./adapters/node/plugin.js'));
         assert(project.cloudflareRegistry.plugins.has('integration-probe:./adapters/cloudflare/plugin.js'));
@@ -171,6 +200,7 @@ describe('test app', ({ before, after, describe, it }) => {
         let pluginPage;
         let held;
         let cachedPages;
+        let platformCheck;
 
         before(async () => {
             booted = await bootOnNode(project, {
@@ -201,6 +231,13 @@ describe('test app', ({ before, after, describe, it }) => {
                 `${ booted.origin }/integration-probe/key-value-keys?prefix=${ encodeURIComponent(PAGE_CACHE_PREFIX) }`,
                 DEPLOY_KEY,
             );
+
+            platformCheck = await fetch(`${ booted.origin }${ PLATFORM_CHECKS_PATHNAME }/kv-get-empty-array`, {
+                method: 'POST',
+                headers: { authorization: `Bearer ${ DEPLOY_KEY }` },
+            });
+
+            await platformCheck.arrayBuffer();
         });
 
         after(async () => {
@@ -226,6 +263,10 @@ describe('test app', ({ before, after, describe, it }) => {
         it('holds a request for the time asked', () => {
             assertEqual(200, held.status);
             assertEqual(20, held.body.held);
+        });
+
+        it('has no platform check: those are Cloudflare\'s', () => {
+            assertEqual(404, platformCheck.status);
         });
 
         it('counts no page cache key: the page cache is off by default', () => {
@@ -283,17 +324,46 @@ describe('test app', ({ before, after, describe, it }) => {
     // fakes in test/test-app/integration-probe/.
     describe('in production as a Worker against fakes', ({ before, it }) => {
         let used;
+        const platformChecks = [];
 
         before(async () => {
             const booted = bootOnCloudflare(project, {
-                env: { ENVIRONMENT: 'production', BUILD_ID, DEPLOY_KEY_HASH },
+                env: {
+                    ENVIRONMENT: 'production',
+                    BUILD_ID,
+                    DEPLOY_KEY_HASH,
+                    // The plugin's own Durable Object, under the binding
+                    // name its manifest defaults to.
+                    INTEGRATION_PROBE_SQL_STORE: createFakeDurableObjectNamespace((state) => {
+                        return new IntegrationProbeSqlStoreCore({ ctx: state, env: {} });
+                    }),
+                },
             });
 
             used = await useProbe(booted.fetch, booted.origin, [ READ_TEST ]);
+
+            for (const name of PLATFORM_CHECKS) {
+                const response = await booted.fetch(`${ booted.origin }${ PLATFORM_CHECKS_PATHNAME }/${ name }`, {
+                    method: 'POST',
+                    headers: { authorization: `Bearer ${ DEPLOY_KEY }` },
+                });
+
+                platformChecks.push({ name, status: response.status, body: await response.json() });
+            }
         });
 
         it('runs a probe test with the deploy key, refuses without it, and says what it is', () => {
             assertProbe(used, 'cloudflare');
+        });
+
+        // One check on a KV binding, one inside the plugin's Durable
+        // Object, and the one that compares the two environments.
+        it('runs platform checks through the route, as the expectations say', () => {
+            for (const { name, status, body } of platformChecks) {
+                assertEqual(200, status, name);
+                assertEqual(name, body.name);
+                assertEqual('', comparePlatformObservation(name, body.observation).join('; '), name);
+            }
         });
     });
 }, TIMEOUT);

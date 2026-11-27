@@ -78,6 +78,21 @@ async function countKeyValueKeys(context, request, response) {
     return response.respondWithJSON(200, { prefix, count: await count(prefix) });
 }
 
+// Runs one named platform check against the target's real bindings and
+// answers what happened. Only a target whose adapter has checks answers:
+// today that is Cloudflare. One check a request keeps each inside a
+// Worker's limits.
+async function runPlatformCheck(context, request, response) {
+    const checks = context.getService('IntegrationProbe').platformChecks;
+    const { name } = request.pathnameParams;
+
+    if (!checks || !Object.hasOwn(checks, name)) {
+        throw new NotFoundError(`This target has no platform check named ${ name }`);
+    }
+
+    return response.respondWithJSON(200, { name, observation: await checks[name](context) });
+}
+
 
 export default {
     inboundMiddleware: [ requireDeployKey ],
@@ -108,6 +123,13 @@ export default {
             name: 'unexpected-error',
             targets: [
                 { name: 'throw', methods: [ 'GET' ], requestHandlers: [ throwUnexpectedError ] },
+            ],
+        },
+        {
+            pattern: '/platform-checks/:name',
+            name: 'platform-checks',
+            targets: [
+                { name: 'run', methods: [ 'POST' ], requestHandlers: [ runPlatformCheck ] },
             ],
         },
         {

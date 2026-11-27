@@ -117,12 +117,13 @@ describe('integration-probe: routes', ({ describe, it }) => {
         assertEqual('DeployKeyRequired', error.code);
     });
 
-    it('mounts the probe for GET and POST, and every other route for GET', () => {
+    it('mounts the probe for GET and POST, a platform check for POST, and every other route for GET', () => {
         assertEqual(
-            '/environment,/hold,/key-value-keys,/probe,/unexpected-error',
+            '/environment,/hold,/key-value-keys,/platform-checks/:name,/probe,/unexpected-error',
             routes.routes.map(({ pattern }) => pattern).sort().join(','),
         );
         assertEqual('GET,POST', findHandler('/probe').methods.join(','));
+        assertEqual('POST', findHandler('/platform-checks/:name').methods.join(','));
 
         for (const pattern of [ '/environment', '/hold', '/key-value-keys', '/unexpected-error' ]) {
             assertEqual('GET', findHandler(pattern).methods.join(','), pattern);
@@ -292,6 +293,57 @@ describe('integration-probe: routes', ({ describe, it }) => {
             const { context } = await makeContext();
             const error = await catchAsyncError(() => {
                 return handler(context, makeRequest({ url: `${ url }?prefix=cache` }), new ServerResponse());
+            });
+
+            assertEqual(404, error.httpStatusCode);
+        });
+    });
+
+    describe('/platform-checks/:name', ({ it }) => {
+        const { handler } = findHandler('/platform-checks/:name');
+
+        function makeCheckRequest(name) {
+            return makeRequest({ method: 'POST', url: `https://target.test/integration-probe/platform-checks/${ name }` })
+                .setPathnameParams({ name });
+        }
+
+        it('runs the named check with the request\'s context and answers what it observed', async () => {
+            const { context } = await makeContext();
+            const contexts = [];
+
+            context.getService('IntegrationProbe').platformChecks = {
+                'made-up-check': async (requestContext) => {
+                    contexts.push(requestContext);
+                    return { outcome: 'rejected', errorName: 'Error', message: 'no' };
+                },
+            };
+
+            const result = await send(handler, context, makeCheckRequest('made-up-check'));
+
+            assertEqual(200, result.status);
+            assertEqual(
+                JSON.stringify({ name: 'made-up-check', observation: { outcome: 'rejected', errorName: 'Error', message: 'no' } }),
+                JSON.stringify(result.body),
+            );
+            assertEqual(context, contexts[0]);
+        });
+
+        it('answers 404 for a name that is no check, an inherited property included', async () => {
+            const { context } = await makeContext();
+
+            context.getService('IntegrationProbe').platformChecks = { 'made-up-check': async () => ({}) };
+
+            for (const name of [ 'another-check', 'toString', 'constructor' ]) {
+                const error = await catchAsyncError(() => handler(context, makeCheckRequest(name), new ServerResponse()));
+
+                assertEqual(404, error.httpStatusCode, name);
+            }
+        });
+
+        it('answers 404 on a target with no platform checks', async () => {
+            const { context } = await makeContext();
+            const error = await catchAsyncError(() => {
+                return handler(context, makeCheckRequest('kv-get-empty-array'), new ServerResponse());
             });
 
             assertEqual(404, error.httpStatusCode);
