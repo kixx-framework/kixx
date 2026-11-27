@@ -41,6 +41,27 @@ directory that starts with a dot, can't be published.
 Installed plugins add content of their own: an admin plugin's pages, for
 example. Plugin content compiles into the same Release as yours.
 
+## Content in development
+
+In the `development` environment a Node.js or Deno server renders pages and
+assets straight from these directories. There is no publish step, and an
+edit shows on the next request with no restart.
+
+- **It shows what a publish would produce.** The server runs the same
+  compiler and the same checks, so stylesheets are bundled and assets have
+  their real content hashes.
+- **A page that fails a check answers 500** with a page that lists its
+  problems: the code, the message, and the file. The problems are logged
+  too. Every other page keeps rendering.
+- **Mount the two content handlers** in `virtual-hosts.js`:
+  `StaticAssetRequestHandler` from `kixx/static-assets/` and
+  `HyperviewPageHandler` from `kixx/hyperview/hyperview-page-handler.js`. A
+  catch-all route with both renders any page, so a new page needs no route
+  and no code deploy.
+
+The switch is `CONTENT_STORE.workingTree`; see "Working-tree content in
+development" in [Configuration](configuration.md).
+
 ## What the checks catch
 
 The checks compile every template. They render nothing, so they need no

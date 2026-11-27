@@ -1,24 +1,16 @@
 import fs from 'node:fs';
-import fsp from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import util from 'node:util';
-import { fileURLToPath } from 'node:url';
 import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual, assertFalsy, isFunction } from 'kixx-assert';
 
 import { renderProjectFiles } from '../../kixx/tooling/mod.js';
 import { createProjectFileSystem } from '../../kixx/adapters/node/tooling/lib/project-file-system.js';
-import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
 import { sha256Hex } from '../../kixx/utils/crypto.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
 import HyperviewService from '../../kixx/hyperview/hyperview-service.js';
 import { startNodeServer } from '../../kixx/adapters/node/server/lib/node-server.js';
-import { createWorker } from '../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js';
-import ContentAddressableIndexStoreCore from '../../kixx/adapters/cloudflare/content-store/lib/content-addressable-index-store-core.js';
-import { createFakeDurableObjectNamespace } from '../fakes/durable-object.js';
-import { createFakeKVNamespace } from '../fakes/workers-kv.js';
 
 // Never an entry point, and never the Durable Object registry: only
 // Cloudflare can load those.
@@ -27,9 +19,19 @@ import * as cloudflareRegistry from './project/cloudflare-registry.generated.js'
 import { pluginRoutes } from './project/routes.generated.js';
 import virtualHosts from './project/virtual-hosts.js';
 import * as app from './project/app/app.js';
+import {
+    FIXTURE_DEPLOY_KEY,
+    FIXTURE_DEPLOY_KEY_HASH,
+    PROJECT_DIRECTORY,
+    SECRET_VALUES,
+    bootOnCloudflare,
+    bootOnNode,
+    makeDataDirectory,
+    makeProcess,
+    readCommittedFile,
+    removeDataDirectory,
+} from './fixture-project-boot.js';
 
-
-const PROJECT_DIRECTORY = fileURLToPath(new URL('./project/', import.meta.url));
 
 // Where core is, from the fixture. A real project holds it at ./kixx.
 const CORE_DIRECTORY = '../../../kixx';
@@ -44,20 +46,6 @@ const GENERATED_FILE_NAMES = [
     'routes.generated.js',
 ];
 
-
-// A made-up deploy key for the fixture, and its SHA-256. The environments
-// hold only the hash, and nothing may ever print either.
-const FIXTURE_DEPLOY_KEY = 'kxdk_d68ff9b752db2b16fc4e4288bff58662244de0ffa0b58e154ec19c1d7256e39d';
-const FIXTURE_DEPLOY_KEY_HASH = '7a2831d3dd4bd497809c5122a4bf21af5ce186648aaeed0e941e3a59a5d06e1b';
-
-// The values the fake environments give the declared secrets. No error and
-// no response may ever repeat one.
-const SECRET_VALUES = {
-    DEPLOY_KEY_HASH: FIXTURE_DEPLOY_KEY_HASH,
-    FIXTURE_APP_SECRET: 'the-app-secret-nothing-may-print',
-    PANEL_SIGNING_SECRET: 'the-panel-secret-nothing-may-print',
-    VISITS_OPTIONAL_TOKEN: 'the-optional-token-nothing-may-print',
-};
 
 // What boot says on every target when the required secrets are absent. The
 // fixture runs as `test`, so the deploy key hash is required too.
@@ -76,160 +64,17 @@ const MALFORMED_DEPLOY_KEY_HASH_MESSAGE = 'DEPLOY_KEY_HASH must be the SHA-256 o
 const WORKING_TREE_REFUSED_MESSAGE = 'CONTENT_STORE.workingTree can be true only in the development environment, '
     + 'and this is "test". Remove the key or set it to false.';
 
-const CATCH_ALL_BODY = 'fixture catch-all: not found\n';
+// The catch-all serves content. These boots assign no Release to the build,
+// so it answers 503. test/fixtures/project-pages.test.js assigns one.
+const NO_RELEASE_CODE = 'BuildNotServable';
 
 // Asks the server to close the connection after the response, so a drain that
 // follows finds no connection open on either runtime.
 const CLOSE_CONNECTION = { connection: 'close' };
 
 
-function readCommittedFile(fileName) {
-    return fs.readFileSync(path.join(PROJECT_DIRECTORY, fileName), 'utf8');
-}
-
 function readManifest(fileName) {
     return JSON.parse(fs.readFileSync(new URL(fileName, import.meta.url), 'utf8'));
-}
-
-function makeDataDirectory() {
-    return fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-fixture-project-'));
-}
-
-function removeDataDirectory(dataDirectory) {
-    return fsp.rm(dataDirectory, { recursive: true, force: true });
-}
-
-// Stands in for node:process. exit() records its code and returns, and on()
-// keeps each handler so a test can deliver a signal by calling it.
-function makeProcess(env) {
-    const exitCodes = [];
-    const handlers = new Map();
-    let resolveExited;
-
-    const exited = new Promise((resolve) => {
-        resolveExited = resolve;
-    });
-
-    return {
-        argv: [ 'node', 'node-server.js', '--environment', 'test', '--port', '0' ],
-        env,
-        exit(code) {
-            exitCodes.push(code);
-            resolveExited(code);
-        },
-        on(name, handler) {
-            handlers.set(name, handler);
-        },
-        // Resolves with the first exit code.
-        exited,
-        exitCodes,
-        handlers,
-    };
-}
-
-// Boots the fixture the way its node-server.js does, from the committed
-// registry, with a fake process and the stores in a temporary directory. The
-// caller must await close(). A test may pass a changed copy of the registry.
-async function bootOnNode(registry = nodeRegistry) {
-    const dataDirectory = await makeDataDirectory();
-
-    const fakeProcess = makeProcess({
-        DATA_DIRECTORY: dataDirectory,
-        DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
-        FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
-        PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
-    });
-
-    let started;
-
-    try {
-        started = await startNodeServer({
-            registry,
-            virtualHosts,
-            app,
-            baseDirectory: PROJECT_DIRECTORY,
-            process: fakeProcess,
-            hostname: '127.0.0.1',
-        });
-    } catch (error) {
-        await removeDataDirectory(dataDirectory);
-        throw error;
-    }
-
-    return {
-        ...started,
-        fakeProcess,
-        dataDirectory,
-        origin: `http://127.0.0.1:${ started.server.address().port }`,
-
-        // Forces a shutdown unless the test already caused one, waits for the
-        // exit (the SQLite stores close in that sweep), and removes the
-        // temporary directory.
-        async close() {
-            started.shutdown('test finished', { force: true });
-            await fakeProcess.exited;
-            await removeDataDirectory(dataDirectory);
-
-            assertFalsy(started.server.listening);
-        },
-    };
-}
-
-// Builds the fixture's Worker the way its cloudflare-server.js does, from the
-// committed registry, with fakes for the bindings core's manifest declares.
-// `secrets` are the secret values the environment holds. A test may pass a
-// changed copy of the registry.
-function bootOnCloudflare(secrets, registry = cloudflareRegistry) {
-    // Workers KV allows one write per second to a key, and so does the fake.
-    // A test moves this clock on between visits instead of waiting.
-    const clock = { now: Date.now() };
-
-    const env = {
-        ENVIRONMENT: 'test',
-        BUILD_ID: 'fixture-build',
-        ...secrets,
-        KEY_VALUE_STORE: createFakeKVNamespace({ now: () => clock.now }),
-        CA_STORE_KV_STORE: createFakeKVNamespace(),
-        CA_STORE_DURABLE_OBJECT: createFakeDurableObjectNamespace((state) => {
-            return new ContentAddressableIndexStoreCore({ ctx: state, env: {} });
-        }),
-    };
-
-    // Reached only when a request fails unexpectedly, which no test here
-    // causes: both stay empty.
-    const waits = [];
-    const waitUntilPromises = [];
-
-    const worker = createWorker({
-        env,
-        sourceConfig: parseJsonc(readCommittedFile('cloudflare-config.jsonc')),
-        registry,
-        virtualHosts,
-        app,
-        wait(milliseconds) {
-            waits.push(milliseconds);
-            return Promise.resolve();
-        },
-    });
-
-    const executionContext = {
-        waitUntil(promise) {
-            waitUntilPromises.push(promise);
-            promise.catch(() => {});
-        },
-    };
-
-    return {
-        env,
-        clock,
-        waits,
-        waitUntilPromises,
-
-        // Cloudflare hands fetch() the environment again on every request.
-        fetch(pathname, headers = {}) {
-            return worker.fetch(new Request(`https://localhost${ pathname }`, { headers }), env, executionContext);
-        },
-    };
 }
 
 // A copy of a registry whose config defaults set CONTENT_STORE.workingTree,
@@ -479,8 +324,8 @@ describe('fixture project', ({ describe }) => {
 
             const { routes } = virtualHosts[0];
 
-            assertEqual('home', routes[0].name);
-            assertEqual(pluginRoutes.map(({ name }) => name).join(','), routes.slice(1, -1).map(({ name }) => name).join(','));
+            assertEqual('home,fingerprinted-assets', routes.slice(0, 2).map(({ name }) => name).join(','));
+            assertEqual(pluginRoutes.map(({ name }) => name).join(','), routes.slice(2, -1).map(({ name }) => name).join(','));
             assertEqual('*', routes.at(-1).pattern);
         });
 
@@ -571,10 +416,11 @@ describe('fixture project', ({ describe }) => {
         });
 
         it('serves no route contributed to a plugin that isn\'t installed', async () => {
-            const response = await fetch(`${ booted.origin }/reports/visits`);
+            // No route matches, so the request falls to the catch-all.
+            const { response, body } = await fetchJSON(`${ booted.origin }/reports/visits`);
 
-            assertEqual(404, response.status);
-            assertEqual(CATCH_ALL_BODY, await response.text());
+            assertEqual(503, response.status);
+            assertEqual(NO_RELEASE_CODE, body.errors[0].code);
         });
 
         it('answers the project\'s own route first', async () => {
@@ -585,10 +431,10 @@ describe('fixture project', ({ describe }) => {
         });
 
         it('leaves an unknown path to the project\'s catch-all', async () => {
-            const response = await fetch(`${ booted.origin }/no-such-page`);
+            const { response, body } = await fetchJSON(`${ booted.origin }/no-such-page`);
 
-            assertEqual(404, response.status);
-            assertEqual(CATCH_ALL_BODY, await response.text());
+            assertEqual(503, response.status);
+            assertEqual(NO_RELEASE_CODE, body.errors[0].code);
         });
 
         it('registers every service the manifests declare', () => {
@@ -882,8 +728,8 @@ describe('fixture project', ({ describe }) => {
 
             const reports = await booted.fetch('/reports/visits');
 
-            assertEqual(404, reports.status);
-            assertEqual(CATCH_ALL_BODY, await reports.text());
+            assertEqual(503, reports.status);
+            assertEqual(NO_RELEASE_CODE, (await reports.json()).errors[0].code);
         });
 
         it('serves the Publishing API behind the deploy key', () => {
