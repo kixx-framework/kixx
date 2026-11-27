@@ -259,6 +259,10 @@ optional; a missing key takes the default.
 | `pageCacheExpirationSeconds` | 86400 | How long a cached page lives. |
 | `allowJsonResponse` | `false` | Serve a page's assembled template context at its URL plus `.json`. Shipped: on in `development` and `local`, off in `production`. |
 
+- **The page cache needs a Key/Value Store.** With `usePageCache` on and no
+  Key/Value Store registered, startup fails. A render that turns the page
+  cache on for itself fails the same way. With the page cache off, pages
+  render with no Key/Value Store at all.
 - **Both TTLs must be at least 60** when `usePageCache` is on. The
   Key/Value Store rejects shorter TTLs on every platform.
 - **The page-cache key** covers the page's content, the shared partials, the

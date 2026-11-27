@@ -182,18 +182,26 @@ export default class HyperviewService {
     /**
      * Connects the content and cache services required by the rendering methods.
      * Call this once after construction and before rendering a page.
+     *
+     * The key-value store holds only the rendered-page cache, so it is optional
+     * while the page cache is off.
      * @param {Object} args - Rendering service dependencies
-     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store holding the rendered-page cache
      * @param {import('../content-addressable-store/content-addressable-store.js').default} args.contentAddressableStore - Published content store used to open snapshots, normalize pathnames, and hash cache-key inputs
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} [args.kvStore] - Key-value store holding the rendered-page cache
      * @returns {void}
+     * @throws {AssertionError} When contentAddressableStore is missing
+     * @throws {AssertionError} When the page cache is on by default and kvStore is missing
      */
     initialize(args) {
         const { contentAddressableStore, kvStore } = args ?? {};
-        assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
         assert(contentAddressableStore, 'HyperviewService#initialize() requires a contentAddressableStore');
+        assert(
+            kvStore || this.#usePageCache !== true,
+            'HyperviewService#initialize(): HYPERVIEW.usePageCache is true, but the page cache has no key-value store; register a KeyValueStore or turn the page cache off',
+        );
 
         this.#contentAddressableStore = contentAddressableStore;
-        this.#kvStore = kvStore;
+        this.#kvStore = kvStore ?? null;
     }
 
     /**
@@ -541,6 +549,7 @@ export default class HyperviewService {
      * @param {boolean} [options.allowJsonResponse] - Serve assembled page context for explicit JSON requests and treat `.json` as a representation suffix; defaults to the constructor value
      * @returns {Promise<{type: 'hypertext', hypertext: string}|{type: 'page-context', pageContext: Object}>} Rendered representation, without HTTP response state
      * @throws {NotFoundError} When no page exists for the resolved pathname
+     * @throws {AssertionError} When the page cache is asked for and the service has no key-value store
     */
     async renderPage(context, options) {
         assert(isPlainObject(options), 'HyperviewService#renderPage: options must be a plain object');
@@ -554,6 +563,13 @@ export default class HyperviewService {
         const pageCacheReadTtlSeconds = options.pageCacheReadTtlSeconds ?? this.#pageCacheReadTtlSeconds;
         const pageCacheExpirationSeconds = options.pageCacheExpirationSeconds ?? this.#pageCacheExpirationSeconds;
         const allowJsonResponse = options.allowJsonResponse ?? this.#allowJsonResponse;
+
+        // Fail before any content read: a render that asks for the page cache
+        // can't quietly run without it.
+        assert(
+            !usePageCache || this.#kvStore,
+            'HyperviewService#renderPage: options.usePageCache is true, but the page cache has no key-value store; register a KeyValueStore or turn the page cache off',
+        );
 
         // If page cache is turned on, then we want to include props in the cache key
         // by default. Otherwise we could cache and serve a page intended for a

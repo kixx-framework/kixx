@@ -231,7 +231,7 @@ function makeRequest(href) {
 function makeSubject(spec, options) {
     const snapshot = makeContentSnapshot(spec);
     const contentAddressableStore = makeContentAddressableStore(snapshot);
-    const kvStore = makeKvStore(options?.kvSeed);
+    const kvStore = options?.withoutKvStore ? undefined : makeKvStore(options?.kvSeed);
 
     const service = new HyperviewService({
         logger: makeLogger(),
@@ -996,6 +996,48 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual(0, kvStore.puts.length);
         });
 
+        it('reads and writes one key when every hash, the props, the URL, and the mode are equal (CONT-13)', async () => {
+            // The key is made of content hashes, so equal content means an equal
+            // key: the second render must find what the first one wrote.
+            const spec = makeDefaultSpec();
+            spec.staticAssets = [{ pathname: 'site.css', hash: 'asset-hash' }];
+
+            const { service, kvStore } = makeSubject(spec, {
+                serviceOptions: { usePageCache: true },
+            });
+
+            const renders = [];
+            for (let i = 0; i < 2; i += 1) {
+                const response = new ServerResponse();
+                response.updateProps({ viewer: 'alice' });
+                renders.push(await renderPageToResponse(service,
+                    CONTEXT,
+                    makeRequest('https://www.example.com/?page=1'),
+                    response,
+                    makeFullPageOptions(),
+                ));
+            }
+
+            assertEqual(2, kvStore.gets.length);
+            assertEqual(1, kvStore.puts.length, 'the second render is served from the cache');
+            assertEqual(kvStore.puts[0].key, kvStore.gets[0].key);
+            assertEqual(kvStore.puts[0].key, kvStore.gets[1].key);
+            assertEqual(renders[0].body, renders[1].body);
+
+            // A separate service over equal content derives the same key.
+            const other = makeSubject(spec, { serviceOptions: { usePageCache: true } });
+            const response = new ServerResponse();
+            response.updateProps({ viewer: 'alice' });
+            await renderPageToResponse(other.service,
+                CONTEXT,
+                makeRequest('https://www.example.com/?page=1'),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertEqual(kvStore.puts[0].key, other.kvStore.puts[0].key);
+        });
+
         it('uses a custom cacheKey in place of the URL', async () => {
             const fromUrl = await renderForCacheKey(makeFullPageOptions());
             const custom = await renderForCacheKey(makeFullPageOptions({ cacheKey: 'custom-identity' }));
@@ -1162,6 +1204,195 @@ describe('HyperviewService', ({ describe }) => {
             await renderWithSnapshot(service, first);
 
             assertEqual(1, first.callsTo('getGlobalTemplatePartials').length);
+        });
+    });
+
+    // CONT-13: compiled templates are cached by hash. The per-page caches are
+    // keyed by pathname and content hash, never by source, so these tests serve
+    // a different source under one hash to see whether a render compiled it.
+    describe('renderPage() per-page template cache (CONT-13)', ({ it }) => {
+
+        function makePageSpec(page) {
+            const spec = makeDefaultSpec();
+            spec.pages['/'] = {
+                pageData: [{ page: { title: 'Home' } }],
+                ...page,
+            };
+            return spec;
+        }
+
+        async function renderBody(service, page) {
+            const contentAddressableStore = makeContentAddressableStore(makeContentSnapshot(makePageSpec(page)));
+
+            service.initialize({ contentAddressableStore });
+
+            const result = await service.renderPage(CONTEXT, {
+                skipBaseRender: true,
+                props: {},
+                url: makeRequest().url,
+            });
+
+            return result.hypertext;
+        }
+
+        function makeService(useTemplateCache) {
+            return new HyperviewService({ logger: makeLogger(), useTemplateCache });
+        }
+
+        it('compiles a page template once per pathname and hash', async () => {
+            const service = makeService(true);
+
+            const first = await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const second = await renderBody(service, { templateHash: 'template-1', template: '<p>not compiled</p>' });
+
+            assertEqual('<p>one</p>', first);
+            assertEqual('<p>one</p>', second);
+        });
+
+        it('compiles a page template again when its hash changes', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const changed = await renderBody(service, { templateHash: 'template-2', template: '<p>two</p>' });
+
+            assertEqual('<p>two</p>', changed);
+        });
+
+        it('reuses a compiled page template when an older hash comes back', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            await renderBody(service, { templateHash: 'template-2', template: '<p>two</p>' });
+            const older = await renderBody(service, { templateHash: 'template-1', template: '<p>not compiled</p>' });
+
+            assertEqual('<p>one</p>', older);
+        });
+
+        it('compiles a page template on every render when the cache is off', async () => {
+            const service = makeService(false);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const second = await renderBody(service, { templateHash: 'template-1', template: '<p>compiled again</p>' });
+
+            assertEqual('<p>compiled again</p>', second);
+        });
+
+        function makePartialsPage(partialsHash, source) {
+            return {
+                template: '{{> byline }}',
+                templateHash: `template-for-${ source }`,
+                partialsHash,
+                partials: [{ id: 'byline', source }],
+            };
+        }
+
+        it('compiles a page partials bundle once per pathname and hash', async () => {
+            const service = makeService(true);
+
+            const first = await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const second = await renderBody(service, makePartialsPage('partials-1', '<p>not compiled</p>'));
+
+            assertEqual('<p>one</p>', first);
+            assertEqual('<p>one</p>', second);
+        });
+
+        it('compiles a page partials bundle again when its hash changes', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const changed = await renderBody(service, makePartialsPage('partials-2', '<p>two</p>'));
+
+            assertEqual('<p>two</p>', changed);
+        });
+
+        it('reuses a compiled page partials bundle when an older hash comes back', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            await renderBody(service, makePartialsPage('partials-2', '<p>two</p>'));
+            const older = await renderBody(service, makePartialsPage('partials-1', '<p>not compiled</p>'));
+
+            assertEqual('<p>one</p>', older);
+        });
+
+        it('compiles a page partials bundle on every render when the cache is off', async () => {
+            const service = makeService(false);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const second = await renderBody(service, makePartialsPage('partials-1', '<p>compiled again</p>'));
+
+            assertEqual('<p>compiled again</p>', second);
+        });
+    });
+
+    // CORE-6: the KV store holds only the rendered-page cache, so Hyperview
+    // renders without one while the page cache is off.
+    describe('renderPage() without a KV store (CORE-6)', ({ it }) => {
+
+        async function render(options, href, subjectOptions) {
+            const { service } = makeSubject(makeDefaultSpec(), {
+                withoutKvStore: true,
+                ...subjectOptions,
+            });
+
+            return await service.renderPage(CONTEXT, {
+                ...options,
+                props: {},
+                url: makeRequest(href).url,
+            });
+        }
+
+        it('renders a full page', async () => {
+            const result = await render(makeFullPageOptions());
+
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                result.hypertext,
+            );
+        });
+
+        it('renders a page template without its base template', async () => {
+            const result = await render({ skipBaseRender: true });
+
+            assertEqual('<main><p>Home</p><footer>Home</footer></main>', result.hypertext);
+        });
+
+        it('renders a page partial', async () => {
+            const result = await render({ partial: 'byline' });
+
+            assertEqual('<p>Home</p>', result.hypertext);
+        });
+
+        it('answers the .json representation', async () => {
+            const result = await render(
+                makeFullPageOptions(),
+                'https://www.example.com/index.json',
+                { serviceOptions: { allowJsonResponse: true } },
+            );
+
+            assertEqual('page-context', result.type);
+            assertEqual('Home', result.pageContext.page.title);
+        });
+
+        it('refuses a render that asks for the page cache, before any content read', async () => {
+            const { service, snapshot, contentAddressableStore } = makeSubject(makeDefaultSpec(), {
+                withoutKvStore: true,
+            });
+
+            const caught = await catchAsyncError(() => service.renderPage(CONTEXT, {
+                ...makeFullPageOptions(),
+                usePageCache: true,
+                props: {},
+                url: makeRequest().url,
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('usePageCache', caught.message);
+            assertMatches('page cache', caught.message);
+            assertMatches('key-value store', caught.message);
+            assertEqual(0, contentAddressableStore.openSnapshotCalls.length);
+            assertEqual(0, snapshot.calls.length);
         });
     });
 
@@ -1442,8 +1673,14 @@ describe('HyperviewService', ({ describe }) => {
 
     describe('initialize()', ({ it }) => {
 
-        it('requires a kvStore', () => {
+        it('needs no kvStore while the page cache is off (CORE-6)', () => {
             const service = new HyperviewService({ logger: makeLogger() });
+
+            service.initialize({ contentAddressableStore: {} });
+        });
+
+        it('requires a kvStore when the page cache is on by default (CORE-6)', () => {
+            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
 
             let caught = null;
             try {
@@ -1454,7 +1691,9 @@ describe('HyperviewService', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('kvStore', caught.message);
+            assertMatches('HYPERVIEW.usePageCache', caught.message);
+            assertMatches('page cache', caught.message);
+            assertMatches('key-value store', caught.message);
         });
 
         it('requires a contentAddressableStore', () => {

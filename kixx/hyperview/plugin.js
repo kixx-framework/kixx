@@ -34,7 +34,11 @@ export function register(context) {
 
 export function initialize(context) {
     const contentAddressableStore = context.getService('ContentAddressableStore');
-    const kvStore = context.getService('KeyValueStore');
+    // The KV store holds only the rendered-page cache, so Hyperview runs
+    // without one when the page cache is off (CORE-6).
+    const kvStore = context.hasService('KeyValueStore')
+        ? context.getService('KeyValueStore')
+        : null;
     const hyperviewService = context.getService('HyperviewService');
     hyperviewService.initialize({ kvStore, contentAddressableStore });
 }

@@ -142,8 +142,34 @@ describe('hyperview plugin', ({ describe }) => {
             );
         });
 
-        it('fails clearly when KeyValueStore is not registered', () => {
-            const context = makeApplicationContext();
+        it('initializes with no KeyValueStore while the page cache is off (CORE-6)', async () => {
+            const context = makeApplicationContext({
+                HYPERVIEW: { ...readCoreConfigDefaults().HYPERVIEW, usePageCache: false },
+            });
+            const contentAddressableStore = makeContentAddressableStore();
+            context.registerService('ContentAddressableStore', contentAddressableStore);
+
+            register(context);
+            initialize(context);
+
+            // The render reaches the store's pathname check, so the service was
+            // initialized and didn't stop for a missing page cache.
+            const caught = await catchAsyncError(
+                () => context.getService('HyperviewService').renderPage({}, {
+                    url: new URL('https://example.com/welcome'),
+                    props: {},
+                    pathname: '/welcome',
+                }),
+            );
+
+            assert(caught, 'expected the rejected pathname to throw');
+            assertEqual(1, contentAddressableStore.calls.length);
+        });
+
+        it('fails clearly when the page cache is on and KeyValueStore is not registered (CORE-6)', () => {
+            const context = makeApplicationContext({
+                HYPERVIEW: { ...readCoreConfigDefaults().HYPERVIEW, usePageCache: true },
+            });
             context.registerService('ContentAddressableStore', makeContentAddressableStore());
 
             register(context);
@@ -152,10 +178,8 @@ describe('hyperview plugin', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assert(
-                caught.message.includes('KeyValueStore'),
-                `expected "KeyValueStore" in "${ caught.message }"`,
-            );
+            assertMatches('HYPERVIEW.usePageCache', caught.message);
+            assertMatches('key-value store', caught.message);
         });
     });
 });

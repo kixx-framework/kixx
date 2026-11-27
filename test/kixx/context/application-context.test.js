@@ -143,6 +143,27 @@ describe('ApplicationContext', ({ describe }) => {
         });
     });
 
+    describe('hasService', ({ it }) => {
+        it('reports whether a service is registered', () => {
+            const context = makeApplicationContext();
+
+            assertEqual(false, context.hasService('svc'));
+
+            context.registerService('svc', { id: 1 });
+
+            assertEqual(true, context.hasService('svc'));
+        });
+
+        it('throws an AssertionError for an empty name', () => {
+            const context = makeApplicationContext();
+
+            const caught = catchError(() => context.hasService(''));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+        });
+    });
+
     describe('registerCollection / getCollection', ({ it }) => {
         it('registers a collection and returns this for chaining', () => {
             const context = makeApplicationContext();
