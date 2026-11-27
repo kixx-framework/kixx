@@ -45,12 +45,14 @@ kixx/
 ├── test/                        # Unit tests mirroring kixx/ (and later plugins/)
 │   ├── fakes/                   # Shared fakes of platform services (KV, Durable Objects)
 │   ├── fixtures/                # A small project that boots from generated registries
-│   ├── skeleton/                # Assembles the skeleton and core into a project and boots it
+│   ├── skeleton/                # Assembles the skeleton and core into a project, and the test app, and boots them
 │   ├── test-app/                # Unit tests for the integration runner and the probe
 │   └── tools/                   # Unit tests for tools/lib/
 ├── test-app/                    # Integration suite, run against a real target (see test-app/README.md)
 │   ├── run-tests.js             # Integration test runner (`node test-app/run-tests.js --local`)
 │   ├── probe/                   # Runs shared test suites inside a running server
+│   ├── integration-probe/       # The test app's one plugin, which mounts the probe
+│   ├── build/                   # The built test app (git-ignored)
 │   └── test/                    # Integration tests
 ├── docs/                        # Maintainer guides; start with doc-index.md
 ├── devkit/                      # The `kixx` CLI, published as kixx-devkit; stand-alone
@@ -66,6 +68,7 @@ kixx/
 ├── test-v6/                     # v6 tests not yet brought back; never run or linted
 ├── tools/                       # Scripts for working on this repo
 │   ├── build-project.js         # Builds a project with no plugins from the skeleton and core
+│   ├── build-test-app.js        # Builds the integration suite's test app into test-app/build/
 │   ├── generate-registries.js   # Writes a project's registries from its manifests
 │   └── lib/                     # The project assembly and the import walker
 ├── usage-docs/                  # Public docs (see usage-docs/README.md)

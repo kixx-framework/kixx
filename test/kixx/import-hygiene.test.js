@@ -35,7 +35,11 @@
 // The probe in test-app/probe/ is bundled into every target the
 // integration suite runs on (QA-8). So everything it reaches imports by
 // relative path only, and nothing under test-app/ imports a cloudflare:*
-// module.
+// module. The test-only plugin that mounts it,
+// test-app/integration-probe/, is held to a plugin's rules: platform-neutral
+// outside its adapters/, relative imports only but for node:* in its
+// Node.js adapter, and no node:* reached from its Cloudflare adapter. The
+// built test app in test-app/build/ is never read.
 //
 // The content compiler runs in a command line tool, a server, and a Worker,
 // and a tool loads it through the tooling entry. So nothing either entry
@@ -63,6 +67,11 @@ const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
 const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
 const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'plugins/');
+
+// The integration suite's test-only plugin, and the test app built from it.
+// The build is git-ignored output: a copy of files checked where they live.
+const INTEGRATION_PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'integration-probe/');
+const TEST_APP_BUILD_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'build/');
 
 // The project skeleton. It holds no core: a project built from it has core
 // at ./kixx/, so its imports of ./kixx/ are resolved to core here.
@@ -498,6 +507,7 @@ describe('import hygiene', ({ it }) => {
             ...listJavaScriptFiles(path.join(SKELETON_DIRECTORY, 'app/')),
             path.join(SKELETON_DIRECTORY, 'virtual-hosts.js'),
             ...listPluginPlatformNeutralFiles(),
+            ...listPlatformNeutralFiles(INTEGRATION_PROBE_DIRECTORY),
         ];
 
         // A generated file isn't in the skeleton, and isn't app code.
@@ -556,11 +566,60 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
+    it('reaches only relative imports from the integration-probe plugin, but for node:* in its Node.js adapter', () => {
+        const violations = [];
+        const nodeAdapterDirectory = path.join(INTEGRATION_PROBE_DIRECTORY, 'adapters/node/');
+
+        // The plugin is bundled into the test app's Worker and copied into
+        // its Node.js project, so it can hold no package. What core's own
+        // adapters import is core's to check.
+        for (const { file, specifiers, chain } of readImportGraph(listJavaScriptFiles(INTEGRATION_PROBE_DIRECTORY))) {
+            if (isInsideCore(file) && toCorePath(file).startsWith('adapters/')) {
+                continue;
+            }
+
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            for (const specifier of specifiers) {
+                const allowed = specifier.startsWith('.')
+                    || (specifier.startsWith('node:') && isInsideDirectory(nodeAdapterDirectory, file));
+
+                if (!allowed) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('reaches no node:* module from the integration-probe plugin\'s Cloudflare adapter', () => {
+        const violations = [];
+        const entryFiles = listJavaScriptFiles(path.join(INTEGRATION_PROBE_DIRECTORY, 'adapters/cloudflare/'));
+
+        // It is bundled into a Worker with everything it reaches.
+        for (const { specifiers, chain } of readImportGraph(entryFiles)) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            for (const specifier of specifiers) {
+                if (specifier.startsWith('node:')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
     it('imports no cloudflare:* module in test-app/', () => {
-        // The runner, its helpers, and the integration tests run on a laptop.
-        // A test app's Cloudflare entry point needs its own list here when
-        // the first test app exists.
-        const violations = listJavaScriptFiles(TEST_APP_DIRECTORY).flatMap((filepath) => {
+        // The runner, its helpers, the integration tests, and the test-only
+        // plugin. The built test app is skipped: its Cloudflare entry point
+        // is the skeleton's, which CLOUDFLARE_ONLY_MODULES lists.
+        const files = listJavaScriptFiles(TEST_APP_DIRECTORY).filter((filepath) => {
+            return !isInsideDirectory(TEST_APP_BUILD_DIRECTORY, filepath);
+        });
+
+        const violations = files.flatMap((filepath) => {
             return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
                 .filter((specifier) => specifier.startsWith('cloudflare:'))
                 .map((specifier) => ({ file: toRepositoryPath(filepath), specifier }));
@@ -608,11 +667,14 @@ function listPluginPlatformNeutralFiles() {
         .filter((entry) => entry.isDirectory())
         .map((entry) => path.join(PLUGINS_DIRECTORY, entry.name))
         .filter((directory) => fs.existsSync(path.join(directory, 'plugin.json')))
-        .flatMap((directory) => {
-            return listJavaScriptFiles(directory).filter((filepath) => {
-                return !isInsideDirectory(path.join(directory, 'adapters/'), filepath);
-            });
-        });
+        .flatMap(listPlatformNeutralFiles);
+}
+
+// Every .js file of a plugin outside its adapters/, as absolute paths.
+function listPlatformNeutralFiles(pluginDirectory) {
+    return listJavaScriptFiles(pluginDirectory).filter((filepath) => {
+        return !isInsideDirectory(path.join(pluginDirectory, 'adapters/'), filepath);
+    });
 }
 
 // Absolute paths of every .js file under the directory, at any depth.

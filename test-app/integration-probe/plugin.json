@@ -1,0 +1,14 @@
+{
+    "name": "integration-probe",
+    "version": "7.0.0-alpha.0",
+    "core": "7.0.0",
+    "description": "Test only. Mounts the integration suite's probe behind the deploy key.",
+    "services": [ "IntegrationProbe" ],
+    "adapters": {
+        "node": { "lifecycle": [ "./adapters/node/plugin.js" ] },
+        "cloudflare": { "lifecycle": [ "./adapters/cloudflare/plugin.js" ] }
+    },
+    "routes": [
+        { "module": "./routes.js", "mount": "/integration-probe", "name": "integration-probe" }
+    ]
+}

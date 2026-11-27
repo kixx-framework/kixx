@@ -1,6 +1,7 @@
 // Builds a complete Kixx project in a directory: the project skeleton from
 // devkit/templates/project/, core as kixx/, optional overlays, the files the
-// overlays import, and the generated files.
+// overlays import, and the generated files. assembleTestApp() builds the
+// integration suite's test app the same way.
 //
 // It copies bytes and substitutes nothing, so every file in the result is the
 // one a real project gets. The skeleton and core are always this
@@ -82,6 +83,44 @@ export async function assembleProject(options) {
 
     // The target was empty, so everything in it now was written here.
     return listFiles(targetDirectory).map((name) => name.split(path.sep).join('/')).sort();
+}
+
+// The integration suite's test app: the skeleton, core, and one test-only
+// plugin that mounts the probe.
+const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app');
+const TEST_APP_PLUGIN_NAME = 'integration-probe';
+
+/**
+ * Builds the integration suite's test app in targetDirectory: a project
+ * with the integration-probe plugin installed, the probe and the suites it
+ * runs, and the test app's own Cloudflare config. Every other skeleton file
+ * is the skeleton's, byte for byte.
+ *
+ * @param {string} targetDirectory - As for assembleProject()
+ * @returns {Promise<string[]>} Every file written, as sorted POSIX paths relative to the target
+ * @throws {OperationalError} When the target can't be replaced, or an import can't be resolved
+ */
+export function assembleTestApp(targetDirectory) {
+    return assembleProject({
+        targetDirectory,
+        overlays: [
+            {
+                from: path.join(TEST_APP_DIRECTORY, TEST_APP_PLUGIN_NAME),
+                to: `plugins/${ TEST_APP_PLUGIN_NAME }`,
+            },
+            // The test app's Cloudflare resources are its own.
+            {
+                from: path.join(TEST_APP_DIRECTORY, 'cloudflare-config.jsonc'),
+                to: 'cloudflare-config.jsonc',
+            },
+        ],
+        // The plugin's imports reach both already. They are named so the
+        // probe is in the build whatever the plugin imports.
+        closureEntries: [
+            path.join(TEST_APP_DIRECTORY, 'probe', 'probe-handler.js'),
+            path.join(TEST_APP_DIRECTORY, 'probe', 'probe-suites.js'),
+        ],
+    });
 }
 
 /**

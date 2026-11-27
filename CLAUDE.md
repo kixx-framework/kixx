@@ -37,6 +37,7 @@ node run-linter.js test-app        # lint the integration suite
 - The plugin guide is `plugins/README.md`: manifests, lifecycle modules, generated registries, entry points, and the ports-and-adapters rules.
 - Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A generated JavaScript file turns lint off for itself.
 - `node tools/build-project.js <directory>` builds a project with no plugins from the skeleton (`devkit/templates/project/`) and core, and runs the generator. Build one under `tmp/` to try a change in a real project. It replaces a directory it built before and refuses any other directory that isn't empty.
+- `node tools/build-test-app.js` builds the integration suite's test app into `test-app/build/` (git-ignored): the skeleton, core, and the test-only plugin in `test-app/integration-probe/`. Building it runs nothing. Never edit, lint, or commit the build.
 - Every change must work on Node.js, Deno, and Cloudflare.
 - Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 

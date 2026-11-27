@@ -4,11 +4,14 @@ The integration suite checks Kixx code against the real systems under it: Cloudf
 
 It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory, and CI doesn't run it. What belongs in each suite is in the Testing Guide, `test/README.md`.
 
-> **Status:** There is no test app yet, and no integration test. Until the first test app arrives, every run ends with `No test files found under …`. The runner, the target helper, and the probe are here, and their unit tests are in `test/test-app/`.
+> **Status:** The test app exists and is built with `node tools/build-test-app.js`. There is no integration test yet, so every run ends with `No test files found under …`. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, the helpers, the probe, and the plugin are in `test/test-app/`.
 
 ```
 test-app/
 ├── run-tests.js                  # The runner
+├── integration-probe/            # The test app's one plugin: mounts the probe (test only)
+├── cloudflare-config.jsonc       # The test app's Cloudflare config
+├── build/                        # The built test app (git-ignored)
 ├── probe/                        # Runs shared suites inside a target
 │   ├── probe-handler.js          # In the target: lists and runs a suite's tests
 │   ├── probe-client.js           # On the laptop: createProbeClient(), describeProbeSuite()
@@ -18,6 +21,40 @@ test-app/
         ├── target.js             # getBaseUrl(), getDeployKey()
         └── publish.js            # publishContent(): a publish over HTTP
 ```
+
+## The Test App
+
+The test app is a real Kixx project: the project skeleton (`devkit/templates/project/`), core, and one test-only plugin, `integration-probe`. Build it from the repository root:
+
+```
+node tools/build-test-app.js
+```
+
+It writes `test-app/build/`, replacing what it built before. The directory is git-ignored, never linted, and never read by the unit suite. Building runs nothing and contacts nothing.
+
+- **Every skeleton file is the skeleton's, byte for byte**, except `cloudflare-config.jsonc`, which is replaced by `test-app/cloudflare-config.jsonc`: the test app's Cloudflare resources are its own. Its namespace ids are placeholders until the test app is provisioned.
+- **The plugin is installed the way any plugin is.** `test-app/integration-probe/` is copied to `plugins/integration-probe/`, and the generator wires its routes and lifecycle modules through the registries. The source sits two levels below the repository root, as a plugin sits two levels below a project root, so its imports (`../../kixx/…`, `../../test-app/probe/…`) are the same in both places.
+- **What the plugin imports comes along.** The probe and the conformance suites it runs are copied to the same paths they have here (`test-app/probe/`, `test/kixx/…`), so the project root holds everything a Worker bundle needs.
+
+The plugin mounts two routes at `/integration-probe`, both behind the deploy key:
+
+| Route | Answers |
+|---|---|
+| `GET` or `POST /integration-probe/probe` | The probe (see "The Probe"), with all six suites. |
+| `GET /integration-probe/environment` | `{ target, environment, buildId }`. `target` is `node` (Node.js and Deno) or `cloudflare`. |
+
+Its `routes.js` is platform-neutral. Each target's lifecycle module (`adapters/node/plugin.js`, `adapters/cloudflare/plugin.js`) registers the `IntegrationProbe` service, which holds the target's name and a factory for each port suite, built over that target's own adapters and bindings:
+
+| Suite | On Node.js and Deno | On Cloudflare |
+|---|---|---|
+| `key-value-store` | The app's own store. No wait after a write. | The app's own store and namespace. Waits 1,100 ms after a write: Workers KV takes one write a second to a key. |
+| `content-store` | A new store for each test, in its own directory under `<data directory>/integration-probe/content-store/`. | A new store for each test over the app's own bindings, with a wire format of its own (`probe-<random id>`). |
+| `logger-writer` | The adapter over a sink the test reads back, never a process stream. | The adapter over a sink the test reads back, never the console. |
+| `server-request` | The adapter over a stand-in for `http.IncomingMessage`. | The adapter over a `Request`. |
+
+**What a Cloudflare probe run leaves behind.** The content store has no delete. Each content store test's wire format names one Durable Object instance and a few KV keys that nothing else shares, and they stay after the test. Nothing here cleans them up. The operator clears them by deleting and re-creating the test app's namespaces when it matters. On Node.js and Deno each test leaves one directory under the data directory.
+
+To add a test route, add it to `test-app/integration-probe/routes.js`. A route that needs a platform service takes it from the `IntegrationProbe` service, never from an import.
 
 ## Who Runs It
 
@@ -110,7 +147,7 @@ A failed test's error carries only its `name`, its `message`, and its `code` whe
 
 ### Mounting It
 
-No app mounts the probe yet. The first test app does it this way:
+The test app's plugin mounts it this way, in `test-app/integration-probe/routes.js`:
 
 ```javascript
 import { createProbeHandler } from './probe/probe-handler.js';
@@ -126,6 +163,8 @@ const probeHandler = createProbeHandler({
 - Mount the handler on a route that accepts `GET` and `POST`.
 - `authorize(context, request)` must return exactly `true` to let a request through. Anything else, or a throw, is a 401. The handler can't be created without it.
 - `factories` maps a suite's name to a function that takes the request's `context` and returns the suite's factory. `BUILT_IN_FACTORIES` covers `content-compiler` and `format-date`. The app supplies one for each port suite, built over its own bindings. A suite with no factory can be listed but not run.
+- A factory builder runs on every run request, before the test is looked up. So it only returns a function, and touches storage inside it.
+- The plugin authorizes with `verifyDeployKey()`, and also puts `requireDeployKey` on the mount. A request without the key is refused at the mount, with a 401 and the code `DeployKeyRequired`.
 
 ### Using It in a Test
 

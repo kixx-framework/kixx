@@ -47,7 +47,7 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
 ## File Conventions
 
 - Put unit tests under `test/`, mirroring the source tree: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`, adapters by `test/kixx/adapters/<platform>/<name>/…`, and plugins (once they exist) by `test/plugins/<name>/…`.
-- Unit tests for code under `test-app/` (the integration runner and the probe) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target.
+- Unit tests for code under `test-app/` (the integration runner, the probe, and the test app's plugin) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target. `test/test-app/integration-probe/` runs each port's conformance suite through the plugin's factories: the Node.js ones over SQLite in a temporary directory, the Cloudflare ones over the fakes.
 - Unit tests for the scripts' shared code in `tools/lib/` live in `test/tools/`: `tools/lib/assemble-project.js` is tested by `test/tools/assemble-project.test.js`. A test that assembles a project builds it in a temporary directory, removes it afterwards, and shares one assembly among the tests of a `describe`.
 - Integration tests live in `test-app/test/`.
 - Fakes of platform services live in `test/fakes/` (see "Fakes").
@@ -56,7 +56,7 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
   - A fixture directory holds no `*.test.js` file: the runner would collect it. Its tests sit beside it.
   - Its generated files are never edited. Regenerate them after changing a manifest.
   - A unit test imports its registries, `virtual-hosts.js`, and `app/app.js`. It never imports an entry point or the Durable Object registry.
-- `test/skeleton/` tests the project skeleton (`devkit/templates/project/`) as a project. `test/skeleton/core-only-project.test.js` assembles the skeleton and core into a temporary directory, once for the file, and boots that project with no plugins: on the Node.js adapters in development and in production, and as a Worker against fakes. It publishes over HTTP with `test-app/test/test-helpers/publish.js`, the helper the integration suite uses. `test/skeleton/assembled-project-boot.js` assembles, loads, and boots:
+- `test/skeleton/` tests the project skeleton (`devkit/templates/project/`) as a project. `test/skeleton/core-only-project.test.js` assembles the skeleton and core into a temporary directory, once for the file, and boots that project with no plugins: on the Node.js adapters in development and in production, and as a Worker against fakes. It publishes over HTTP with `test-app/test/test-helpers/publish.js`, the helper the integration suite uses. `test/skeleton/test-app.test.js` does the same with the integration suite's test app (`assembleTestApp()`), and runs a probe test in it. `test/skeleton/assembled-project-boot.js` assembles, loads, and boots:
   - It loads every module of a boot from the assembled project with a dynamic `import()`, the project's own copy of core included. Never mix in a core module imported from this repository: two copies of a class don't share identity.
   - It never loads an entry point or the Durable Object registry.
   - It captures the project's log lines, because the skeleton's config logs at `DEBUG` and `INFO`.
@@ -317,7 +317,8 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 - **The fixture project.** Each of its entry points imports exactly the modules a thin shell may (`FIXTURE_ENTRY_POINT_IMPORTS`). Nothing its Cloudflare registry reaches imports a `node:*` module, and nothing its `routes.generated.js` or `virtual-hosts.js` reaches imports a `node:*` or `cloudflare:*` module.
 - **The project skeleton** (`devkit/templates/project/`). Each of its entry points imports exactly the modules a thin shell may (`SKELETON_ENTRY_POINT_IMPORTS`). Every import of `./kixx/` names a module core has. It holds no generated file and no `kixx/` directory.
 - **App and plugin code (CORE-5).** Nothing that the skeleton's `app/` files, its `virtual-hosts.js`, or a first-party plugin's files outside its `adapters/` import, directly or through other modules, is a `node:*` or `cloudflare:*` module or a core adapter. A plugin is covered as soon as its directory under `plugins/` has a `plugin.json`. Nothing enforces the rule inside a project.
-- **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module.
+- **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module; the built test app in `test-app/build/` is skipped.
+- **The test app's plugin** (`test-app/integration-probe/`). Its files outside `adapters/` are held to the CORE-5 rule above. Everything it reaches imports by relative path only, except `node:*` modules in its own `adapters/node/` and what core's adapters import. Nothing its `adapters/cloudflare/` reaches imports a `node:*` module.
 
 Its lists are constants at the top of the file:
 

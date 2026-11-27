@@ -329,6 +329,7 @@ export default [
             'kixx/vendor/',
             'node_modules/',
             'tmp/',
+            'test-app/build/',
             'test-v6/',
             'reference-app/',
             'devkit/',
