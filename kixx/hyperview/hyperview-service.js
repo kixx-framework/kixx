@@ -1,4 +1,4 @@
-import { NotFoundError } from '../errors/mod.js';
+import { NotFoundError, OperationalError } from '../errors/mod.js';
 import HyperviewPage from './hyperview-page.js';
 import * as templating from '../vendor/templating/mod.js';
 import formatDate from './helpers/format-date.js';
@@ -48,6 +48,33 @@ function setCachedEntry(cache, key, entry, maxEntries) {
         cache.delete(cache.keys().next().value);
     }
     return entry;
+}
+
+// Refuses to render a page whose content has compiler problems. Rendering it
+// would throw an unexpected error from a broken template; this one is
+// expected, so a server answers it and keeps running. The message names the
+// page and a count, never file content.
+function throwForContentProblems(pathname, pageProblems, baseTemplateProblems) {
+    const problems = [
+        ...pageProblems,
+        // A global partial both the page and its base template reach is one problem.
+        ...baseTemplateProblems.filter((problem) => !pageProblems.includes(problem)),
+    ];
+
+    if (problems.length === 0) {
+        return;
+    }
+
+    const error = new OperationalError(
+        `The page "${ pathname }" can't be rendered: its content has ${ problems.length } problem(s)`,
+        { code: 'ContentProblems', httpStatusCode: 500 },
+        throwForContentProblems,
+    );
+
+    error.problems = problems;
+    error.pathname = pathname;
+
+    throw error;
 }
 
 function layerPartials(primary, secondary) {
@@ -182,18 +209,26 @@ export default class HyperviewService {
     /**
      * Connects the content and cache services required by the rendering methods.
      * Call this once after construction and before rendering a page.
+     *
+     * The key-value store holds only the rendered-page cache, so it is optional
+     * while the page cache is off.
      * @param {Object} args - Rendering service dependencies
-     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} args.kvStore - Key-value store holding the rendered-page cache
      * @param {import('../content-addressable-store/content-addressable-store.js').default} args.contentAddressableStore - Published content store used to open snapshots, normalize pathnames, and hash cache-key inputs
+     * @param {import('../key-value-store/key-value-store-interface.js').KeyValueStoreInterface} [args.kvStore] - Key-value store holding the rendered-page cache
      * @returns {void}
+     * @throws {AssertionError} When contentAddressableStore is missing
+     * @throws {AssertionError} When the page cache is on by default and kvStore is missing
      */
     initialize(args) {
         const { contentAddressableStore, kvStore } = args ?? {};
-        assert(kvStore, 'HyperviewService#initialize() requires a kvStore');
         assert(contentAddressableStore, 'HyperviewService#initialize() requires a contentAddressableStore');
+        assert(
+            kvStore || this.#usePageCache !== true,
+            'HyperviewService#initialize(): HYPERVIEW.usePageCache is true, but the page cache has no key-value store; register a KeyValueStore or turn the page cache off',
+        );
 
         this.#contentAddressableStore = contentAddressableStore;
-        this.#kvStore = kvStore;
+        this.#kvStore = kvStore ?? null;
     }
 
     /**
@@ -524,6 +559,9 @@ export default class HyperviewService {
      * complete page wrapped by a base template. All content and cache-validator
      * reads use one immutable, request-scoped content snapshot.
      *
+     * A render from content supplied for the request (a working tree or a
+     * draft) never reads or writes the rendered-page cache.
+     *
      * @param {import('../context/request-context.js').default} context - Context for storage and cache operations
      * @param {Object} options - Render inputs independent of HTTP request and response objects
      * @param {URL} options.url - Requested URL used to select the page and default cache identity
@@ -541,6 +579,10 @@ export default class HyperviewService {
      * @param {boolean} [options.allowJsonResponse] - Serve assembled page context for explicit JSON requests and treat `.json` as a representation suffix; defaults to the constructor value
      * @returns {Promise<{type: 'hypertext', hypertext: string}|{type: 'page-context', pageContext: Object}>} Rendered representation, without HTTP response state
      * @throws {NotFoundError} When no page exists for the resolved pathname
+     * @throws {AssertionError} When the page cache is asked for and the service has no key-value store
+     * @throws {OperationalError} With code `ContentProblems` and HTTP status 500 when the content supplied
+     *   for this request has problems in the page or, for a full-page render, in its base template. The
+     *   problems are on `error.problems` and the page pathname on `error.pathname`.
     */
     async renderPage(context, options) {
         assert(isPlainObject(options), 'HyperviewService#renderPage: options must be a plain object');
@@ -550,7 +592,7 @@ export default class HyperviewService {
         assert(isPlainObject(props), 'HyperviewService#renderPage: options.props must be a plain object');
 
         // Each caller may override the constructor-level default for its own call.
-        const usePageCache = options.usePageCache ?? this.#usePageCache;
+        let usePageCache = options.usePageCache ?? this.#usePageCache;
         const pageCacheReadTtlSeconds = options.pageCacheReadTtlSeconds ?? this.#pageCacheReadTtlSeconds;
         const pageCacheExpirationSeconds = options.pageCacheExpirationSeconds ?? this.#pageCacheExpirationSeconds;
         const allowJsonResponse = options.allowJsonResponse ?? this.#allowJsonResponse;
@@ -628,6 +670,31 @@ export default class HyperviewService {
         // A render reads all of its content, including cache-key inputs, through
         // exactly one request-scoped snapshot.
         const content = await this.#contentAddressableStore.openSnapshot(context);
+        const suppliedContent = content.suppliedContent ?? null;
+
+        if (suppliedContent) {
+            // Supplied content is a working tree or a draft, not a published
+            // Release. Its output never enters the shared page cache, whatever
+            // the config or the caller says.
+            usePageCache = false;
+
+            // Asked before the page is looked up: a page whose page.json is
+            // malformed has no metadata, and would otherwise read as missing.
+            const isFullPageRender = !isJsonPathRequest && !options.partial && !options.skipBaseRender;
+
+            throwForContentProblems(
+                pathname,
+                suppliedContent.getPageProblems(pathname),
+                isFullPageRender ? suppliedContent.getBaseTemplateProblems(options.baseTemplateId) : [],
+            );
+        }
+
+        // Fail before any page read: a render that asks for the page cache
+        // can't quietly run without it.
+        assert(
+            !usePageCache || this.#kvStore,
+            'HyperviewService#renderPage: options.usePageCache is true, but the page cache has no key-value store; register a KeyValueStore or turn the page cache off',
+        );
 
         const assets = this.#getStaticAssets(content);
         const page = await this.#getPage(context, content, url, pathname, props, assets);

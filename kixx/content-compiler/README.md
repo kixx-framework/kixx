@@ -66,7 +66,7 @@ const compilation = await compileContent({
 
 It throws an `AssertionError` for a missing or malformed option. It rejects with a `ValidationError` when a plugin content directory isn't a plain path inside the project (it is absolute, or holds an empty, `.`, or `..` segment). The error names the owner, the key, and the path, and nothing has been read by then. This is what refuses content declared by a core that lives outside the project.
 
-`content-compiler/mod.js` also exports `createMemoryContentSource(files, { symlinks })`, a source that holds its tree in memory. Tests use it.
+`content-compiler/mod.js` also exports `createMemoryContentSource(files, { symlinks })`, a source that holds its tree in memory. Tests use it. It exports `createCompiledContent()` and `listContentDirectories()` too (see "Serving Compiled Content").
 
 ## The Content Source
 
@@ -175,6 +175,59 @@ Before it returns a Release, the compiler checks the manifest and every structur
 **`report.pages`** groups problems by page: `[ { pathname, problems } ]`, sorted by pathname, with only the pages that have a problem. Each page lists the problems in its own files, then the problems of every global partial it reaches. The problems are the same objects as in `report.problems`. Problems in base templates, in global partials no page reaches, and in static assets, and collisions and limits, are in `report.problems` only.
 
 **`report.unmatchedFiles`** lists files under a content directory that no convention matched, as sorted paths from the project root: a `README.md` in `templates/`, or a file in a page directory that no `page.json` references. It is information. An unmatched file never refuses a Release.
+
+## Serving Compiled Content
+
+A server can answer a request straight from a compilation, with no publish. The development server does this with the working tree, so development shows what a publish would produce.
+
+`createCompiledContent(compilation)` turns what `compileContent()` resolved into supplied content, which a `ContentAddressableStore` serves in place of the build's Release:
+
+```javascript
+import { compileContent, createCompiledContent } from './kixx/content-compiler/mod.js';
+
+const compilation = await compileContent({ source, pluginContentRoots, templateHelpers });
+const content = await createCompiledContent(compilation);
+
+// For one request:
+contentAddressableStore.supplyContent(context, content);
+
+// Or for every request:
+contentAddressableStore.setContentSupplier(async (context) => content);
+```
+
+It is built from `objects`, never from `release`, so it works for a tree with problems. The objects are indexed by the functions that index a published Release, and every object keeps the compiler's hash. It resolves:
+
+| Field | Meaning |
+|---|---|
+| `index`, `objects` | What the store reads: the index of every object, and a reader that returns an object's bytes by hash as text, an `ArrayBuffer`, or a new stream. |
+| `getPageProblems(pathname)` | The problems that block a page: those `report.pages` lists for its pathname, then every other problem in one of its files, such as a content limit or a validator's refusal. Empty when none. |
+| `getBaseTemplateProblems(id)` | The problems that block a base template: those in its own file and in the file of each global partial it reaches. Empty when none. |
+| `report` | The compilation's report, unchanged. |
+| `problems` | Every problem to log: `report.problems`, plus any added for a tree that can't be indexed. |
+
+The problems are the report's own objects. A problem that belongs to no page and no base template blocks nothing: a global partial nothing reaches, a static asset, a collision, or a limit on the whole tree. A static asset the compiler couldn't build is absent.
+
+**A tree that can't be indexed serves nothing.** When the objects can't form an index, for example a file `static-assets/a` beside `public/a/b`, the result has an empty index. `getPageProblems()` then returns every problem for every page, with an `invalid-release` problem for each thing the index refused unless the compiler already reported it. A pathname that is no page has none, so it answers 404.
+
+**How a failing page is reported.** Hyperview asks both lookups before it reads a page. When either answers a problem, `HyperviewService#renderPage()` throws an expected `OperationalError` with code `ContentProblems` and HTTP status 500, in every environment. The problems are on `error.problems`, the page's first, and the page's pathname is on `error.pathname`. The base template is asked about only for a full-page render: a partial render, a render without the base template, and the `.json` response read none. Every other page keeps rendering.
+
+- **In development**, `HyperviewPageHandler` answers 500 with an HTML page that lists each problem's code, message, and file, with `Cache-Control: no-store`. The page uses nothing from the project, and every value is escaped.
+- **In every other environment** the handler rethrows the error, so the caller decides what a visitor or an editor sees. With no error handler, the router answers its standard response for an expected 500.
+
+A render from supplied content never reads or writes the rendered-page cache, whatever `HYPERVIEW.usePageCache` or the call says. Compiled templates are still cached by hash.
+
+`listContentDirectories(pluginContentRoots)` returns every directory a compile reads, as paths from the project root: `pages`, `templates`, `static-assets`, and `public`, then each plugin's directories. A caller that checks the content for changes checks exactly these.
+
+Both functions are platform-neutral, like the rest of the compiler.
+
+**The development server.** On Node.js and Deno, `startNodeServer()` calls `installWorkingTreeContent()` (`kixx/adapters/node/content-compiler/lib/install-working-tree-content.js`) after boot. When `CONTENT_STORE.workingTree` is on, which is the default in development, it registers a supplier built by `createWorkingTreeContent()` in `working-tree-content.js` beside it:
+
+- **Every request checks every content file's modified time and size**, and reads none. The directories checked are those `listContentDirectories()` returns.
+- **The tree is compiled again only when that check differs** from the last compile's. Requests that see the same state share one compile.
+- **Each new compilation is logged**: one line with the object count, the problem count, and the time, then one warning per problem.
+- **The first compile runs at boot**, so a tree that can't be compiled stops the server before it listens.
+
+`readWorkingTreeSwitch()` in `kixx/content-addressable-store/working-tree-switch.js` reads the key. Core's boot check refuses `true` outside development on every platform.
 
 ## Stylesheets
 
@@ -322,11 +375,12 @@ The compiler builds objects for content contract version 2, with addressing form
 
 | File | What it holds |
 |---|---|
-| `mod.js` | The entry: `compileContent`, `serializeContentObject`, `createMemoryContentSource` |
+| `mod.js` | The entry: `compileContent`, `serializeContentObject`, `createCompiledContent`, `listContentDirectories`, `createMemoryContentSource` |
 | `compile-content.js` | The entry function, the limits, and the Release's self-validation |
 | `scan-content-sources.js` | Reads every content directory and builds the objects |
 | `check-templates.js` | The template checks and the dependency graph |
 | `create-release-manifest.js` | Builds the manifest from the objects |
+| `compiled-content.js` | Turns a compilation into content a store can serve |
 | `bundle-stylesheet.js`, `parse-stylesheet.js` | Stylesheet bundling |
 | `strip-asset-comments.js` | JavaScript comment stripping |
 | `content-source-interface.js` | The content source contract |

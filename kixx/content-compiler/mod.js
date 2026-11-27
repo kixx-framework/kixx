@@ -6,4 +6,6 @@
  * @module content-compiler
  */
 export { compileContent, serializeContentObject } from './compile-content.js';
+export { createCompiledContent } from './compiled-content.js';
 export { createMemoryContentSource } from './memory-content-source.js';
+export { listContentDirectories } from './scan-content-sources.js';

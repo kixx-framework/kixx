@@ -147,6 +147,33 @@ describe('node file system content source', ({ before, after, describe }) => {
             assertEqual(0, listing.entries.length);
         });
 
+        it('lists a directory removed during the walk as empty, as a checkout does', async () => {
+            const rootDirectory = await writeTree({
+                files: { 'pages/page.json': '{}', 'pages/blog/page.json': '{}' },
+            });
+            const blogDirectory = path.join(rootDirectory, 'pages', 'blog');
+            const { readdir } = fsp;
+
+            // The parent was listed; the child goes before it is read.
+            fsp.readdir = async (directoryPath, options) => {
+                if (directoryPath === blogDirectory) {
+                    await fsp.rm(blogDirectory, { recursive: true });
+                }
+                return readdir(directoryPath, options);
+            };
+
+            let listing;
+
+            try {
+                listing = await createFileSystemContentSource(rootDirectory).listFiles('pages');
+            } finally {
+                fsp.readdir = readdir;
+            }
+
+            assertEqual('directory', listing.kind);
+            assertEqual('page.json', listing.entries.map((entry) => entry.path).join(','));
+        });
+
         it('answers "missing" when the root directory does not exist', async () => {
             const source = createFileSystemContentSource(path.join(tempDirectory, 'no-such-root'));
 

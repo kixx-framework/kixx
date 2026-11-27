@@ -11,18 +11,6 @@ export function getFileEtag(file) {
     return `"${ file.content.generation }"`;
 }
 
-/** Reports whether an If-None-Match list weakly matches the current validator. */
-export function matchesIfNoneMatch(value, etag) {
-    if (!value) {
-        return false;
-    }
-    const opaque = etag.replace(/^W\//u, '');
-    return value.split(',').some((candidate) => {
-        const normalized = candidate.trim().replace(/^W\//u, '');
-        return normalized === '*' || normalized === opaque;
-    });
-}
-
 /** Builds a safe Content-Disposition value for the stored filename. */
 export function getContentDisposition(file, forceAttachment = false) {
     // Match the media type essence: the shared extension map emits parameters

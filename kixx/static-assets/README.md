@@ -43,8 +43,10 @@ and the pathname is not access control.
 
 ## Development browser assets
 
-Developer mode scans `static-assets/` into the current content
-snapshot. Browser sources live in `static-assets/stylesheets/` and
+In development on Node.js and Deno, each request's snapshot is the
+project's working tree, compiled by the content compiler a publish uses
+(see "Serving Compiled Content" in `kixx/content-compiler/README.md`).
+Browser sources live in `static-assets/stylesheets/` and
 `static-assets/javascript/`, while their public logical pathnames
 remain `/stylesheets/**` and `/javascript/**`.
 
@@ -57,8 +59,8 @@ key on that hash alone and would return the entrypoint blob for a
 dependency request.
 
 These pathname-mode dependencies resolve from the current snapshot and
-revalidate independently. Editing an asset changes its developer content
-hash on the next scan without an asset build or server restart.
+revalidate independently. Editing an asset changes its content hash on
+the next request, without an asset build or server restart.
 
 ## Production publishing
 

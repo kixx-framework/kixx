@@ -2,20 +2,21 @@
 // constant in the Node adapter package.
 import { FORMAT } from '../../../content-addressable-store/addressing.js';
 import {
-    assert,
     assertFunction,
     assertNonEmptyString,
 } from '../../../assertions/mod.js';
 import ContentStore from './lib/content-store.js';
-import DeveloperContentStore from './lib/developer-content-store.js';
-
-const DEFAULT_SOURCE_DIRECTORIES = {
-    pagesDirectory: './pages',
-    templatesDirectory: './templates',
-    staticAssetsDirectory: './static-assets',
-};
 
 
+/**
+ * Registers the content store, in every environment, from
+ * `CONTENT_STORE.rootDirectory`. A development server stores what is published
+ * to it here too, while its pages render from the working tree.
+ *
+ * @param {Object} context - The application context
+ * @returns {void}
+ * @throws {AssertionError} When `CONTENT_STORE.rootDirectory` or `config.resolveFilepath` is missing
+ */
 export function register(context) {
     const { config, logger } = context;
     const storeConfig = config?.env?.CONTENT_STORE;
@@ -23,27 +24,6 @@ export function register(context) {
         config?.resolveFilepath,
         'node-content-store plugin requires context.config.resolveFilepath',
     );
-
-    if (storeConfig?.developerMode === true) {
-        assertNonEmptyString(
-            config.environment,
-            'node-content-store plugin developer mode requires context.config.environment',
-        );
-        assert(
-            config.environment === 'development',
-            'node-content-store plugin developer mode is restricted to the development environment',
-        );
-
-        const sourceDirectories = {};
-        for (const [ name, defaultPath ] of Object.entries(DEFAULT_SOURCE_DIRECTORIES)) {
-            sourceDirectories[name] = resolvePath(config, storeConfig[name] ?? defaultPath, name);
-        }
-        context.registerService('ContentStore', new DeveloperContentStore({
-            logger,
-            ...sourceDirectories,
-        }));
-        return;
-    }
 
     assertNonEmptyString(
         storeConfig?.rootDirectory,
@@ -61,17 +41,4 @@ export function register(context) {
         format: FORMAT,
         sqliteOptions: storeConfig.sqliteOptions ?? {},
     }));
-}
-
-function resolvePath(config, configuredPath, name) {
-    assertNonEmptyString(
-        configuredPath,
-        `node-content-store plugin requires a non-empty CONTENT_STORE.${ name }`,
-    );
-    const resolvedPath = config.resolveFilepath(configuredPath);
-    assertNonEmptyString(
-        resolvedPath,
-        'node-content-store plugin context.config.resolveFilepath() must return a non-empty string',
-    );
-    return resolvedPath;
 }

@@ -84,6 +84,18 @@ export default class ApplicationContext extends BaseContext {
     }
 
     /**
+     * Reports whether a service is registered, so a caller can treat it as
+     * optional. getService() asserts when the service is missing.
+     * @param {string} name - Service identifier
+     * @returns {boolean} True when a service is registered under `name`
+     * @throws {AssertionError} When name is not a non-empty string
+     */
+    hasService(name) {
+        assertNonEmptyString(name, 'Service name must be a non-empty string');
+        return this.#services.has(name);
+    }
+
+    /**
      * Registers a collection instance for later retrieval via getCollection().
      * @param {string} name - Collection identifier for lookup
      * @param {Object} collection - Collection instance to register

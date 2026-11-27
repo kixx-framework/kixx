@@ -26,7 +26,15 @@ import {
     normalizeCodeInfo,
     validateReleaseProvenance,
 } from './publishing-history.js';
-import { assert, assertNonEmptyString, isNonEmptyString, isPlainObject, isString } from '../assertions/mod.js';
+import {
+    assert,
+    assertNonEmptyString,
+    isFunction,
+    isNonEmptyString,
+    isObjectNotNull,
+    isPlainObject,
+    isString,
+} from '../assertions/mod.js';
 import { ConflictError, NotFoundError, OperationalError, ValidationError } from '../errors/mod.js';
 
 const BULK_FILE_LIMIT = 100;
@@ -49,6 +57,25 @@ const ASSIGNMENT_KEYS = [
  * @readonly
  */
 export const CONTENT_CONTRACT_VERSION = 2;
+
+/**
+ * Compiled content that stands in for the build's Release for one request.
+ *
+ * A request served from supplied content reads its pages, templates, and
+ * static assets from here and never from the content store. The development
+ * server supplies the working tree this way, and a preview supplies a draft.
+ * It may carry other fields.
+ *
+ * @typedef {Object} SuppliedContent
+ * @property {ContentAddressableIndex} index - Every object, under its storage pathname
+ * @property {Object} objects - Reads an object's bytes by hash
+ * @property {function(Object, ('text'|'arrayBuffer'|'stream'), string, string): Promise<(string|ArrayBuffer|ReadableStream|null)>} objects.getFile
+ *   The port's getFile(context, type, pathname, hash). Null when no object has the hash.
+ * @property {function(Object, 'text', Array<{ hash: string }>): Promise<Array<(string|null)>>} objects.getFiles
+ *   The port's getFiles(), aligned with its files argument.
+ * @property {function(string): Object[]} getPageProblems - The problems that block a page pathname; empty when none
+ * @property {function(string): Object[]} getBaseTemplateProblems - The problems that block a base template id; empty when none
+ */
 
 /**
  * The framework-facing entry point to published site content.
@@ -94,6 +121,14 @@ export const CONTENT_CONTRACT_VERSION = 2;
  * read is deliberately closure-independent, so putting it on a snapshot would
  * force an index read solely to bypass the index.
  *
+ * ## Supplied content
+ * A request can be served from {@link SuppliedContent} in place of the build's
+ * Release: {@link ContentAddressableStore#supplyContent} sets it for one
+ * request, and {@link ContentAddressableStore#setContentSupplier} registers a
+ * function that answers for every request. Both read paths above resolve it
+ * the same way, once per request, so a request never mixes supplied content
+ * with a Release. Publishing and history always mean the real store.
+ *
  * ## Lifecycle
  * The instance is registered as a service before the store it depends on is
  * available, so construction takes no arguments and
@@ -116,6 +151,18 @@ export default class ContentAddressableStore {
     // A build with no assigned Release has no root hash to key a cache entry
     // by, so the "already logged" fact is tracked separately, by build id.
     #loggedMissingBuildIds = new Set();
+
+    #contentSupplier = null;
+
+    // The supplied content each request resolved, or null for "none", keyed by
+    // its context so one request sees one answer however often it reads.
+    // Holds a promise while a supplier is answering.
+    #suppliedContentByContext = new WeakMap();
+
+    // The supplier's last non-null answer. A fingerprinted asset read checks
+    // it before calling the supplier again: a hash names its bytes, so an
+    // earlier answer that holds the hash gives the same asset.
+    #lastSuppliedContent = null;
 
     /**
      * Supplies the persistence port. Called by the plugin's `initialize()`
@@ -182,19 +229,122 @@ export default class ContentAddressableStore {
     }
 
     /**
-     * Resolves the running build's closure and returns a read/write view of it.
+     * Serves one request from supplied content in place of the build's Release.
+     *
+     * Call it before the request's first content read. It wins over a
+     * registered content supplier.
+     * @param {Object} context - The request's context; every read made with it sees this content
+     * @param {SuppliedContent} suppliedContent - The content to serve
+     * @returns {void}
+     * @throws {AssertionError} When context is not an object or suppliedContent is malformed
+     */
+    supplyContent(context, suppliedContent) {
+        assert(isObjectNotNull(context), 'supplyContent() requires a context object');
+        assertSuppliedContent(suppliedContent, 'supplyContent()');
+        this.#suppliedContentByContext.set(context, suppliedContent);
+    }
+
+    /**
+     * Registers the function that supplies content for every request, or
+     * clears it with null.
+     *
+     * The supplier is called once per request, with the request's context,
+     * before its first content read. It resolves supplied content, or null to
+     * leave that request on the build's Release.
+     * @param {(function(Object): Promise<(SuppliedContent|null)>)|null} supplier - The supplier, or null to clear it
+     * @returns {void}
+     * @throws {AssertionError} When supplier is neither a function nor null, or one is already registered
+     */
+    setContentSupplier(supplier) {
+        if (supplier === null) {
+            this.#contentSupplier = null;
+            this.#lastSuppliedContent = null;
+            return;
+        }
+
+        assert(isFunction(supplier), 'setContentSupplier() requires a function or null');
+        assert(
+            this.#contentSupplier === null,
+            'setContentSupplier(): a content supplier is already registered; clear it with null first',
+        );
+        this.#contentSupplier = supplier;
+    }
+
+    // Resolves the supplied content for a request, or null when it is served
+    // from the build's Release. The answer is remembered for the context. A
+    // supplier that fails is not remembered, so the request never falls back
+    // to a Release it wasn't meant to see.
+    async #resolveSuppliedContent(context) {
+        const remembered = this.#suppliedContentByContext;
+
+        if (remembered.has(context)) {
+            return await remembered.get(context);
+        }
+
+        const supplier = this.#contentSupplier;
+
+        if (!supplier) {
+            return null;
+        }
+
+        const promise = Promise.resolve().then(async () => {
+            const suppliedContent = await supplier(context);
+
+            if (suppliedContent === null) {
+                return null;
+            }
+
+            assertSuppliedContent(suppliedContent, 'The content supplier');
+
+            if (this.#contentSupplier === supplier) {
+                this.#lastSuppliedContent = suppliedContent;
+            }
+
+            return suppliedContent;
+        });
+
+        remembered.set(context, promise);
+
+        try {
+            return await promise;
+        } catch (cause) {
+            if (remembered.get(context) === promise) {
+                remembered.delete(context);
+            }
+            throw cause;
+        }
+    }
+
+    /**
+     * Resolves the content this request is served from and returns a view of it.
+     *
+     * That is the content supplied for the request, else a registered
+     * supplier's answer, else the running build's closure. Supplied content is
+     * read without resolving a build, so it is served even when no Release is
+     * assigned.
      *
      * The returned snapshot is pinned to the closure this call resolved, so a
      * deploy landing afterwards is invisible to it. Open exactly one per request
      * and thread it through the render; opening a second mid-request reintroduces
      * the torn-read the snapshot exists to prevent.
      * @param {Object} context - Request or execution context, passed through to the store
-     * @returns {Promise<ContentSnapshot>} A snapshot pinned to the current build's closure
+     * @returns {Promise<ContentSnapshot>} A snapshot pinned to the supplied content or the current build's closure
      * @throws {AssertionError} When the stored index table is malformed
      * @throws {OperationalError} When the build has no assigned Release, its Release's content
      *   contract is unsupported by this code, or the backing store fails
      */
     async openSnapshot(context) {
+        const suppliedContent = await this.#resolveSuppliedContent(context);
+
+        if (suppliedContent) {
+            return new ContentSnapshot(
+                suppliedContent.objects,
+                suppliedContent.index,
+                this.#snapshotLogger,
+                suppliedContent,
+            );
+        }
+
         const buildId = context.runtime.build.id ?? null;
         this.#logger.info('open-snapshot get-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
@@ -214,11 +364,7 @@ export default class ContentAddressableStore {
 
         const index = new ContentAddressableIndex(build.entries);
 
-        // A null rootHash means developer mode: a live scan with no immutable
-        // Release, so there is no content contract to verify against.
-        if (build.rootHash) {
-            await this.#verifyContentContract(context, buildId, build.rootHash, index);
-        }
+        await this.#verifyContentContract(context, buildId, build.rootHash, index);
 
         return new ContentSnapshot(this.#store, index, this.#snapshotLogger);
     }
@@ -279,7 +425,7 @@ export default class ContentAddressableStore {
      * restoration, where "no active build" is an expected outcome to report,
      * not a startup-class fault.
      * @param {Object} context - Request or execution context, passed through to the store
-     * @returns {Promise<{id: string, rootHash: string}|null>} The running build's id and assigned root hash, or null when the runtime has no build id, no registered pointer, or (developer mode) no persisted pointer
+     * @returns {Promise<{id: string, rootHash: string}|null>} The running build's id and assigned root hash, or null when the runtime has no build id or no registered pointer
      * @throws {OperationalError} When the backing store fails
      */
     async getCurrentBuild(context) {
@@ -290,7 +436,7 @@ export default class ContentAddressableStore {
 
         this.#logger.info('get-current-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
-        if (!build || !build.rootHash) {
+        if (!build) {
             return null;
         }
 
@@ -438,24 +584,56 @@ export default class ContentAddressableStore {
     /**
      * Reads a static asset blob directly by content hash, without loading an
      * index or resolving the running build's closure.
+     *
+     * A hash names its bytes, so every source gives the same asset. The
+     * cheapest sources are read first: the content this request already
+     * resolved, the supplier's last answer, then the store. The supplier is
+     * called only when none of them holds the hash, so a page's assets don't
+     * each make it check the working tree again.
      * @param {Object} context - Request or execution context, passed through to the store
      * @param {string} pathname - Logical asset pathname, used by pathname-backed adapters
      * @param {string} hash - Content address of the blob to read
      * @returns {Promise<ReadableStream|null>} The blob stream, or null when the blob is absent
      * @throws {AssertionError} When pathname or hash is invalid, or a present blob is not a stream
      * @throws {OperationalError} When the backing store fails
+     * @throws {Error} Whatever the content supplier rejects with, when it is called
      */
     async getStaticAssetByHash(context, pathname, hash) {
         assert(isValidPathname(pathname), 'getStaticAssetByHash() requires a valid pathname');
         assert(isValidHash(hash), 'getStaticAssetByHash() requires a valid hash');
 
-        this.#logger.info('get-static-asset-by-hash get-file', { pathname, hash });
-        const stream = await this.#store.getFile(
-            context,
-            'stream',
-            getStaticAssetPath(pathname),
-            hash,
-        );
+        const assetPath = getStaticAssetPath(pathname);
+        const read = (suppliedContent) => suppliedContent.objects.getFile(context, 'stream', assetPath, hash);
+
+        const known = [];
+
+        if (this.#suppliedContentByContext.has(context)) {
+            known.push(await this.#resolveSuppliedContent(context));
+        }
+
+        known.push(this.#lastSuppliedContent);
+
+        let stream = null;
+
+        for (const suppliedContent of new Set(known)) {
+            if (stream === null && suppliedContent) {
+                stream = await read(suppliedContent);
+            }
+        }
+
+        if (stream === null) {
+            this.#logger.info('get-static-asset-by-hash get-file', { pathname, hash });
+            stream = await this.#store.getFile(context, 'stream', assetPath, hash);
+        }
+
+        // Only now ask the supplier: the asset may be new in its content.
+        if (stream === null && this.#contentSupplier && !this.#suppliedContentByContext.has(context)) {
+            const suppliedContent = await this.#resolveSuppliedContent(context);
+
+            if (suppliedContent) {
+                stream = await read(suppliedContent);
+            }
+        }
 
         assert(
             stream === null || stream instanceof ReadableStream,
@@ -710,4 +888,16 @@ function getStructuredKind(pathname) {
         return 'pageIncludes';
     }
     return null;
+}
+
+function assertSuppliedContent(suppliedContent, caller) {
+    assert(
+        isObjectNotNull(suppliedContent)
+        && suppliedContent.index instanceof ContentAddressableIndex
+        && isFunction(suppliedContent.objects?.getFile)
+        && isFunction(suppliedContent.objects?.getFiles)
+        && isFunction(suppliedContent.getPageProblems)
+        && isFunction(suppliedContent.getBaseTemplateProblems),
+        `${ caller } requires supplied content with an index, objects.getFile(), objects.getFiles(), getPageProblems(), and getBaseTemplateProblems()`,
+    );
 }

@@ -186,9 +186,8 @@ Paths are below `environments.<envName>` unless marked root.
 | `OBJECT_STORE.path` | yes | |
 | `OBJECT_STORE.buckets` | yes | Keyed by bucket name; each value rendered whole (`{}` or options such as `{ "directory": ... }`). |
 | `FILES.maxUploadBytes`, `FILES.bucket` | yes | |
-| `CONTENT_STORE.developerMode` | optional | When truthy, renders `"developerMode": true` and the directory keys below; otherwise renders `rootDirectory`. Only valid in `development` (enforced at runtime, not by the template). |
-| `CONTENT_STORE.pagesDirectory`, `templatesDirectory`, `staticAssetsDirectory` | optional | Developer mode only. Each rendered only when present. |
-| `CONTENT_STORE.rootDirectory` | yes, unless developer mode | |
+| `CONTENT_STORE.rootDirectory` | yes | Every environment, `development` included. |
+| `CONTENT_STORE.workingTree` | optional | Leave it out. In `development` the server renders the working tree by default; `true` outside `development` fails boot (core's `content-addressable-store/plugin.js`). |
 
 ### Cloudflare context
 

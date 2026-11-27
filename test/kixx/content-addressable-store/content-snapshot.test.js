@@ -90,6 +90,32 @@ function makeSnapshot(index, blobsByHash) {
 
 describe('ContentSnapshot', ({ describe, it }) => {
 
+    it('has no supplied content when it is a snapshot of a Release', async () => {
+        const snapshot = makeSnapshot(await makeIndex([]), new Map());
+
+        assertEqual(null, snapshot.suppliedContent);
+    });
+
+    it('exposes the supplied content it was opened from', async () => {
+        const index = await makeIndex([]);
+        const suppliedContent = { index };
+        const snapshot = new ContentSnapshot(makeStore(new Map()), index, makeLogger(), suppliedContent);
+
+        assertEqual(suppliedContent, snapshot.suppliedContent);
+    });
+
+    it('refuses a write when it reads supplied content', async () => {
+        const index = await makeIndex([]);
+        const store = makeStore(new Map());
+        const snapshot = new ContentSnapshot(store, index, makeLogger(), { index });
+
+        const caught = await catchError(() => snapshot.putPageTemplate({}, '/about/page.html', '<main></main>'));
+
+        assertEqual('AssertionError', caught.name);
+        assert(caught.message.includes('read-only'));
+        assertEqual(0, store.putFileCalls.length);
+    });
+
     it('continues to read its original index after a build reassignment', async () => {
         const partialsPath = getGlobalTemplatePartialsPath();
 

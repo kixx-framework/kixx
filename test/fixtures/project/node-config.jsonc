@@ -8,6 +8,14 @@
             "CONTENT_STORE": { "rootDirectory": "content-store" },
             // Overrides one default of the visits plugin and leaves the rest.
             "VISITS": { "greeting": "hello from the fixture" }
+        },
+        // Only what has no default. CONTENT_STORE.workingTree is left out,
+        // so pages and assets render from the working tree.
+        "development": {
+            "LOGGER": { "level": "NONE" },
+            "KEY_VALUE_STORE": { "path": "key-value-store.sqlite" },
+            "CONTENT_STORE": { "rootDirectory": "content-store" },
+            "VISITS": { "greeting": "hello from the fixture" }
         }
     }
 }

@@ -58,10 +58,10 @@ describe('fixture project: content', ({ before, it }) => {
         assert(compilation.release, 'expected a Release');
     });
 
-    it('puts the project\'s page and the plugin\'s page in one manifest', () => {
+    it('puts the project\'s pages and the plugin\'s pages in one manifest', () => {
         const { manifest } = compilation.release;
 
-        assertEqual('/,/visits', Object.keys(manifest.pages).join());
+        assertEqual('/,/about,/visits,/visits/about', Object.keys(manifest.pages).join());
         assertEqual('page.html', Object.keys(manifest.pages['/'].templates).join());
         assertEqual('page.html', Object.keys(manifest.pages['/visits'].templates).join());
         assertEqual('/robots.txt,/site.css', Object.keys(manifest.staticAssets).join());
@@ -75,10 +75,14 @@ describe('fixture project: content', ({ before, it }) => {
         assertEqual(compilation.objects.length, files.length);
     });
 
-    it('reads the plugin\'s page from the plugin\'s directory', () => {
+    it('reads the plugin\'s pages from the plugin\'s directory', () => {
         const pluginObjects = compilation.objects.filter(({ pathname }) => pathname.startsWith('/visits'));
 
-        assertEqual('PageIncludes,PageMetadata,PagePartials,PageTemplate', pluginObjects.map(({ type }) => type).join());
+        // Two pages, /visits and /visits/about, of four objects each.
+        assertEqual(
+            'PageIncludes,PageIncludes,PageMetadata,PageMetadata,PagePartials,PagePartials,PageTemplate,PageTemplate',
+            pluginObjects.map(({ type }) => type).sort().join(),
+        );
 
         for (const { sourceFiles } of pluginObjects) {
             assert(sourceFiles.length > 0);
@@ -90,7 +94,8 @@ describe('fixture project: content', ({ before, it }) => {
     });
 
     it('links each page to its owner, its files, and the project\'s global partial', () => {
-        const [ home, visits ] = compilation.graph.pages;
+        const home = compilation.graph.pages.find(({ pathname }) => pathname === '/');
+        const visits = compilation.graph.pages.find(({ pathname }) => pathname === '/visits');
 
         assertEqual('/ app pages/page.html', `${ home.pathname } ${ home.owner } ${ home.templateFile }`);
         assertEqual(

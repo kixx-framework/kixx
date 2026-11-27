@@ -17,6 +17,7 @@ import ServerResponse from '../../../../http-router/server-response.js';
 import { readConfig } from '../../../../config/read-config.js';
 import { bootApplication } from '../../../../context/boot-application.js';
 import TraceLogger from '../../../../logger/trace-logger.js';
+import { installWorkingTreeContent } from '../../content-compiler/lib/install-working-tree-content.js';
 import {
     resolveDotenvFilepath,
     readEnvironment,
@@ -40,6 +41,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
  * @property {Object} configDefaults - Config defaults, merged under the selected environment's config
  * @property {{ required: string[], optional: string[], requiredOutsideDevelopment: string[] }} secrets - Every declared secret name
  * @property {string[]} [templateHelpers] - Every declared template helper name; when given, boot warns about each difference from the helpers registered
+ * @property {Object[]} [contentRoots] - The installed plugins' content directories. Needed, with templateHelpers, when the server renders the working tree.
  */
 
 /**
@@ -59,7 +61,9 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
  * `--dotenv`), the environment is read from the dotenv files and the process
  * environment, `node-config.jsonc` is read with the registry's defaults under
  * the selected environment's section, every declared secret is checked, and
- * each lifecycle module is registered and initialized. Then the server
+ * each lifecycle module is registered and initialized. In development the
+ * project's working tree is then compiled and installed as the content every
+ * request renders (see installWorkingTreeContent()). Then the server
  * listens, the start() hooks run, and the SIGTERM and SIGINT handlers are
  * registered.
  *
@@ -74,7 +78,7 @@ const SHUTDOWN_TIMEOUT_MS = 10000;
  * @param {NodeServerRegistry} options.registry - The exports of the project's Node.js registry module
  * @param {Array<Object>} options.virtualHosts - Virtual host specifications for the router
  * @param {Object} options.app - The application's own lifecycle hooks
- * @param {string} options.baseDirectory - Directory holding `node-config.jsonc` and the `.env.<environment>` files
+ * @param {string} options.baseDirectory - The project root: the directory holding `node-config.jsonc`, the `.env.<environment>` files, and the content directories
  * @param {Object} [options.process] - The process: `argv`, `env`, `exit`, and `on` are used. Defaults to `node:process`.
  * @param {(filepath: string) => string} [options.readFile] - UTF-8 file reader for the dotenv and config files, defaulting to `fs.readFileSync`
  * @param {string} [options.hostname] - Address to bind. When omitted the server accepts connections on every address.
@@ -171,6 +175,15 @@ export async function startNodeServer(options) {
         secrets: registry.secrets,
         templateHelpers: registry.templateHelpers,
     });
+
+    // The project root is baseDirectory, never config.resolveFilepath(),
+    // which DATA_DIRECTORY redirects.
+    try {
+        await installWorkingTreeContent({ appContext, registry, baseDirectory });
+    } catch (cause) {
+        await appContext.close();
+        throw cause;
+    }
 
     // Whether to trust the X-Forwarded-For header when resolving a request's client
     // IP. Enable only when running behind a trusted reverse proxy that sets it;

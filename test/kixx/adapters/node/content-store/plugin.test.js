@@ -87,29 +87,29 @@ describe('node-content-store plugin', ({ after, it }) => {
         assertEqual('file', (await fsp.stat(path.join(rootDirectory, `format-${ FORMAT }`, 'index.sqlite'))).isFile() ? 'file' : 'missing');
     });
 
-    it('registers DeveloperContentStore with resolved source directories', () => {
-        const tracker = new MockTracker();
-        const resolveFilepath = tracker.fn((value) => `/project/${ value.slice(2) }`);
-        const { context, registered } = makeContext({ developerMode: true }, resolveFilepath, 'development');
+    it('registers the ordinary ContentStore in development', async () => {
+        const temporaryDirectory = await makeTemporaryDirectory();
+        const rootDirectory = path.join(temporaryDirectory, 'content-store');
+        const { context, registered } = makeContext({ rootDirectory: './content-store' }, () => rootDirectory, 'development');
 
         register(context);
         stores.push(registered.service);
 
         assertEqual('ContentStore', registered.name);
-        assertEqual('DeveloperContentStore', registered.service.constructor.name);
-        assertEqual(3, resolveFilepath.mock.callCount());
-        assertEqual('./pages', resolveFilepath.mock.getCall(0).arguments[0]);
-        assertEqual('./templates', resolveFilepath.mock.getCall(1).arguments[0]);
-        assertEqual('./static-assets', resolveFilepath.mock.getCall(2).arguments[0]);
+        assertEqual('ContentStore', registered.service.constructor.name);
+
+        // It is writable, as in every environment.
+        await registered.service.saveIndex({ logger: makeLogger() }, 'root', { '/': [ 'tree', 'root' ] });
+        assertEqual(true, (await fsp.stat(path.join(rootDirectory, `format-${ FORMAT }`, 'index.sqlite'))).isFile());
     });
 
-    it('rejects developer mode outside the development environment', () => {
-        const { context } = makeContext({ developerMode: true }, (value) => value, 'production');
+    it('requires a root directory in development too', () => {
+        const { context } = makeContext({}, (value) => value, 'development');
 
         const error = catchError(() => register(context));
 
         assertEqual('AssertionError', error.name);
-        assertMatches('development environment', error.message);
+        assertMatches('CONTENT_STORE.rootDirectory', error.message);
     });
 
     it('rejects missing configured root directories and resolvers', () => {

@@ -38,7 +38,7 @@ The three directories differ in how the content compiler (`kixx/content-compiler
 | `public/` | `/**` (site root) | No | Published verbatim |
 | `pages/**/page.css` | None — inlined into the HTML | N/A | Included verbatim in page content |
 
-Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL. Developer mode scans `static-assets/` into its snapshot, so this works in development too; a pathname missing from the snapshot falls back to the bare pathname:
+Templates link entrypoints through `assetUrl`, which rewrites the logical pathname to a content-addressed URL. A development server compiles `static-assets/` from the working tree with the compiler a publish uses, so this works in development too, with the same hashes; a pathname missing from the snapshot falls back to the bare pathname:
 
 ```html
 <link href="{{ assetUrl assets "/stylesheets/stylesheet.css" }}" rel="stylesheet">

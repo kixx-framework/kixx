@@ -53,8 +53,9 @@ Changes are ignored in:
 dependencies, stop and start the devserver.
 
 Template, page, and static asset edits need no restart in the `development`
-environment: the default `node-config.jsonc` turns off the template and page
-caches there and reads content from disk.
+environment: the app server renders the project's working tree there, and
+compiles it again when a content file changes. See "Working-tree content in
+development" in the app's configuration guide.
 
 ## Error page
 

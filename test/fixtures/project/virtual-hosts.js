@@ -1,12 +1,10 @@
+import HyperviewPageHandler from '../../../kixx/hyperview/hyperview-page-handler.js';
+import StaticAssetRequestHandler from '../../../kixx/static-assets/static-asset-request-handler.js';
 import { pluginRoutes } from './routes.generated.js';
 
 
 function showHome(_context, _request, response) {
     return response.respondWithJSON(200, { page: 'home' });
-}
-
-function answerNotFound(_context, _request, response) {
-    return response.respond(404, { 'content-type': 'text/plain; charset=utf-8' }, 'fixture catch-all: not found\n');
 }
 
 const homeRoute = {
@@ -17,11 +15,35 @@ const homeRoute = {
     ],
 };
 
+// The URL the assetUrl template helper writes: an asset under its content
+// hash, cached forever.
+const fingerprintedAssetsRoute = {
+    pattern: '/assets/:hash/*pathname',
+    name: 'fingerprinted-assets',
+    targets: [
+        {
+            name: 'serve-asset',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [ StaticAssetRequestHandler({ fingerprinted: true }) ],
+        },
+    ],
+};
+
+// Everything else is content: a static asset by its pathname, else a page.
+// A new page needs no route.
 const catchAllRoute = {
     pattern: '*',
     name: 'catch-all',
     targets: [
-        { name: 'not-found', methods: [ 'GET', 'HEAD' ], requestHandlers: [ answerNotFound ] },
+        {
+            name: 'serve-content',
+            methods: [ 'GET', 'HEAD' ],
+            requestHandlers: [
+                // A miss falls through to the page handler.
+                StaticAssetRequestHandler({ throwNotFound: false, skipWhenFound: true }),
+                HyperviewPageHandler({ baseTemplateId: 'default.html' }),
+            ],
+        },
     ],
 };
 
@@ -31,6 +53,6 @@ export default [
     {
         name: 'fixture',
         hostname: 'localhost',
-        routes: [ homeRoute, ...pluginRoutes, catchAllRoute ],
+        routes: [ homeRoute, fingerprintedAssetsRoute, ...pluginRoutes, catchAllRoute ],
     },
 ];

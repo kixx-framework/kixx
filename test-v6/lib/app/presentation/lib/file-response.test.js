@@ -4,18 +4,11 @@ import { assertEqual } from 'kixx-assert';
 import {
     getContentDisposition,
     getFileEtag,
-    matchesIfNoneMatch,
 } from '../../../../app/presentation/lib/file-response.js';
 
 describe('file-response', ({ it }) => {
     it('uses the committed generation as a quoted validator', () => {
         assertEqual('"generation-2"', getFileEtag(makeFile('image/png', 'photo.png')));
-    });
-
-    it('weakly matches lists and the wildcard', () => {
-        assertEqual(true, matchesIfNoneMatch('"old", W/"generation-2"', '"generation-2"'));
-        assertEqual(true, matchesIfNoneMatch('*', '"generation-2"'));
-        assertEqual(false, matchesIfNoneMatch('"old"', '"generation-2"'));
     });
 
     it('serves safe browser media inline and markup as an attachment', () => {

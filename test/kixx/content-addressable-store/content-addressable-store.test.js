@@ -2,7 +2,12 @@ import { describe, MockTracker } from 'kixx-test';
 import { assert, assertEqual } from 'kixx-assert';
 import ContentAddressableStore, { CONTENT_CONTRACT_VERSION } from '../../../kixx/content-addressable-store/content-addressable-store.js';
 import { BadRequestError, OperationalError } from '../../../kixx/errors/mod.js';
-import { CONTENT_CONTRACT_PATH } from '../../../kixx/content-addressable-store/content-layout.js';
+import {
+    CONTENT_CONTRACT_PATH,
+    getGlobalTemplatePartialsPath,
+    getStaticAssetPath,
+} from '../../../kixx/content-addressable-store/content-layout.js';
+import { hashBlob } from '../../../kixx/content-addressable-store/addressing.js';
 import ContentAddressableIndex from '../../../kixx/content-addressable-store/content-addressable-index.js';
 
 const DEPLOY_KEY = Object.freeze({ type: 'deploy-key', id: 'test-key' });
@@ -188,6 +193,74 @@ async function catchAsyncError(fn) {
         return error;
     }
     return null;
+}
+
+// A double of the content store port that fails on every call, to prove a
+// read never reached the store.
+function makeUnreachableContentStore() {
+    const contentStore = {};
+
+    for (const name of Object.keys(makeContentStore())) {
+        contentStore[name] = () => {
+            throw new Error(`the content store was called: ${ name }()`);
+        };
+    }
+
+    return contentStore;
+}
+
+function makeStoreOver(contentStore) {
+    const store = new ContentAddressableStore();
+    store.initialize({ logger: makeLogger().logger, contentStore });
+    return store;
+}
+
+function makeRequestContext(buildId) {
+    return { runtime: { build: { id: buildId ?? 'build-1' } } };
+}
+
+// Supplied content holding one static asset and the global partials bundle,
+// shaped as the SuppliedContent contract says.
+async function makeSuppliedContent(label) {
+    const asset = `body { content: "${ label }"; }`;
+    const partials = JSON.stringify([{ id: 'byline', source: label }]);
+    const assetHash = await hashBlob(asset);
+    const partialsHash = await hashBlob(partials);
+    const texts = new Map([ [ assetHash, asset ], [ partialsHash, partials ] ]);
+    const calls = [];
+
+    const entries = await ContentAddressableIndex.buildIndex([
+        { pathname: getStaticAssetPath('/site.css'), hash: assetHash, size: asset.length },
+        { pathname: getGlobalTemplatePartialsPath(), hash: partialsHash, size: partials.length },
+    ]);
+
+    return {
+        label,
+        assetHash,
+        calls,
+        index: new ContentAddressableIndex(entries),
+        objects: {
+            async getFile(_context, type, pathname, hash) {
+                calls.push({ method: 'getFile', type, pathname, hash });
+                const text = texts.get(hash);
+                if (text === undefined) {
+                    return null;
+                }
+                return type === 'stream' ? new Response(text).body : text;
+            },
+            async getFiles(_context, _type, files) {
+                calls.push({ method: 'getFiles' });
+                return files.map(({ hash }) => texts.get(hash) ?? null);
+            },
+        },
+        getPageProblems: () => [],
+        getBaseTemplateProblems: () => [],
+    };
+}
+
+async function readByline(snapshot, context) {
+    const bundle = await snapshot.getGlobalTemplatePartials(context);
+    return bundle.json[0].source;
 }
 
 async function uploadJson(store, value) {
@@ -763,22 +836,21 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual(getFileCalls, contentStore.calls.filter((call) => call === 'getFile').length);
         });
 
-        it('serves a snapshot without a contract check in developer mode', async () => {
+        it('runs the contract check for every build', async () => {
             const { store, contentStore } = makeStore();
 
-            // A developer-mode adapter resolves a build with scanned entries
-            // but no persisted rootHash, and never writes a content-contract
-            // entry — there is no immutable Release to check it against.
+            // A closure no publish wrote: it has no content contract entry.
             const entries = {
                 '/': [ 'tree', 'aaaaaaaaaaaaaaaaaaaaaaaaaa' ],
                 '/a': [ 'blob', 'bbbbbbbbbbbbbbbbbbbbbbbbbb', 3, null ],
             };
-            contentStore.getBuild = async () => ({ rootHash: null, entries });
+            contentStore.getBuild = async () => ({ rootHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaa', entries });
 
-            const context = { runtime: { build: { id: 'dev' } } };
-            const snapshot = await store.openSnapshot(context);
-            assert(snapshot);
-            assertEqual(0, contentStore.calls.filter((call) => call === 'getFile').length);
+            const context = { runtime: { build: { id: 'build-1' } } };
+            const error = await catchAsyncError(() => store.openSnapshot(context));
+
+            assertEqual('AssertionError', error.name);
+            assert(error.message.includes('has no content contract entry'));
         });
 
         it('reports 503 naming the build id when no Release is assigned', async () => {
@@ -841,5 +913,302 @@ describe('ContentAddressableStore', ({ describe, it }) => {
         const result = await store.putObject({}, new ArrayBuffer(0));
         assertEqual(0, result.size);
         assertEqual(false, contentStore.calls.includes('getBuild'));
+    });
+
+    // R10: one request can be served from supplied content in place of the
+    // build's Release, and every read of that request sees the same content.
+    describe('supplied content', ({ it }) => {
+        it('serves a snapshot from content supplied for the request, without the store', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('supplied');
+            const context = makeRequestContext();
+
+            store.supplyContent(context, supplied);
+            const snapshot = await store.openSnapshot(context);
+
+            assertEqual(supplied, snapshot.suppliedContent);
+            assertEqual('supplied', await readByline(snapshot, context));
+            assertEqual(supplied.assetHash, snapshot.statStaticAsset('/site.css').hash);
+
+            const asset = await snapshot.getStaticAsset(context, '/site.css');
+            assertEqual('body { content: "supplied"; }', await new Response(asset.stream).text());
+        });
+
+        it('serves supplied content to a build with no assigned Release', async () => {
+            const { store, contentStore } = makeStore();
+            const context = makeRequestContext('ghost-build');
+
+            store.supplyContent(context, await makeSuppliedContent('supplied'));
+            const snapshot = await store.openSnapshot(context);
+
+            assertEqual('supplied', await readByline(snapshot, context));
+            assertEqual(false, contentStore.calls.includes('getBuild'));
+        });
+
+        it('gives every request the registered supplier\'s answer', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('from-supplier');
+            const seen = [];
+
+            store.setContentSupplier(async (context) => {
+                seen.push(context);
+                return supplied;
+            });
+
+            const first = makeRequestContext();
+            const second = makeRequestContext();
+
+            assertEqual('from-supplier', await readByline(await store.openSnapshot(first), first));
+            assertEqual('from-supplier', await readByline(await store.openSnapshot(second), second));
+            assertEqual(2, seen.length);
+            assertEqual(first, seen[0]);
+            assertEqual(second, seen[1]);
+        });
+
+        it('leaves a request on the Release when the supplier answers null', async () => {
+            const { store, contentStore } = makeStore();
+            const object = await uploadText(store, 'abc');
+            const release = await store.createRelease({}, { staticAssets: { '/a': object } }, creation());
+            await store.assignRelease({}, 'build-1', assignment({ releaseId: release.releaseId, expectedAssignmentId: null }));
+
+            let supplierCalls = 0;
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return null;
+            });
+
+            const context = makeRequestContext();
+            const snapshot = await store.openSnapshot(context);
+            await store.openSnapshot(context);
+
+            assertEqual(null, snapshot.suppliedContent);
+            assertEqual(object.objectId, snapshot.statStaticAsset('/a').hash);
+            assert(contentStore.calls.includes('getBuild'));
+            assertEqual(1, supplierCalls, 'the "none" answer is remembered for the context');
+        });
+
+        it('lets content supplied for a request win over the supplier', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const fromSupplier = await makeSuppliedContent('from-supplier');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return fromSupplier;
+            });
+
+            const context = makeRequestContext();
+            store.supplyContent(context, await makeSuppliedContent('for-request'));
+
+            assertEqual('for-request', await readByline(await store.openSnapshot(context), context));
+            assertEqual(0, supplierCalls);
+        });
+
+        it('gives two requests supplied different content their own', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const first = makeRequestContext();
+            const second = makeRequestContext();
+
+            store.supplyContent(first, await makeSuppliedContent('first'));
+            store.supplyContent(second, await makeSuppliedContent('second'));
+
+            assertEqual('first', await readByline(await store.openSnapshot(first), first));
+            assertEqual('second', await readByline(await store.openSnapshot(second), second));
+        });
+
+        it('calls the supplier once per request however many snapshots it opens', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('from-supplier');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return supplied;
+            });
+
+            const context = makeRequestContext();
+            const [ first, second ] = await Promise.all([
+                store.openSnapshot(context),
+                store.openSnapshot(context),
+            ]);
+            const third = await store.openSnapshot(context);
+            await store.getStaticAssetByHash(context, '/site.css', supplied.assetHash);
+
+            assertEqual(1, supplierCalls);
+            assertEqual(supplied, first.suppliedContent);
+            assertEqual(supplied, second.suppliedContent);
+            assertEqual(supplied, third.suppliedContent);
+        });
+
+        it('reads a fingerprinted asset from the supplied content', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('supplied');
+            const context = makeRequestContext();
+
+            store.supplyContent(context, supplied);
+            const stream = await store.getStaticAssetByHash(context, '/site.css', supplied.assetHash);
+
+            assertEqual('body { content: "supplied"; }', await new Response(stream).text());
+            assertEqual(getStaticAssetPath('/site.css'), supplied.calls[0].pathname);
+            assertEqual('stream', supplied.calls[0].type);
+        });
+
+        it('reads a fingerprinted asset from the store when the supplied content lacks the hash', async () => {
+            const { store, contentStore } = makeStore();
+            const stored = await hashBlob('stored bytes');
+            contentStore.blobs.set(stored, new Response('stored bytes').body);
+            const context = makeRequestContext();
+
+            store.supplyContent(context, await makeSuppliedContent('supplied'));
+            const stream = await store.getStaticAssetByHash(context, '/logo.png', stored);
+
+            assertEqual('stored bytes', await new Response(stream).text());
+        });
+
+        it('reads a fingerprinted asset from the supplier\'s last answer without asking it again', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            const supplied = await makeSuppliedContent('supplied');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return supplied;
+            });
+
+            await store.openSnapshot(makeRequestContext());
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/site.css', supplied.assetHash);
+
+            assertEqual('body { content: "supplied"; }', await new Response(stream).text());
+            assertEqual(1, supplierCalls);
+        });
+
+        it('reads a fingerprinted asset from the store before asking the supplier', async () => {
+            const { store, contentStore } = makeStore();
+            const stored = await hashBlob('stored bytes');
+            contentStore.blobs.set(stored, new Response('stored bytes').body);
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                throw new Error('compile failed');
+            });
+
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/logo.png', stored);
+
+            assertEqual('stored bytes', await new Response(stream).text());
+            assertEqual(0, supplierCalls);
+        });
+
+        it('asks the supplier for a fingerprinted asset no other source holds', async () => {
+            const { store } = makeStore();
+            const supplied = await makeSuppliedContent('supplied');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                return supplied;
+            });
+
+            const stream = await store.getStaticAssetByHash(makeRequestContext(), '/site.css', supplied.assetHash);
+
+            assertEqual('body { content: "supplied"; }', await new Response(stream).text());
+            assertEqual(1, supplierCalls);
+        });
+
+        it('rejects the read when the supplier rejects, and asks again for the next request', async () => {
+            const { store, contentStore } = makeStore();
+            const supplied = await makeSuppliedContent('recovered');
+            let supplierCalls = 0;
+
+            store.setContentSupplier(async () => {
+                supplierCalls += 1;
+                if (supplierCalls === 1) {
+                    throw new Error('compile failed');
+                }
+                return supplied;
+            });
+
+            const context = makeRequestContext();
+            const caught = await catchAsyncError(() => store.openSnapshot(context));
+
+            assertEqual('compile failed', caught.message);
+            assertEqual(false, contentStore.calls.includes('getBuild'), 'no Release is served in its place');
+
+            // Nothing was remembered for the failed context either.
+            const retried = await store.openSnapshot(context);
+            const next = await store.openSnapshot(makeRequestContext());
+
+            assertEqual(supplied, retried.suppliedContent);
+            assertEqual(supplied, next.suppliedContent);
+            assertEqual(3, supplierCalls);
+        });
+
+        it('rejects the read when the supplier answers malformed content', async () => {
+            const store = makeStoreOver(makeUnreachableContentStore());
+            store.setContentSupplier(async () => ({ index: {} }));
+
+            const caught = await catchAsyncError(() => store.openSnapshot(makeRequestContext()));
+
+            assertEqual('AssertionError', caught.name);
+            assert(caught.message.includes('content supplier'));
+        });
+
+        it('refuses malformed supplied content', async () => {
+            const { store } = makeStore();
+            const valid = await makeSuppliedContent('supplied');
+            const malformed = [
+                null,
+                'content',
+                { ...valid, index: {} },
+                { ...valid, objects: { getFile: valid.objects.getFile } },
+                { ...valid, objects: null },
+                { ...valid, getPageProblems: null },
+                { ...valid, getBaseTemplateProblems: undefined },
+            ];
+
+            for (const suppliedContent of malformed) {
+                const caught = await catchAsyncError(() => store.supplyContent({}, suppliedContent));
+
+                assert(caught, 'expected an error to be thrown');
+                assertEqual('AssertionError', caught.name);
+                assert(caught.message.includes('supplyContent()'));
+            }
+        });
+
+        it('refuses a context that is not an object', async () => {
+            const { store } = makeStore();
+            const valid = await makeSuppliedContent('supplied');
+
+            const caught = await catchAsyncError(() => store.supplyContent(null, valid));
+
+            assertEqual('AssertionError', caught.name);
+            assert(caught.message.includes('context'));
+        });
+
+        it('refuses a second supplier until the first is cleared', async () => {
+            const { store } = makeStore();
+            const supplier = async () => null;
+
+            store.setContentSupplier(supplier);
+            const second = await catchAsyncError(() => store.setContentSupplier(async () => null));
+            const notFunction = await catchAsyncError(() => store.setContentSupplier('supplier'));
+
+            assertEqual('AssertionError', second.name);
+            assert(second.message.includes('already registered'));
+            assertEqual('AssertionError', notFunction.name);
+
+            store.setContentSupplier(null);
+            store.setContentSupplier(supplier);
+        });
+
+        it('leaves getCurrentBuild() on the real store', async () => {
+            const { store, contentStore } = makeStore();
+            store.setContentSupplier(async () => {
+                throw new Error('the supplier was called');
+            });
+
+            assertEqual(null, await store.getCurrentBuild(makeRequestContext('ghost-build')));
+            assert(contentStore.calls.length > 0);
+        });
     });
 });

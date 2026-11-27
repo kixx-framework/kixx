@@ -308,10 +308,11 @@ describe('tooling: the entry a tool loads', ({ it }) => {
     });
 
     // A tool reads a real project, so the in-memory source is not part of
-    // the entry.
+    // the entry. Neither are the two functions a server uses to serve a
+    // compilation: a tool compiles and publishes, and serves nothing.
     it('exports nothing else from the compiler', () => {
         assertEqual(
-            'createMemoryContentSource',
+            'createCompiledContent,createMemoryContentSource,listContentDirectories',
             Object.keys(contentCompiler).filter((name) => !Object.hasOwn(tooling, name)).join(),
         );
     });

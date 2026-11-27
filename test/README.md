@@ -51,7 +51,7 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
 - Integration tests live in `test-app/test/`.
 - Fakes of platform services live in `test/fakes/` (see "Fakes").
 - Name test files with the project convention `*.test.js`.
-- `test/fixtures/project/` is a small Kixx project: core, two tiny plugins, an app, entry points, and committed generated registries. `test/fixtures/project.test.js` checks that the committed files are what the generator writes, and boots the project from its registries on the Node.js adapters and on the Cloudflare adapters against fakes. Its rules are in `test/fixtures/project/README.md`:
+- `test/fixtures/project/` is a small Kixx project: core, two tiny plugins, an app, entry points, and committed generated registries. `test/fixtures/project.test.js` checks that the committed files are what the generator writes, and boots the project from its registries on the Node.js adapters and on the Cloudflare adapters against fakes. `test/fixtures/project-pages.test.js` boots it to render pages: from a published Release, and from the working tree in development. Both boot it with `test/fixtures/fixture-project-boot.js`. Its rules are in `test/fixtures/project/README.md`:
   - A fixture directory holds no `*.test.js` file: the runner would collect it. Its tests sit beside it.
   - Its generated files are never edited. Regenerate them after changing a manifest.
   - A unit test imports its registries, `virtual-hosts.js`, and `app/app.js`. It never imports an entry point or the Durable Object registry.

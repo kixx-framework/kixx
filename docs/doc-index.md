@@ -64,7 +64,7 @@ docs/configuration-internals.md
 
 kixx/content-compiler/README.md
 
-The one compiler that turns a project's content into content objects and a Release manifest: the entry point a tool loads (`kixx/tooling/mod.js` and the two Node.js adapters), `compileProjectContent()` and `compileContent()`, the content source port and how to write a source, what is compiled and each object type, the result (`objects`, `release`, `report`, `graph`), stylesheet bundling and JavaScript comment stripping, plugin content and collisions, the template checks and what they can't see, the dependency graph, the limits, and every problem code.
+The one compiler that turns a project's content into content objects and a Release manifest: the entry point a tool loads (`kixx/tooling/mod.js` and the two Node.js adapters), `compileProjectContent()` and `compileContent()`, the content source port and how to write a source, what is compiled and each object type, the result (`objects`, `release`, `report`, `graph`), stylesheet bundling and JavaScript comment stripping, plugin content and collisions, the template checks and what they can't see, the dependency graph, the limits, and every problem code. Also serving compiled content with no publish: `createCompiledContent()`, `ContentAddressableStore#supplyContent()` and `setContentSupplier()`, how a failing page is reported, and the development server's working-tree supplier and its `CONTENT_STORE.workingTree` switch.
 
 ### Code Fingerprint
 
@@ -82,19 +82,19 @@ The server's publish rules (CONT-4, CONT-5, CONT-6): the `prestage` and `publish
 
 kixx/static-assets/README.md
 
-`StaticAssetRequestHandler` fingerprinted versus pathname modes and their caching headers, development asset scanning and root-relative imports, and how the content compiler publishes CSS and JavaScript for production.
+`StaticAssetRequestHandler` fingerprinted versus pathname modes and their caching headers, development assets (compiled from the working tree) and root-relative imports, and how the content compiler publishes CSS and JavaScript for production.
 
 ### Content
 
 usage-docs/kixx-app/content.md
 
-For app developers: where content lives, what the pre-publish checks catch and don't, reading a failed check, declaring a template helper in `app/app.json` and the boot warning, collisions with plugin content, and unmatched files.
+For app developers: where content lives, how a development server renders it from the working tree with no publish, what the pre-publish checks catch and don't, reading a failed check, declaring a template helper in `app/app.json` and the boot warning, collisions with plugin content, and unmatched files.
 
 ### Configuration
 
 usage-docs/kixx-app/configuration.md
 
-Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, config defaults, merging dotenv files, the server port, the generated `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
+Where a runtime value belongs: per-environment values in `node-config.jsonc`/`cloudflare-config.jsonc` versus per-deploy environment variables (dotenv files or Cloudflare bindings) split by secrecy. Covers environment selection, config defaults, merging dotenv files, the server port, the generated `example.env.secrets` manifest, `DATA_DIRECTORY` and store paths, `CONTENT_STORE` and working-tree content in development, `JOB_QUEUE` settings, and Cloudflare bindings, secrets, resources, and packaging.
 
 ### Administrative Data API
 

@@ -5,6 +5,7 @@ import {
     assertFalsy,
     assertMatches,
     assertNotEqual,
+    assertNotMatches,
 } from 'kixx-assert';
 
 import HyperviewService from '../../../kixx/hyperview/hyperview-service.js';
@@ -66,6 +67,7 @@ function makeContentSnapshot(spec) {
         baseTemplatesHash = 'base-templates-hash-1',
         staticAssets = null,
         staticAssetsHash = 'static-assets-hash-1',
+        suppliedContent,
     } = spec ?? {};
 
     const calls = [];
@@ -77,6 +79,10 @@ function makeContentSnapshot(spec) {
 
     return {
         calls,
+
+        // Left undefined unless a test supplies content, as on the fakes
+        // written before supplied content existed.
+        suppliedContent,
 
         get listStaticAssetsCalls() {
             return listStaticAssetsCalls;
@@ -231,7 +237,7 @@ function makeRequest(href) {
 function makeSubject(spec, options) {
     const snapshot = makeContentSnapshot(spec);
     const contentAddressableStore = makeContentAddressableStore(snapshot);
-    const kvStore = makeKvStore(options?.kvSeed);
+    const kvStore = options?.withoutKvStore ? undefined : makeKvStore(options?.kvSeed);
 
     const service = new HyperviewService({
         logger: makeLogger(),
@@ -996,6 +1002,48 @@ describe('HyperviewService', ({ describe }) => {
             assertEqual(0, kvStore.puts.length);
         });
 
+        it('reads and writes one key when every hash, the props, the URL, and the mode are equal (CONT-13)', async () => {
+            // The key is made of content hashes, so equal content means an equal
+            // key: the second render must find what the first one wrote.
+            const spec = makeDefaultSpec();
+            spec.staticAssets = [{ pathname: 'site.css', hash: 'asset-hash' }];
+
+            const { service, kvStore } = makeSubject(spec, {
+                serviceOptions: { usePageCache: true },
+            });
+
+            const renders = [];
+            for (let i = 0; i < 2; i += 1) {
+                const response = new ServerResponse();
+                response.updateProps({ viewer: 'alice' });
+                renders.push(await renderPageToResponse(service,
+                    CONTEXT,
+                    makeRequest('https://www.example.com/?page=1'),
+                    response,
+                    makeFullPageOptions(),
+                ));
+            }
+
+            assertEqual(2, kvStore.gets.length);
+            assertEqual(1, kvStore.puts.length, 'the second render is served from the cache');
+            assertEqual(kvStore.puts[0].key, kvStore.gets[0].key);
+            assertEqual(kvStore.puts[0].key, kvStore.gets[1].key);
+            assertEqual(renders[0].body, renders[1].body);
+
+            // A separate service over equal content derives the same key.
+            const other = makeSubject(spec, { serviceOptions: { usePageCache: true } });
+            const response = new ServerResponse();
+            response.updateProps({ viewer: 'alice' });
+            await renderPageToResponse(other.service,
+                CONTEXT,
+                makeRequest('https://www.example.com/?page=1'),
+                response,
+                makeFullPageOptions(),
+            );
+
+            assertEqual(kvStore.puts[0].key, other.kvStore.puts[0].key);
+        });
+
         it('uses a custom cacheKey in place of the URL', async () => {
             const fromUrl = await renderForCacheKey(makeFullPageOptions());
             const custom = await renderForCacheKey(makeFullPageOptions({ cacheKey: 'custom-identity' }));
@@ -1162,6 +1210,417 @@ describe('HyperviewService', ({ describe }) => {
             await renderWithSnapshot(service, first);
 
             assertEqual(1, first.callsTo('getGlobalTemplatePartials').length);
+        });
+    });
+
+    // CONT-13: compiled templates are cached by hash. The per-page caches are
+    // keyed by pathname and content hash, never by source, so these tests serve
+    // a different source under one hash to see whether a render compiled it.
+    describe('renderPage() per-page template cache (CONT-13)', ({ it }) => {
+
+        function makePageSpec(page) {
+            const spec = makeDefaultSpec();
+            spec.pages['/'] = {
+                pageData: [{ page: { title: 'Home' } }],
+                ...page,
+            };
+            return spec;
+        }
+
+        async function renderBody(service, page) {
+            const contentAddressableStore = makeContentAddressableStore(makeContentSnapshot(makePageSpec(page)));
+
+            service.initialize({ contentAddressableStore });
+
+            const result = await service.renderPage(CONTEXT, {
+                skipBaseRender: true,
+                props: {},
+                url: makeRequest().url,
+            });
+
+            return result.hypertext;
+        }
+
+        function makeService(useTemplateCache) {
+            return new HyperviewService({ logger: makeLogger(), useTemplateCache });
+        }
+
+        it('compiles a page template once per pathname and hash', async () => {
+            const service = makeService(true);
+
+            const first = await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const second = await renderBody(service, { templateHash: 'template-1', template: '<p>not compiled</p>' });
+
+            assertEqual('<p>one</p>', first);
+            assertEqual('<p>one</p>', second);
+        });
+
+        it('compiles a page template again when its hash changes', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const changed = await renderBody(service, { templateHash: 'template-2', template: '<p>two</p>' });
+
+            assertEqual('<p>two</p>', changed);
+        });
+
+        it('reuses a compiled page template when an older hash comes back', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            await renderBody(service, { templateHash: 'template-2', template: '<p>two</p>' });
+            const older = await renderBody(service, { templateHash: 'template-1', template: '<p>not compiled</p>' });
+
+            assertEqual('<p>one</p>', older);
+        });
+
+        it('compiles a page template on every render when the cache is off', async () => {
+            const service = makeService(false);
+
+            await renderBody(service, { templateHash: 'template-1', template: '<p>one</p>' });
+            const second = await renderBody(service, { templateHash: 'template-1', template: '<p>compiled again</p>' });
+
+            assertEqual('<p>compiled again</p>', second);
+        });
+
+        function makePartialsPage(partialsHash, source) {
+            return {
+                template: '{{> byline }}',
+                templateHash: `template-for-${ source }`,
+                partialsHash,
+                partials: [{ id: 'byline', source }],
+            };
+        }
+
+        it('compiles a page partials bundle once per pathname and hash', async () => {
+            const service = makeService(true);
+
+            const first = await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const second = await renderBody(service, makePartialsPage('partials-1', '<p>not compiled</p>'));
+
+            assertEqual('<p>one</p>', first);
+            assertEqual('<p>one</p>', second);
+        });
+
+        it('compiles a page partials bundle again when its hash changes', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const changed = await renderBody(service, makePartialsPage('partials-2', '<p>two</p>'));
+
+            assertEqual('<p>two</p>', changed);
+        });
+
+        it('reuses a compiled page partials bundle when an older hash comes back', async () => {
+            const service = makeService(true);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            await renderBody(service, makePartialsPage('partials-2', '<p>two</p>'));
+            const older = await renderBody(service, makePartialsPage('partials-1', '<p>not compiled</p>'));
+
+            assertEqual('<p>one</p>', older);
+        });
+
+        it('compiles a page partials bundle on every render when the cache is off', async () => {
+            const service = makeService(false);
+
+            await renderBody(service, makePartialsPage('partials-1', '<p>one</p>'));
+            const second = await renderBody(service, makePartialsPage('partials-1', '<p>compiled again</p>'));
+
+            assertEqual('<p>compiled again</p>', second);
+        });
+    });
+
+    // CORE-6: the KV store holds only the rendered-page cache, so Hyperview
+    // renders without one while the page cache is off.
+    describe('renderPage() without a KV store (CORE-6)', ({ it }) => {
+
+        async function render(options, href, subjectOptions) {
+            const { service } = makeSubject(makeDefaultSpec(), {
+                withoutKvStore: true,
+                ...subjectOptions,
+            });
+
+            return await service.renderPage(CONTEXT, {
+                ...options,
+                props: {},
+                url: makeRequest(href).url,
+            });
+        }
+
+        it('renders a full page', async () => {
+            const result = await render(makeFullPageOptions());
+
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                result.hypertext,
+            );
+        });
+
+        it('renders a page template without its base template', async () => {
+            const result = await render({ skipBaseRender: true });
+
+            assertEqual('<main><p>Home</p><footer>Home</footer></main>', result.hypertext);
+        });
+
+        it('renders a page partial', async () => {
+            const result = await render({ partial: 'byline' });
+
+            assertEqual('<p>Home</p>', result.hypertext);
+        });
+
+        it('answers the .json representation', async () => {
+            const result = await render(
+                makeFullPageOptions(),
+                'https://www.example.com/index.json',
+                { serviceOptions: { allowJsonResponse: true } },
+            );
+
+            assertEqual('page-context', result.type);
+            assertEqual('Home', result.pageContext.page.title);
+        });
+
+        it('refuses a render that asks for the page cache, before any content read', async () => {
+            const { service, snapshot, contentAddressableStore } = makeSubject(makeDefaultSpec(), {
+                withoutKvStore: true,
+            });
+
+            const caught = await catchAsyncError(() => service.renderPage(CONTEXT, {
+                ...makeFullPageOptions(),
+                usePageCache: true,
+                props: {},
+                url: makeRequest().url,
+            }));
+
+            assert(caught, 'expected an error to be thrown');
+            assertEqual('AssertionError', caught.name);
+            assertMatches('usePageCache', caught.message);
+            assertMatches('page cache', caught.message);
+            assertMatches('key-value store', caught.message);
+
+            // The snapshot has to be opened first: content supplied for the
+            // request turns the page cache off. Nothing is read from it.
+            assertEqual(1, contentAddressableStore.openSnapshotCalls.length);
+            assertEqual(0, snapshot.calls.length);
+            assertEqual(0, snapshot.listStaticAssetsCalls);
+        });
+    });
+
+    // R10 and STU-16: a render from content supplied for the request (a
+    // working tree or a draft) never enters the page cache, and a page the
+    // compiler found problems in is refused instead of rendered.
+    describe('renderPage() from supplied content', ({ it }) => {
+
+        function makeSuppliedContent(problems) {
+            const { pages = {}, baseTemplates = {} } = problems ?? {};
+
+            return {
+                getPageProblems: (pathname) => pages[pathname] ?? [],
+                getBaseTemplateProblems: (id) => baseTemplates[id] ?? [],
+            };
+        }
+
+        function makeSuppliedSpec(problems) {
+            const spec = makeDefaultSpec();
+            spec.pages['/about'] = {
+                pageData: [{ page: { title: 'About' } }],
+                template: '<main>About</main>',
+                partials: [ { id: 'byline', source: '<p>About</p>' } ],
+            };
+            spec.suppliedContent = makeSuppliedContent(problems);
+            return spec;
+        }
+
+        function makeProblem(filepath) {
+            return { code: 'template-syntax-error', message: `Bad template in ${ filepath }`, filepath };
+        }
+
+        function render(service, options, href) {
+            return service.renderPage(CONTEXT, {
+                props: {},
+                url: makeRequest(href).url,
+                ...options,
+            });
+        }
+
+        const RENDER_MODES = [
+            { name: 'full page', options: { baseTemplateId: 'main' } },
+            { name: 'page template', options: { skipBaseRender: true } },
+            { name: 'partial', options: { partial: 'byline' } },
+            { name: '.json', options: { baseTemplateId: 'main', allowJsonResponse: true }, href: 'https://www.example.com/index.json' },
+        ];
+
+        it('neither reads nor writes the page cache when it is on by default', async () => {
+            const { service, kvStore } = makeSubject(makeSuppliedSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+
+            const first = await render(service, makeFullPageOptions());
+            const second = await render(service, makeFullPageOptions());
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                first.hypertext,
+            );
+            assertEqual(first.hypertext, second.hypertext);
+        });
+
+        it('neither reads nor writes the page cache when the call turns it on', async () => {
+            const { service, kvStore } = makeSubject(makeSuppliedSpec());
+
+            for (const { options } of RENDER_MODES.slice(0, 3)) {
+                const result = await render(service, { ...options, usePageCache: true });
+                assertEqual('hypertext', result.type);
+            }
+
+            assertEqual(0, kvStore.gets.length);
+            assertEqual(0, kvStore.puts.length);
+        });
+
+        it('serves a cached page to nobody: a seeded cache entry is not read', async () => {
+            // Every key is seeded with the same poison, so any read would show.
+            const { service, kvStore } = makeSubject(makeSuppliedSpec(), {
+                serviceOptions: { usePageCache: true },
+            });
+            kvStore.get = async () => 'STALE';
+
+            const result = await render(service, makeFullPageOptions());
+
+            assertNotEqual('STALE', result.hypertext);
+        });
+
+        it('renders with no KV store at all, even when the call asks for the page cache', async () => {
+            const { service } = makeSubject(makeSuppliedSpec(), { withoutKvStore: true });
+
+            const result = await render(service, makeFullPageOptions({ usePageCache: true }));
+
+            assertEqual(
+                '<html><body><main><p>Home</p><footer>Home</footer></main></body></html>',
+                result.hypertext,
+            );
+        });
+
+        it('refuses a page with problems before any page read, in every render mode', async () => {
+            const problem = makeProblem('pages/page.html');
+
+            for (const { name, options, href } of RENDER_MODES) {
+                const { service, snapshot } = makeSubject(makeSuppliedSpec({ pages: { '/': [ problem ] } }));
+
+                const caught = await catchAsyncError(() => render(service, options, href));
+
+                assert(caught, `expected the ${ name } render to throw`);
+                assertEqual('OperationalError', caught.name, name);
+                assertEqual('ContentProblems', caught.code, name);
+                assertEqual(500, caught.httpStatusCode, name);
+                assertEqual(true, caught.expected, name);
+                assertEqual('/', caught.pathname, name);
+                assertEqual(1, caught.problems.length, name);
+                assertEqual(problem, caught.problems[0], name);
+                assertEqual(0, snapshot.calls.length, `${ name }: no content read`);
+                assertEqual(0, snapshot.listStaticAssetsCalls, `${ name }: no asset listing`);
+            }
+        });
+
+        it('names the page and the count in the message, never file content', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ makeProblem('pages/page.html'), makeProblem('pages/byline.html') ] },
+            }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertMatches('"/"', caught.message);
+            assertMatches('2 problem', caught.message);
+            assertNotMatches('Bad template', caught.message);
+            assertNotMatches('pages/page.html', caught.message);
+        });
+
+        it('refuses a page whose metadata is missing instead of answering not found', async () => {
+            // A malformed page.json leaves the page with no metadata object.
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/broken': [ makeProblem('pages/broken/page.json') ] },
+            }));
+
+            const caught = await catchAsyncError(() => {
+                return render(service, makeFullPageOptions(), 'https://www.example.com/broken');
+            });
+
+            assertEqual('ContentProblems', caught.code);
+            assertEqual('/broken', caught.pathname);
+        });
+
+        it('renders a page without problems from the same supplied content', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ makeProblem('pages/page.html') ] },
+            }));
+
+            for (const { name, options, href } of RENDER_MODES) {
+                const result = await render(
+                    service,
+                    options,
+                    href ? 'https://www.example.com/about.json' : 'https://www.example.com/about',
+                );
+
+                assert(result.hypertext || result.pageContext, name);
+            }
+        });
+
+        it('refuses a full-page render whose base template has problems', async () => {
+            const problem = makeProblem('templates/base/main.html');
+            const { service, snapshot } = makeSubject(makeSuppliedSpec({ baseTemplates: { main: [ problem ] } }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertEqual('ContentProblems', caught.code);
+            assertEqual(problem, caught.problems[0]);
+            assertEqual(0, snapshot.calls.length);
+        });
+
+        it('lets a base template\'s problems block no render that reads no base template', async () => {
+            const { service } = makeSubject(makeSuppliedSpec({
+                baseTemplates: { main: [ makeProblem('templates/base/main.html') ] },
+            }));
+
+            const pageTemplate = await render(service, { skipBaseRender: true });
+            const partial = await render(service, { partial: 'byline' });
+            const json = await render(
+                service,
+                { baseTemplateId: 'main', allowJsonResponse: true },
+                'https://www.example.com/index.json',
+            );
+
+            assertEqual('<main><p>Home</p><footer>Home</footer></main>', pageTemplate.hypertext);
+            assertEqual('<p>Home</p>', partial.hypertext);
+            assertEqual('page-context', json.type);
+        });
+
+        it('lists the page\'s problems first, and a shared problem once', async () => {
+            const page = makeProblem('pages/page.html');
+            const shared = makeProblem('templates/partials/footer.html');
+            const base = makeProblem('templates/base/main.html');
+            const { service } = makeSubject(makeSuppliedSpec({
+                pages: { '/': [ page, shared ] },
+                baseTemplates: { main: [ base, shared ] },
+            }));
+
+            const caught = await catchAsyncError(() => render(service, makeFullPageOptions()));
+
+            assertEqual(3, caught.problems.length);
+            assertEqual(page, caught.problems[0]);
+            assertEqual(shared, caught.problems[1]);
+            assertEqual(base, caught.problems[2]);
+        });
+
+        it('keeps the page cache for a snapshot of a Release', async () => {
+            const spec = makeSuppliedSpec();
+            spec.suppliedContent = null;
+            const { service, kvStore } = makeSubject(spec, { serviceOptions: { usePageCache: true } });
+
+            await render(service, makeFullPageOptions());
+
+            assertEqual(1, kvStore.gets.length);
+            assertEqual(1, kvStore.puts.length);
         });
     });
 
@@ -1442,8 +1901,14 @@ describe('HyperviewService', ({ describe }) => {
 
     describe('initialize()', ({ it }) => {
 
-        it('requires a kvStore', () => {
+        it('needs no kvStore while the page cache is off (CORE-6)', () => {
             const service = new HyperviewService({ logger: makeLogger() });
+
+            service.initialize({ contentAddressableStore: {} });
+        });
+
+        it('requires a kvStore when the page cache is on by default (CORE-6)', () => {
+            const service = new HyperviewService({ logger: makeLogger(), usePageCache: true });
 
             let caught = null;
             try {
@@ -1454,7 +1919,9 @@ describe('HyperviewService', ({ describe }) => {
 
             assert(caught, 'expected an error to be thrown');
             assertEqual('AssertionError', caught.name);
-            assertMatches('kvStore', caught.message);
+            assertMatches('HYPERVIEW.usePageCache', caught.message);
+            assertMatches('page cache', caught.message);
+            assertMatches('key-value store', caught.message);
         });
 
         it('requires a contentAddressableStore', () => {
