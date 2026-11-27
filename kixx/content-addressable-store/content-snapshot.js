@@ -143,6 +143,13 @@ export default class ContentSnapshot {
             `Invalid type "${ type }" passed into ContentSnapshot#putFile()`,
         );
 
+        // Supplied content is a working tree or a draft held in memory. It
+        // has nowhere to write to.
+        assert(
+            this.#suppliedContent === null,
+            'ContentSnapshot: a snapshot of supplied content is read-only',
+        );
+
         const hash = await hashBlob(bytes);
 
         const size = await this.#store.putFile(context, pathname, hash, bytes);
@@ -228,6 +235,7 @@ export default class ContentSnapshot {
      * @param {string} pathname - Logical asset pathname
      * @param {ArrayBuffer} arrayBuffer - The asset's bytes
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putStaticAsset(context, pathname, arrayBuffer) {
@@ -274,6 +282,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {Array<*>} bundle - The partial-template bundle to publish
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putGlobalTemplatePartials(context, bundle) {
@@ -321,6 +330,7 @@ export default class ContentSnapshot {
      * @param {Object} context - Request or execution context
      * @param {Array<*>} bundle - The base-template bundle to publish
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putBaseTemplates(context, bundle) {
@@ -353,6 +363,7 @@ export default class ContentSnapshot {
      * @param {string} pathname - Logical page pathname
      * @param {Object} obj - Page metadata to publish
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putPageMetadata(context, pathname, obj) {
@@ -382,6 +393,7 @@ export default class ContentSnapshot {
      * @param {string} pathname - Logical page pathname
      * @param {Object} bundle - The include bundle to publish, keyed by include name
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putPageIncludes(context, pathname, bundle) {
@@ -411,6 +423,7 @@ export default class ContentSnapshot {
      * @param {string} pathname - Logical page pathname
      * @param {Array<*>} bundle - The partial-template bundle to publish
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      */
     async putPagePartials(context, pathname, bundle) {
@@ -443,6 +456,7 @@ export default class ContentSnapshot {
      * @param {string} pathname - Logical template filepath, including the filename
      * @param {string} source - Template source text
      * @returns {Promise<{pathname: string, hash: string, size: number}>} The storage pathname, content hash, and byte size to record in the manifest
+     * @throws {AssertionError} When the snapshot reads supplied content, which is read-only
      * @throws {OperationalError} When the backing store fails
      * @see isValidTemplateFilepath in ./content-layout.js for the filepath rule
      */
