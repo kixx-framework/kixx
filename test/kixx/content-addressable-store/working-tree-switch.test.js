@@ -66,18 +66,6 @@ describe('working tree switch', ({ describe }) => {
                 }
             }
         });
-
-        it('ignores the removed developerMode and source directory keys', () => {
-            const contentStore = {
-                developerMode: true,
-                pagesDirectory: './pages',
-                templatesDirectory: './templates',
-                staticAssetsDirectory: './static-assets',
-            };
-
-            assertEqual(false, readWorkingTreeSwitch(makeConfig('production', contentStore)));
-            assertEqual(true, readWorkingTreeSwitch(makeConfig('development', contentStore)));
-        });
     });
 
     describe('the core plugin\'s register()', ({ it }) => {

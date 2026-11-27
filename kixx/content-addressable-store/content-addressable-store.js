@@ -353,11 +353,7 @@ export default class ContentAddressableStore {
 
         const index = new ContentAddressableIndex(build.entries);
 
-        // A null rootHash means developer mode: a live scan with no immutable
-        // Release, so there is no content contract to verify against.
-        if (build.rootHash) {
-            await this.#verifyContentContract(context, buildId, build.rootHash, index);
-        }
+        await this.#verifyContentContract(context, buildId, build.rootHash, index);
 
         return new ContentSnapshot(this.#store, index, this.#snapshotLogger);
     }
@@ -418,7 +414,7 @@ export default class ContentAddressableStore {
      * restoration, where "no active build" is an expected outcome to report,
      * not a startup-class fault.
      * @param {Object} context - Request or execution context, passed through to the store
-     * @returns {Promise<{id: string, rootHash: string}|null>} The running build's id and assigned root hash, or null when the runtime has no build id, no registered pointer, or (developer mode) no persisted pointer
+     * @returns {Promise<{id: string, rootHash: string}|null>} The running build's id and assigned root hash, or null when the runtime has no build id or no registered pointer
      * @throws {OperationalError} When the backing store fails
      */
     async getCurrentBuild(context) {
@@ -429,7 +425,7 @@ export default class ContentAddressableStore {
 
         this.#logger.info('get-current-build', { buildId });
         const build = await this.#store.getBuild(context, buildId);
-        if (!build || !build.rootHash) {
+        if (!build) {
             return null;
         }
 
