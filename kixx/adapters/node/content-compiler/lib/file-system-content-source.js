@@ -95,6 +95,12 @@ async function walkDirectory(directoryPath, prefix, entries) {
     try {
         dirents = await fsp.readdir(directoryPath, { withFileTypes: true });
     } catch (cause) {
+        // Removed since it was found, as a checkout or an editor's save
+        // does. It has nothing in it now.
+        if (MISSING_CODES.includes(cause.code)) {
+            return;
+        }
+
         throw new OperationalError(`Unable to read directory ${ directoryPath } (${ cause.code })`, { cause });
     }
 
