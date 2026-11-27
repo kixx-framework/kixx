@@ -11,8 +11,10 @@ import { readWorkingTreeSwitch } from './working-tree-switch.js';
 
 /**
  * Registers the store. First it checks `CONTENT_STORE.workingTree`, on every
- * platform and before any store opens, so a server that can't render a
- * working tree fails boot instead of ignoring the key.
+ * platform and before any store opens, so a malformed value, or `true`
+ * outside development, fails boot. In development the key is only read here:
+ * the Node.js server acts on it, and a Cloudflare Worker, which has no
+ * working tree, ignores it and serves the published Release.
  *
  * @param {Object} context - The application context
  * @returns {void}
