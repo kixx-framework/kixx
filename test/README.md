@@ -18,9 +18,9 @@ Each runner imports test files first, which register top-level `describe` blocks
 | Runs with | `run-tests.js` | `test-app/run-tests.js`, pointed at a test app that is already running or deployed |
 | Needs | Node.js or Deno, git, and the dev dependencies. No network, credentials, account, emulator (wrangler, miniflare, workerd), container, or database server. | A running or deployed test app, and credentials for a deployed one. |
 | Takes | Seconds | Minutes |
-| Runs | On every change, in CI, and by agents | Before each release and after a change to platform-facing code. Agents write its tests. The operator runs them. |
+| Runs | On every change, in CI, and by agents | In CI on every push, against a test app started on the runner. By the operator, locally and against deployed targets, before each release and after a change to platform-facing code. Agents write its tests and never run them. |
 
-`run-tests.js` never collects `test-app/`, and CI doesn't run the integration suite.
+`run-tests.js` never collects `test-app/`. CI runs the integration suite in a job of its own, `integration-local`, against local Node.js and Deno targets only.
 
 **Where does a new test belong?** If it needs a real platform, a running or deployed app, credentials, or the network, it belongs in the integration suite. Everything else belongs in the unit suite, with each platform service replaced by a fake.
 
@@ -47,7 +47,7 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
 ## File Conventions
 
 - Put unit tests under `test/`, mirroring the source tree: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`, adapters by `test/kixx/adapters/<platform>/<name>/…`, and plugins (once they exist) by `test/plugins/<name>/…`.
-- Unit tests for code under `test-app/` (the integration runner, the probe, and the test app's plugin) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target. `test/test-app/integration-probe/` runs each port's conformance suite through the plugin's factories: the Node.js ones over SQLite in a temporary directory, the Cloudflare ones over the fakes.
+- Unit tests for code under `test-app/` (the integration runner, the probe, and the test app's plugin) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target. `test/test-app/lib/` tests `run-local.js`'s logic and the server process helper with the fake clock, `spawn`, and `fetch` in `test/test-app/lib/process-fakes.js`, so no process is started. `test/test-app/integration-probe/` runs each port's conformance suite through the plugin's factories: the Node.js ones over SQLite in a temporary directory, the Cloudflare ones over the fakes.
 - Unit tests for the scripts' shared code in `tools/lib/` live in `test/tools/`: `tools/lib/assemble-project.js` is tested by `test/tools/assemble-project.test.js`. A test that assembles a project builds it in a temporary directory, removes it afterwards, and shares one assembly among the tests of a `describe`.
 - Integration tests live in `test-app/test/`.
 - Fakes of platform services live in `test/fakes/` (see "Fakes").

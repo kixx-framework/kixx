@@ -2,13 +2,17 @@
 
 The integration suite checks Kixx code against the real systems under it: Cloudflare Workers with real KV and Durable Objects, and Node.js and Deno hosts. It covers what the unit suite's fakes stand in for: every adapter on its real platform, entry points and Durable Object classes, platform limits, data that must outlast a restart or a deploy, and differences between runtimes.
 
-It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory, and CI doesn't run it. What belongs in each suite is in the Testing Guide, `test/README.md`.
+It is apart from the unit suite. `run-tests.js` at the repository root never collects this directory. CI runs it in a job of its own, against a test app started on the runner. What belongs in each suite is in the Testing Guide, `test/README.md`.
 
-> **Status:** The test app exists and is built with `node tools/build-test-app.js`. There is no integration test yet, so every run ends with `No test files found under …`. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, the helpers, the probe, and the plugin are in `test/test-app/`.
+> **Status:** The first integration tests exist: the test app is up with production settings (`test/all-targets/boot.test.js`), and all six probe suites run inside it (`test/probe/`). They run against the local target, on Node.js and on Deno, in CI and with `run-local.js`. No test app is deployed yet, so the `cloudflare` and `nodejs` targets have never been run. The unit suite boots the built test app on the Node.js adapters and as a Worker against fakes (`test/skeleton/test-app.test.js`), and the unit tests of the runner, `run-local.js`'s logic, the helpers, the probe, and the plugin are in `test/test-app/`.
 
 ```
 test-app/
 ├── run-tests.js                  # The runner
+├── run-local.js                  # Builds and starts the test app here, runs the suite, stops it
+├── lib/
+│   ├── local-target.js           # run-local.js's logic
+│   └── server-process.js         # Starts, watches, and stops a server process
 ├── integration-probe/            # The test app's one plugin: mounts the probe (test only)
 ├── cloudflare-config.jsonc       # The test app's Cloudflare config
 ├── build/                        # The built test app (git-ignored)
@@ -17,8 +21,10 @@ test-app/
 │   ├── probe-client.js           # On the laptop: createProbeClient(), describeProbeSuite()
 │   └── probe-suites.js           # The suites the probe can run
 └── test/                         # Integration tests (*.test.js)
+    ├── all-targets/              # Tests that run on every target
+    ├── probe/                    # One file per probe suite; they run on every target
     └── test-helpers/
-        ├── target.js             # getBaseUrl(), getDeployKey()
+        ├── target.js             # getBaseUrl(), getDeployKey(), getTarget(), describeOnTarget(), fetchWithDeployKey()
         └── publish.js            # publishContent(): a publish over HTTP
 ```
 
@@ -58,9 +64,46 @@ To add a test route, add it to `test-app/integration-probe/routes.js`. A route t
 
 ## Who Runs It
 
-Agents write integration tests. The operator runs them, before each release and after a change to platform-facing code. An agent never runs the suite against a target and never deploys one.
+- **Agents** write integration tests. An agent never runs `run-local.js` or `run-tests.js`, and never deploys a target. It pushes, then reads the CI job.
+- **CI** runs the suite against the local target on every push: the `integration-local` job, once on Node.js and once on Deno.
+- **The operator** runs it against the local target on a laptop, and against the deployed targets before each release and after a change to platform-facing code.
 
-## Running the Suite
+## Running the Suite Locally
+
+One command builds the test app, starts it on this machine, runs the suite against it, and stops it. From the repository root, after `npm install`:
+
+```
+node test-app/run-local.js           # a Node.js server, tested from Node.js
+deno run -A test-app/run-local.js    # a Deno server, tested from Deno
+```
+
+It does this, in order:
+
+1. Stops at once if anything already answers at `http://localhost:2026/`.
+2. Builds the test app into `test-app/build/`.
+3. Makes a temporary data directory and a deploy key for this run.
+4. Starts `test-app/build/node-server.js --environment production --port 2026` with the runtime it runs on, and waits up to 15 seconds for it to answer.
+5. Runs `run-tests.js --local` with the same runtime. Arguments after the script's name go to the runner, so `--skip` and pathnames work (see "Running the Suite Against a Target").
+6. Sends the server `SIGTERM` and waits for it to exit.
+
+Its exit code is the runner's, or 1 when the server didn't start or didn't exit with code 0.
+
+It sets these in the server's environment, and nothing else. Variables named `INTEGRATION_TESTS_*` in your shell are not passed to the server.
+
+| Variable | Value |
+|---|---|
+| `DEPLOY_KEY_HASH` | The hash of the run's deploy key. |
+| `BUILD_ID` | `integration-<time>`. |
+| `TRUST_PROXY` | `true`, so a test can name its own client address in `X-Forwarded-For`. |
+| `DATA_DIRECTORY` | The temporary data directory. The stores and the server's log (`server.log`) are in it. |
+
+The runner gets the key as `INTEGRATION_TESTS_DEPLOY_KEY`. The key and the hash travel in the two children's environments only. They are never printed and never on a command line.
+
+A passing run removes the data directory. A failing run keeps it, prints the path of the server's log, and prints the log's last 60 lines.
+
+The logic is in `lib/local-target.js`. It starts the server through `lib/server-process.js`, which a test that needs a server of its own also uses: `startServerProcess()` starts a project's entry point on a port, `waitUntilReady()` waits for it to answer, `signal()` sends it a signal, `exited` resolves its exit code and output, and `stop()` ends it. A test that starts a server calls `stop()` in a `finally`.
+
+## Running the Suite Against a Target
 
 The runner starts nothing and deploys nothing. It points the tests at a target that is already up: a test app on this machine, run under Node.js or Deno with production settings, or a deployed one.
 
@@ -97,17 +140,24 @@ node test-app/run-tests.js --local --skip test-app/test/some-file.test.js
 |---|---|
 | `INTEGRATION_TESTS_BASE_URL` | Required. The target's base URL, an absolute `http:` or `https:` URL. A target option sets it. |
 | `INTEGRATION_TESTS_TARGET` | Set by the runner to `local`, `cloudflare`, or `nodejs` when a named target is used. Otherwise the runner clears it. |
-| `INTEGRATION_TESTS_DEPLOY_KEY` | Optional. The target's deploy key, for tests that call a protected route such as the probe. |
+| `INTEGRATION_TESTS_DEPLOY_KEY` | The target's deploy key, for tests that call a protected route such as the probe. `run-local.js` sets it. For any other target, set it yourself. |
 
 The deploy key is a secret. Set it in the environment only. It has no command-line option, because a secret on the command line leaks into shell history and process listings, and it never goes in a tracked file. The runner never reads it.
 
-Tests read these through `test/test-helpers/target.js`: `getBaseUrl()` returns the base URL without a trailing slash, and `getDeployKey()` returns the key, or `null` when none is set.
+Tests read these through `test/test-helpers/target.js`:
+
+- `getBaseUrl()` returns the base URL without a trailing slash.
+- `getDeployKey()` returns the key, or `null` when none is set.
+- `getTarget()` returns `local`, `cloudflare`, or `nodejs`, or `null` for a target given by URL.
+- `fetchWithDeployKey(pathname, init)` sends a request to the target with the key as a bearer token. It follows no redirect, and an error from it names only the method and the path.
 
 `test/test-helpers/publish.js` publishes content to a target through its Publishing API: `publishContent({ baseUrl, deployKey, files, pluginContentRoots, templateHelpers })` compiles the files, uploads the objects the store lacks, creates the Release, and assigns it to the build the target runs. The first assignment pre-stages the build with a made-up commit and code fingerprint; later ones are content-only publishes. The unit suite uses the same helper against a project booted on `127.0.0.1` (`test/skeleton/`).
 
 ## Writing an Integration Test
 
 - Put it in `test-app/test/`, named `*.test.js`. It uses `kixx-test` and `kixx-assert`, like a unit test.
+- A test that is the same on every target goes in `test/all-targets/`. A test for one target goes in `test/local/` or `test/cloudflare/`, and registers its block with `describeOnTarget([ 'local' ], name, fn)`, which registers nothing on any other target or on one given by URL.
+- Every test file is imported into one process, in path order. Don't depend on that order.
 - Drive the target over HTTP, from `getBaseUrl()`.
 - Touch only the test app's own resources.
 - Take credentials from the environment, never from a tracked file. Never print one, and never put one in an assertion message.

@@ -23,7 +23,7 @@ node run-linter.js test-app        # lint the integration suite
 **Read the Testing Guide before you write a test:** `test/README.md`. It says which suite a test belongs in, how a module gets its platform services, how to keep a Durable Object thin, how to write a fake, and how to write a conformance suite.
 
 - `run-tests.js` runs the unit suite only: Kixx code against fakes, with no network and no credentials.
-- The integration suite lives in `test-app/` and runs against a real target. Agents write its tests and the operator runs them. Never run it against a target, and never deploy. See `test-app/README.md`.
+- The integration suite lives in `test-app/` and runs against a real target. Agents write its tests. CI runs them against a test app on the runner (`test-app/run-local.js`), and the operator runs them locally and against deployed targets. Never run `test-app/run-tests.js` or `test-app/run-local.js` yourself, and never deploy: push, then read the `integration-local` CI job. See `test-app/README.md`.
 
 **Keep the layers apart.**
 

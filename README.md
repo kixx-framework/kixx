@@ -31,7 +31,7 @@ This mono-repo holds every part of the Kixx framework. The important directories
 
 ```
 kixx/
-├── .github/workflows/ci.yml     # CI: lint, unit tests on Node.js and Deno, and the skeleton project
+├── .github/workflows/ci.yml     # CI: lint, unit tests, the skeleton project, and local integration tests
 ├── kixx/                        # Core, vendored into projects as kixx/
 │   ├── config/, context/, http-router/, hyperview/, logger/, ...   # Framework modules
 │   ├── content-compiler/        # Compiles content into objects and a Release manifest, and checks it
@@ -50,6 +50,8 @@ kixx/
 │   └── tools/                   # Unit tests for tools/lib/
 ├── test-app/                    # Integration suite, run against a real target (see test-app/README.md)
 │   ├── run-tests.js             # Integration test runner (`node test-app/run-tests.js --local`)
+│   ├── run-local.js             # Builds and starts the test app here, runs the suite, stops it
+│   ├── lib/                     # run-local.js's logic and the server process helper
 │   ├── probe/                   # Runs shared test suites inside a running server
 │   ├── integration-probe/       # The test app's one plugin, which mounts the probe
 │   ├── build/                   # The built test app (git-ignored)
@@ -83,7 +85,7 @@ kixx/
 
 `reference-app/` is what remains of the v6 starter app. It is not maintained or runnable; it shrinks as code moves out of it, and is deleted at the end of the extraction. `test-v6/` holds the v6 tests (the v6 integration suites included) until each is brought back beside the code it covers.
 
-**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. Its `skeleton` job builds a project with no plugins (`node tools/build-project.js`), installs that project's own dev dependencies, and runs its tests and lint on Node.js and its tests on Deno. The devkit suite isn't in CI yet; run it by hand with `node devkit/run-tests.js`. The integration suite in `test-app/` isn't in CI either: the operator runs it against a running or deployed test app.
+**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. Its `skeleton` job builds a project with no plugins (`node tools/build-project.js`), installs that project's own dev dependencies, and runs its tests and lint on Node.js and its tests on Deno. Its `integration-local` job runs the integration suite in `test-app/` against a test app started on the runner with production settings (`test-app/run-local.js`), once on Node.js and once on Deno. The deployed integration targets aren't in CI: the operator runs those. The devkit suite isn't in CI yet; run it by hand with `node devkit/run-tests.js`.
 
 Kixx Core
 ---------

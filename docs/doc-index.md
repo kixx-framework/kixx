@@ -46,7 +46,7 @@ The unit suite and the integration suite, and which one a test belongs in. Depen
 
 test-app/README.md
 
-Running the integration suite against a real target: the runner's target options, its environment variables and the deploy key, timeouts and path selection, and who runs it. Covers the probe, which runs shared conformance suites inside a running server: its protocol, mounting it, and using `createProbeClient` and `describeProbeSuite` in an integration test.
+Running the integration suite against a real target: `run-local.js`, which builds and starts the test app on this machine and runs the suite against it, the runner's target options, its environment variables and the deploy key, timeouts and path selection, and who runs it. Covers the probe, which runs shared conformance suites inside a running server: its protocol, mounting it, and using `createProbeClient` and `describeProbeSuite` in an integration test.
 
 ### Cross-Site Request Forgery Protection
 

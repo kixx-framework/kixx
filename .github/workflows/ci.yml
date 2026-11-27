@@ -1,6 +1,10 @@
-# Lints the repository, runs the unit suite on Node.js and Deno, and builds a
-# project from the skeleton to run its own tests and lint, for every push to
-# any branch and every pull request.
+# Lints the repository, runs the unit suite on Node.js and Deno, builds a
+# project from the skeleton to run its own tests and lint, and runs the
+# integration suite against a test app started on the runner, on Node.js and
+# on Deno, for every push to any branch and every pull request.
+#
+# The integration suite's deployed targets are not run here: the operator
+# runs those.
 #
 # Each job checks one thing, so a failed job names its cause. Add a new check
 # as a new job.
@@ -147,3 +151,42 @@ jobs:
             echo 'The drift test passed on an edited generated file.'
             exit 1
           fi
+
+  # The integration suite against a test app on this machine, with production
+  # settings (QA-8). run-local.js builds the test app, starts it, runs the
+  # suite, and stops it. It makes a deploy key for the run, so the job needs
+  # no secret. A Node.js run tests a Node.js server and a Deno run a Deno
+  # server. On a failure it prints the end of the server's log.
+  integration-local:
+    name: Integration tests on local ${{ matrix.runtime }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: Node.js
+            command: node test-app/run-local.js
+          - runtime: Deno
+            command: deno run -A test-app/run-local.js
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.8.x
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run the integration suite on ${{ matrix.runtime }}
+        run: ${{ matrix.command }}
