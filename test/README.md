@@ -56,6 +56,10 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
   - A fixture directory holds no `*.test.js` file: the runner would collect it. Its tests sit beside it.
   - Its generated files are never edited. Regenerate them after changing a manifest.
   - A unit test imports its registries, `virtual-hosts.js`, and `app/app.js`. It never imports an entry point or the Durable Object registry.
+- `test/skeleton/` tests the project skeleton (`devkit/templates/project/`) as a project. `test/skeleton/core-only-project.test.js` assembles the skeleton and core into a temporary directory, once for the file, and boots that project with no plugins: on the Node.js adapters in development and in production, and as a Worker against fakes. It publishes over HTTP with `test-app/test/test-helpers/publish.js`, the helper the integration suite uses. `test/skeleton/assembled-project-boot.js` assembles, loads, and boots:
+  - It loads every module of a boot from the assembled project with a dynamic `import()`, the project's own copy of core included. Never mix in a core module imported from this repository: two copies of a class don't share identity.
+  - It never loads an entry point or the Durable Object registry.
+  - It captures the project's log lines, because the skeleton's config logs at `DEBUG` and `INFO`.
 - Build any other fixture in a temporary directory (`fsp.mkdtemp`) and remove it afterwards, or resolve it from `import.meta.url`. Never read files through the working directory or from `reference-app/`.
 - `test-v6/` holds v6 tests that are not run. When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass.
 - The integration runner lives in `test-app/`. The v6 integration suites wait in `test-v6/test-app/`, and are not run, until they are rewritten for v7.
@@ -306,6 +310,7 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 `test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear. Its import walker (`extractSpecifiers()` and `readImportGraph()`) is in `tools/lib/import-graph.js`, shared with the project assembly:
 
 - **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. No core module outside `kixx/adapters/` imports an adapter: adapters are reached through generated registries and entry points. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
+- **Core's contents (CORE-1).** The top level of `kixx/` holds exactly the modules CORE-1 names, the operator-approved additions, and the modules leaving core. A new directory or file there fails until it is listed.
 - **The content compiler and the tooling entry.** Nothing reachable from `kixx/content-compiler/mod.js` or `kixx/tooling/mod.js` imports a `node:*` or `cloudflare:*` module or a package, or is a file under `kixx/adapters/`. That is what lets the compiler run in a command line tool, a server, and a Worker. The rules above imply it. This one follows the imports and prints the chain of files that leads to a break. The entries are listed in `PLATFORM_NEUTRAL_ENTRIES`.
 - **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules. Core's manifest (`kixx/plugin.json`) declares exactly the same files under `cloudflare.durableObjects`.
 - **What a unit test may reach.** Nothing that a file under `test/` imports, directly or through other modules, is a shell, imports a `cloudflare:*` module, or is one of the `CLOUDFLARE_ONLY_MODULES`. A failure prints the chain of files that leads there. No `*.test.js` file reaches an entry point in `ENTRY_POINTS`.
@@ -320,6 +325,7 @@ Its lists are constants at the top of the file:
 - `CLOUDFLARE_ONLY_MODULES`: the files that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry, for the fixture and the skeleton. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
 - `ENTRY_POINTS`: the entry points of the fixture and the skeleton. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS` or `SKELETON_ENTRY_POINT_IMPORTS`.
 - `PLATFORM_NEUTRAL_ENTRIES`: add the entry module of core code that must load on every runtime.
+- `CORE_1_MODULES` and `APPROVED_CORE_ADDITIONS`: with `LEAVING_CORE`, exactly what the top level of `kixx/` holds (CORE-1). A new top-level module needs the operator's approval and an entry in `APPROVED_CORE_ADDITIONS` with its reason.
 - `LEAVING_CORE` and `KNOWN_EDGES`: delete an entry when its module or edge is gone. The rule "lists no module or edge that is already gone" fails until you do.
 
 The rules follow static `import` and `export … from` statements. A dynamic `import()` isn't followed.

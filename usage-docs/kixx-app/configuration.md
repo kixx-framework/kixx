@@ -85,6 +85,15 @@ name and a section for each environment:
 }
 ```
 
+That is the whole config of an app with no plugins. Nothing else is
+needed to boot and serve pages: the store paths have
+[defaults](#data_directory-and-store-paths), development needs no
+environment variable and no secret, and every other environment needs only
+`DEPLOY_KEY_HASH` and a `BUILD_ID`. On Cloudflare, `cloudflare-config.jsonc`
+adds the Worker's name and the names and ids of the app's two KV
+namespaces; the binding names, the Durable Object class, and the cache
+times are defaults.
+
 `LOGGER.level` is `DEBUG`, `INFO`, `WARN`, `ERROR`, or `NONE`. A section
 with no `LOGGER` block, or a block with no `level`, logs at `INFO`. A level
 that isn't one of those names fails startup.

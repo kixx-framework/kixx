@@ -14,7 +14,9 @@ test-app/
 │   ├── probe-client.js           # On the laptop: createProbeClient(), describeProbeSuite()
 │   └── probe-suites.js           # The suites the probe can run
 └── test/                         # Integration tests (*.test.js)
-    └── test-helpers/target.js    # getBaseUrl(), getDeployKey()
+    └── test-helpers/
+        ├── target.js             # getBaseUrl(), getDeployKey()
+        └── publish.js            # publishContent(): a publish over HTTP
 ```
 
 ## Who Runs It
@@ -63,6 +65,8 @@ node test-app/run-tests.js --local --skip test-app/test/some-file.test.js
 The deploy key is a secret. Set it in the environment only. It has no command-line option, because a secret on the command line leaks into shell history and process listings, and it never goes in a tracked file. The runner never reads it.
 
 Tests read these through `test/test-helpers/target.js`: `getBaseUrl()` returns the base URL without a trailing slash, and `getDeployKey()` returns the key, or `null` when none is set.
+
+`test/test-helpers/publish.js` publishes content to a target through its Publishing API: `publishContent({ baseUrl, deployKey, files, pluginContentRoots, templateHelpers })` compiles the files, uploads the objects the store lacks, creates the Release, and assigns it to the build the target runs. The first assignment pre-stages the build with a made-up commit and code fingerprint; later ones are content-only publishes. The unit suite uses the same helper against a project booted on `127.0.0.1` (`test/skeleton/`).
 
 ## Writing an Integration Test
 

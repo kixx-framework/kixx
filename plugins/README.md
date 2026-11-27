@@ -182,7 +182,7 @@ Rules:
 
 - **Commit them.** A fresh clone boots with no generate step, and a plugin change shows up as a diff.
 - **Never edit one.** Change a manifest and regenerate.
-- **A test catches drift.** `test/fixtures/project.test.js` fails while the fixture's committed files differ from what the generator writes.
+- **A test catches drift.** `test/fixtures/project.test.js` fails while the fixture's committed files differ from what the generator writes. A project has the same test, `test/generated-files.test.js`, from the skeleton: it renders with the project's own `kixx/tooling/mod.js` and fails, naming the file, when a generated file is missing or differs.
 - **Generated JavaScript is not linted.** Each file turns lint off for itself with `/* eslint-disable */`.
 
 In this repository, regenerate a project with:

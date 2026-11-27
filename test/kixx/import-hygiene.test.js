@@ -41,6 +41,9 @@
 // and a tool loads it through the tooling entry. So nothing either entry
 // reaches imports a platform module, a package, or an adapter.
 //
+// CORE-1 names what core contains. The top level of kixx/ is pinned to
+// that list, the operator-approved additions, and LEAVING_CORE.
+//
 // When a section extracts a module or removes an edge, delete its entry
 // from LEAVING_CORE or KNOWN_EDGES. The rule "lists no module or edge that
 // is already gone" fails until you do.
@@ -65,6 +68,39 @@ const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'plugins/');
 // at ./kixx/, so its imports of ./kixx/ are resolved to core here.
 const SKELETON_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'devkit/templates/project/');
 const SKELETON_CORE_DIRECTORY = path.join(SKELETON_DIRECTORY, 'kixx/');
+
+// What core's directory holds, at its top level, is these three lists and
+// nothing else. A new entry fails "holds exactly the modules CORE-1 allows"
+// until it is listed with its reason.
+//
+// The modules CORE-1 names, with core's manifest.
+const CORE_1_MODULES = [
+    'adapters',
+    'assertions',
+    'config',
+    'content-addressable-store',
+    'content-compiler',
+    'context',
+    'errors',
+    'http-router',
+    'hyperview',
+    'key-value-store',
+    'logger',
+    'plugin.json',
+    'publishing-api',
+    'static-assets',
+    'utils',
+    'vendor',
+];
+
+// Modules the operator approved in core beyond CORE-1's list, and why
+// each is there.
+const APPROVED_CORE_ADDITIONS = {
+    'code-fingerprint': 'the publish gates compare a commit\'s code with a build\'s',
+    'deploy-key': 'authenticates the Publishing API',
+    'publish-gates': 'what the Publishing API requires of a build write',
+    'tooling': 'the generator and compiler entry a project runs from its own core',
+};
 
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
@@ -295,6 +331,16 @@ describe('import hygiene', ({ it }) => {
         });
 
         assertEqual('', formatViolations(violations));
+    });
+
+    it('holds exactly the modules CORE-1 allows', () => {
+        const allowed = [
+            ...CORE_1_MODULES,
+            ...Object.keys(APPROVED_CORE_ADDITIONS),
+            ...Object.keys(LEAVING_CORE),
+        ].sort();
+
+        assertEqual(allowed.join('\n'), fs.readdirSync(CORE_DIRECTORY).sort().join('\n'));
     });
 
     it('lists no module or edge that is already gone', () => {
