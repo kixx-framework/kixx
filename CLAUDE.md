@@ -75,6 +75,14 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 - It must run on Node.js and Deno.
 - Keep `package.json` and `deno.json` in sync, including the version. See `devkit/docs/packaging-and-runtimes.md`.
 
+**The project skeleton** is `devkit/templates/project/`: the hand-written files a new project is copied from. It is data to the devkit.
+
+- Its files import core as `./kixx/...`. Never import, run, or lint one in place.
+- It holds no `*.generated.js` file, no `example.env.secrets`, and no `kixx/` directory.
+- Code in its `app/` and its `virtual-hosts.js` imports no `node:*` or `cloudflare:*` module and no adapter. Its entry points import exactly what `plugins/README.md` lists.
+- Its config files hold only what has no default.
+- `test/kixx/import-hygiene.test.js` enforces the import rules. List a new entry point there.
+
 **Keep commands thin.** A command in `commands/` wires options and settings to one call into `devkit/lib/`, where the logic lives. Add a command by following `devkit/commands/README.md`. Throw `UsageError` for anything the user can fix (see `devkit/docs/error-handling.md`).
 
 **Update what depends on the devkit.**

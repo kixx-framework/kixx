@@ -1,0 +1,21 @@
+{
+    "name": "kixx-app",
+    // Only what has no default: the names and ids of this app's own
+    // Cloudflare resources.
+    "environments": {
+        "production": {
+            "LOGGER": { "level": "INFO" },
+            "WORKER": { "name": "replace-with-worker-name" },
+            "KEY_VALUE_STORE": {
+                "namespaceName": "replace-with-key-value-namespace-name",
+                "namespaceId": "replace-with-key-value-namespace-id"
+            },
+            "CONTENT_STORE": {
+                "kvNamespace": {
+                    "namespaceName": "replace-with-content-namespace-name",
+                    "namespaceId": "replace-with-content-namespace-id"
+                }
+            }
+        }
+    }
+}

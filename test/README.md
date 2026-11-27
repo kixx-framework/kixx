@@ -309,13 +309,15 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 - **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules. Core's manifest (`kixx/plugin.json`) declares exactly the same files under `cloudflare.durableObjects`.
 - **What a unit test may reach.** Nothing that a file under `test/` imports, directly or through other modules, is a shell, imports a `cloudflare:*` module, or is one of the `CLOUDFLARE_ONLY_MODULES`. A failure prints the chain of files that leads there. No `*.test.js` file reaches an entry point in `ENTRY_POINTS`.
 - **The fixture project.** Each of its entry points imports exactly the modules a thin shell may (`FIXTURE_ENTRY_POINT_IMPORTS`). Nothing its Cloudflare registry reaches imports a `node:*` module, and nothing its `routes.generated.js` or `virtual-hosts.js` reaches imports a `node:*` or `cloudflare:*` module.
+- **The project skeleton** (`devkit/templates/project/`). Each of its entry points imports exactly the modules a thin shell may (`SKELETON_ENTRY_POINT_IMPORTS`). Every import of `./kixx/` names a module core has. It holds no generated file and no `kixx/` directory.
+- **App and plugin code (CORE-5).** Nothing that the skeleton's `app/` files, its `virtual-hosts.js`, or a first-party plugin's files outside its `adapters/` import, directly or through other modules, is a `node:*` or `cloudflare:*` module or a core adapter. A plugin is covered as soon as its directory under `plugins/` has a `plugin.json`. Nothing enforces the rule inside a project.
 - **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module.
 
 Its lists are constants at the top of the file:
 
 - `DURABLE_OBJECT_SHELLS`: add the file of a new Durable Object class, and remove a deleted one. An entry that no longer imports a `cloudflare:*` module fails too. Declare the class in core's manifest in the same change.
-- `CLOUDFLARE_ONLY_MODULES`: the files under `test/` that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
-- `ENTRY_POINTS`: a project's entry points under `test/`. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS`.
+- `CLOUDFLARE_ONLY_MODULES`: the files that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry, for the fixture and the skeleton. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
+- `ENTRY_POINTS`: the entry points of the fixture and the skeleton. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS` or `SKELETON_ENTRY_POINT_IMPORTS`.
 - `PLATFORM_NEUTRAL_ENTRIES`: add the entry module of core code that must load on every runtime.
 - `LEAVING_CORE` and `KNOWN_EDGES`: delete an entry when its module or edge is gone. The rule "lists no module or edge that is already gone" fails until you do.
 

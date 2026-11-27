@@ -1,0 +1,7 @@
+{
+    "template": "page.html",
+    "page": {
+        "title": "Welcome to Kixx",
+        "description": "A new Kixx app."
+    }
+}

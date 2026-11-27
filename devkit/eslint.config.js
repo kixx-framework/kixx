@@ -328,6 +328,9 @@ export default [
             'node_modules/',
             'lib/vendor/',
             'test/fixtures/',
+            // The project skeleton. It is linted by its own config, inside a
+            // project built from it.
+            'templates/',
         ],
     },
     {

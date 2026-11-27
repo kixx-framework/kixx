@@ -10,6 +10,7 @@
             "kixx.js",
             "commands/",
             "lib/",
+            "templates/",
             "README.md",
             "LICENSE"
         ],

@@ -55,6 +55,7 @@ kixx/
 │   ├── kixx.js                  # CLI entry point
 │   ├── commands/                # Thin command wrappers: admin, app, cloudflare, dev, local
 │   ├── lib/                     # Command logic; vendored code in lib/vendor/
+│   ├── templates/project/       # The project skeleton a new project is copied from
 │   ├── docs/                    # Developer guides; start with doc-index.md
 │   ├── test/                    # Unit tests (most still parked in test-v6/devkit/)
 │   ├── run-tests.js             # Test runner (`node devkit/run-tests.js [path]`)
@@ -99,6 +100,8 @@ With it you can:
 - `kixx admin` - Create the first admin account and run data migrations.
 - `kixx app` - Publish your site's content to a running app.
 - `kixx cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
+
+`devkit/templates/project/` is the project skeleton: every hand-written file of a new project with no plugins. It ships inside the devkit, and holds no core and no generated file.
 
 See [devkit/README.md](devkit/README.md) to install it.
 

@@ -1,0 +1,12 @@
+{
+    "name": "kixx-app",
+    // Only what has no default. Core and each plugin supply the rest.
+    "environments": {
+        "development": {
+            "LOGGER": { "level": "DEBUG" }
+        },
+        "production": {
+            "LOGGER": { "level": "INFO" }
+        }
+    }
+}

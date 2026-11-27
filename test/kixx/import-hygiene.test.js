@@ -21,6 +21,17 @@
 // imports exactly what a thin shell may (PLUG-5). Its platform-neutral
 // files stay platform-neutral.
 //
+// The project skeleton in devkit/templates/project/ is what a new project
+// is copied from, so the same rules hold for it: its entry points are thin
+// shells no test reaches, its Cloudflare entry point is Cloudflare-only, and
+// every import of ./kixx/ names a module core really has. It holds no core
+// and no generated file of its own.
+//
+// Code in a project's app/, and a plugin's code outside its adapters/, never
+// imports a platform module or a platform adapter (CORE-5). The rule is
+// tested here, for the skeleton and for every first-party plugin. Nothing
+// enforces it inside a project.
+//
 // The probe in test-app/probe/ is bundled into every target the
 // integration suite runs on (QA-8). So everything it reaches imports by
 // relative path only, and nothing under test-app/ imports a cloudflare:*
@@ -46,6 +57,12 @@ const CORE_MANIFEST_FILE = path.join(CORE_DIRECTORY, 'plugin.json');
 const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
 const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
+const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'plugins/');
+
+// The project skeleton. It holds no core: a project built from it has core
+// at ./kixx/, so its imports of ./kixx/ are resolved to core here.
+const SKELETON_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'devkit/templates/project/');
+const SKELETON_CORE_DIRECTORY = path.join(SKELETON_DIRECTORY, 'kixx/');
 
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
@@ -71,21 +88,24 @@ const DURABLE_OBJECT_SHELLS = [
     'adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
 ];
 
-// Files under test/ that only Cloudflare can load, as repository-relative
-// paths: a Cloudflare entry point, and a generated registry that exports
-// Durable Object shells. No unit test may reach one. List a file here when a
-// fixture gains one.
+// Files that only Cloudflare can load, as repository-relative paths: a
+// Cloudflare entry point, and a generated registry that exports Durable
+// Object shells. No unit test may reach one. List a file here when a fixture
+// or a project template gains one.
 const CLOUDFLARE_ONLY_MODULES = [
     'test/fixtures/project/cloudflare-server.js',
     'test/fixtures/project/cloudflare-durable-objects.generated.js',
+    'devkit/templates/project/cloudflare-server.js',
 ];
 
-// Entry points under test/, as repository-relative paths. An entry point
-// starts a server when it loads, so no test file may import one: the
-// integration suite covers them. List a fixture's entry point here.
+// Entry points, as repository-relative paths. An entry point starts a server
+// when it loads, so no test file may import one: the integration suite
+// covers them. List the entry points of a fixture or a project template here.
 const ENTRY_POINTS = [
     'test/fixtures/project/node-server.js',
     'test/fixtures/project/cloudflare-server.js',
+    'devkit/templates/project/node-server.js',
+    'devkit/templates/project/cloudflare-server.js',
 ];
 
 const FIXTURE_PROJECT_DIRECTORY = path.join(TEST_DIRECTORY, 'fixtures/project/');
@@ -112,6 +132,26 @@ const FIXTURE_ENTRY_POINT_IMPORTS = {
     'cloudflare-server.js': [
         'cloudflare:workers',
         '../../../kixx/adapters/cloudflare/server/lib/cloudflare-worker.js',
+        './cloudflare-config.generated.js',
+        './cloudflare-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+        './cloudflare-durable-objects.generated.js',
+    ],
+};
+
+// The same lists for the skeleton, where core is at ./kixx/. They are the
+// entry points in plugins/README.md ("Entry Points").
+const SKELETON_ENTRY_POINT_IMPORTS = {
+    'node-server.js': [
+        './kixx/adapters/node/server/lib/node-server.js',
+        './node-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+    ],
+    'cloudflare-server.js': [
+        'cloudflare:workers',
+        './kixx/adapters/cloudflare/server/lib/cloudflare-worker.js',
         './cloudflare-config.generated.js',
         './cloudflare-registry.generated.js',
         './virtual-hosts.js',
@@ -370,6 +410,81 @@ describe('import hygiene', ({ it }) => {
         assertEqual(Object.keys(FIXTURE_ENTRY_POINT_IMPORTS).sort().join(','), listed.sort().join(','));
     });
 
+    it('keeps the skeleton\'s entry points to the imports of a thin shell', () => {
+        for (const [ fileName, expected ] of Object.entries(SKELETON_ENTRY_POINT_IMPORTS)) {
+            const source = fs.readFileSync(path.join(SKELETON_DIRECTORY, fileName), 'utf8');
+
+            assertEqual(expected.join('\n'), extractSpecifiers(source).join('\n'), fileName);
+        }
+
+        // Every listed entry point of the skeleton has a list above.
+        const listed = ENTRY_POINTS
+            .filter((entry) => isInsideDirectory(SKELETON_DIRECTORY, path.join(REPOSITORY_DIRECTORY, entry)))
+            .map((entry) => path.basename(entry));
+
+        assertEqual(Object.keys(SKELETON_ENTRY_POINT_IMPORTS).sort().join(','), listed.sort().join(','));
+    });
+
+    it('holds no generated file and no core in the skeleton', () => {
+        // The scaffold copies core in and runs the generator. A copy kept
+        // here would drift from what they write.
+        const found = fs.readdirSync(SKELETON_DIRECTORY, { recursive: true })
+            .map((name) => name.split(path.sep).join('/'))
+            .filter((name) => {
+                return name.endsWith('.generated.js')
+                    || path.posix.basename(name) === 'example.env.secrets'
+                    || name === 'kixx';
+            });
+
+        assertEqual('', found.join('\n'));
+    });
+
+    it('resolves every import of core from the skeleton', () => {
+        // A core module that moves breaks the build here, and not in a
+        // project generated from the skeleton.
+        const violations = listJavaScriptFiles(SKELETON_DIRECTORY).flatMap((filepath) => {
+            return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
+                .filter((specifier) => specifier.startsWith('.'))
+                .map((specifier) => ({ specifier, target: path.resolve(path.dirname(filepath), specifier) }))
+                .filter(({ target }) => isInsideDirectory(SKELETON_CORE_DIRECTORY, target))
+                .filter(({ target }) => !fs.existsSync(resolveSkeletonCore(target)))
+                .map(({ specifier }) => ({ file: toRepositoryPath(filepath), specifier }));
+        });
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('imports no platform module or adapter from the skeleton\'s app code or a plugin\'s platform-neutral code (CORE-5)', () => {
+        const violations = [];
+
+        const entryFiles = [
+            ...listJavaScriptFiles(path.join(SKELETON_DIRECTORY, 'app/')),
+            path.join(SKELETON_DIRECTORY, 'virtual-hosts.js'),
+            ...listPluginPlatformNeutralFiles(),
+        ];
+
+        // A generated file isn't in the skeleton, and isn't app code.
+        const stopAt = (filepath) => filepath.endsWith('.generated.js') && isInsideDirectory(SKELETON_DIRECTORY, filepath);
+
+        const resolve = (file, specifier) => resolveSkeletonCore(path.resolve(path.dirname(file), specifier));
+
+        for (const { file, specifiers, chain } of readImportGraph(entryFiles, stopAt, resolve)) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            if (isInsideCore(file) && toCorePath(file).startsWith('adapters/')) {
+                violations.push({ file: trail, specifier: '(an adapter)' });
+            }
+
+            for (const specifier of specifiers) {
+                if (specifier.startsWith('node:') || specifier.startsWith('cloudflare:')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
     it('keeps the fixture\'s platform-neutral files platform-neutral', () => {
         const violations = [];
 
@@ -445,7 +560,10 @@ function readCoreImports() {
 //
 // A file that `stopAt` accepts is recorded but never read, so its imports
 // aren't followed: it may import a file that doesn't exist here.
-function readImportGraph(entryFiles, stopAt = () => false) {
+//
+// `resolve` turns a relative specifier into an absolute path. The default
+// resolves it against the importing file's directory.
+function readImportGraph(entryFiles, stopAt = () => false, resolve = resolveSpecifier) {
     const graph = new Map();
     const queue = entryFiles.map((filepath) => [ filepath ]);
 
@@ -462,12 +580,44 @@ function readImportGraph(entryFiles, stopAt = () => false) {
 
         for (const specifier of specifiers) {
             if (specifier.startsWith('.')) {
-                queue.push([ ...chain, path.resolve(path.dirname(file), specifier) ]);
+                queue.push([ ...chain, resolve(file, specifier) ]);
             }
         }
     }
 
     return Array.from(graph.values());
+}
+
+function resolveSpecifier(file, specifier) {
+    return path.resolve(path.dirname(file), specifier);
+}
+
+// Maps a path inside the skeleton's ./kixx/, which the skeleton doesn't
+// hold, to the same path in core. Any other path is returned unchanged.
+function resolveSkeletonCore(filepath) {
+    if (!isInsideDirectory(SKELETON_CORE_DIRECTORY, filepath)) {
+        return filepath;
+    }
+
+    return path.join(CORE_DIRECTORY, path.relative(SKELETON_CORE_DIRECTORY, filepath));
+}
+
+// Every .js file of each first-party plugin outside its adapters/, as
+// absolute paths. A plugin is a directory under plugins/ with a plugin.json.
+function listPluginPlatformNeutralFiles() {
+    if (!fs.existsSync(PLUGINS_DIRECTORY)) {
+        return [];
+    }
+
+    return fs.readdirSync(PLUGINS_DIRECTORY, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(PLUGINS_DIRECTORY, entry.name))
+        .filter((directory) => fs.existsSync(path.join(directory, 'plugin.json')))
+        .flatMap((directory) => {
+            return listJavaScriptFiles(directory).filter((filepath) => {
+                return !isInsideDirectory(path.join(directory, 'adapters/'), filepath);
+            });
+        });
 }
 
 // Absolute paths of every .js file under the directory, at any depth.
