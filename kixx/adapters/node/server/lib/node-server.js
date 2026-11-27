@@ -209,6 +209,12 @@ export async function startNodeServer(options) {
         let isHeadRequest = false;
         let request;
 
+        // A drain closes idle connections once, when it begins. The
+        // connection of a request in flight at that moment becomes idle only
+        // when its response is done, so release it then. Without this the
+        // exit waits for the client, or the keep-alive timeout, to let go.
+        nodeResponse.once('close', releaseConnectionsWhileDraining);
+
         try {
             request = new ServerRequest(nodeRequest, { trustProxy });
 
@@ -229,6 +235,7 @@ export async function startNodeServer(options) {
             if (!request && cause.name === 'BadRequestError') {
                 logger.warn('bad request target', { url: nodeRequest.url });
                 trace.error({ pathname: nodeRequest.url });
+                closeConnectionWhileShuttingDown(nodeResponse);
                 sendBadRequest(nodeResponse, nodeRequest.method === 'HEAD');
                 return;
             }
@@ -249,6 +256,9 @@ export async function startNodeServer(options) {
             nodeResponse.setHeader('content-type', 'text/plain; charset=utf-8');
             // This response bypasses the router, which otherwise enforces the cache policy.
             nodeResponse.setHeader('cache-control', 'no-store');
+            // The shutdown below always follows this response, whether or
+            // not the router has begun one already.
+            nodeResponse.setHeader('connection', 'close');
 
             if (isHeadRequest) {
                 nodeResponse.end();
@@ -279,6 +289,7 @@ export async function startNodeServer(options) {
         }
 
         nodeResponse.statusCode = response.status;
+        closeConnectionWhileShuttingDown(nodeResponse);
 
         const { body } = response;
 
@@ -320,6 +331,25 @@ export async function startNodeServer(options) {
     const nodeServer = http.createServer(handleRequest);
 
     let isShuttingDown = false;
+
+    // Tells the client not to reuse the connection, so the server closes it
+    // as soon as the response is written and a drain can finish. A response
+    // written before a shutdown begins keeps its connection alive.
+    function closeConnectionWhileShuttingDown(nodeResponse) {
+        if (isShuttingDown && !nodeResponse.headersSent) {
+            nodeResponse.setHeader('connection', 'close');
+        }
+    }
+
+    // Covers a response whose headers were already sent when the drain
+    // began, which can't carry `Connection: close`. The connection is
+    // already idle when the response's 'close' event fires (Node.js 24 and
+    // Deno 2.9), so the call needs no deferral.
+    function releaseConnectionsWhileDraining() {
+        if (isShuttingDown) {
+            nodeServer.closeIdleConnections();
+        }
+    }
 
     // Shut down the process: stop accepting new connections, then exit.
     //
@@ -381,7 +411,8 @@ export async function startNodeServer(options) {
             nodeServer.closeAllConnections();
         } else {
             // Graceful drain: release only idle keep-alive sockets. Sockets serving
-            // a request keep draining until their request finishes.
+            // a request keep draining until their request finishes, and are
+            // released as each response closes (see handleRequest()).
             nodeServer.closeIdleConnections();
         }
     }

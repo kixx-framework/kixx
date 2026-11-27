@@ -428,7 +428,7 @@ Those are all the imports each may have. `cloudflare-config.generated.js` is wri
 
 The server logic lives in the two core modules, which take every platform service as an argument and are unit tested:
 
-- `startNodeServer()` parses the command line, reads the dotenv files and `node-config.jsonc`, boots, listens, runs the `start()` hooks, and shuts down on SIGTERM (drain) or SIGINT (at once).
+- `startNodeServer()` parses the command line, reads the dotenv files and `node-config.jsonc`, boots, listens, runs the `start()` hooks, and shuts down on SIGTERM (drain) or SIGINT (at once). A drain lets each request in flight finish, answers it with `Connection: close`, and exits as soon as the last response is written; a 10-second timer forces the exit.
 - `createWorker()` boots when the module loads and returns `{ fetch }`. It builds each request's context from that request's environment.
 
 Unit tests never import an entry point. `test/fixtures/project/` holds a small project whose registries the unit suite boots on both targets.

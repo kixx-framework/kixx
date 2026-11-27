@@ -69,9 +69,6 @@ const WORKING_TREE_REFUSED_MESSAGE = 'CONTENT_STORE.workingTree can be true only
 // so it answers 503. test/fixtures/project-pages.test.js assigns one.
 const NO_RELEASE_CODE = 'BuildNotServable';
 
-// Asks the server to close the connection after the response, so a drain that
-// follows finds no connection open on either runtime.
-const CLOSE_CONNECTION = { connection: 'close' };
 
 
 function readManifest(fileName) {
@@ -574,7 +571,7 @@ describe('fixture project', ({ describe }) => {
             booted = await bootOnNode();
 
             // One request, so the stores have been used when they close.
-            const response = await fetch(`${ booted.origin }/visits`, { headers: CLOSE_CONNECTION });
+            const response = await fetch(`${ booted.origin }/visits`);
             await response.text();
 
             // SIGTERM is the deploy path: drain, stop, close, exit.
