@@ -69,7 +69,7 @@ export function splitPositionals(declared, positionals, options) {
         const { name } = required[i];
 
         if (i >= positionals.length) {
-            const hint = commandLabel ? ` Run "kixx ${ commandLabel } --help" for usage.` : '';
+            const hint = commandLabel ? ` Run "kixx-dev ${ commandLabel } --help" for usage.` : '';
             throw new UsageError(`Missing required argument <${ name }>.${ hint }`);
         }
 

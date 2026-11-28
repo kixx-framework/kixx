@@ -1,7 +1,7 @@
 Kixx Devkit Commands
 ====================
 
-How the CLI in `devkit/kixx.js` discovers, configures, and runs commands, and what you
+How the CLI in `devkit/kixx-dev.js` discovers, configures, and runs commands, and what you
 need to write to add a new one.
 
 
@@ -30,7 +30,7 @@ commands/
         create-worker.js
 ```
 
-`kixx.js` passes the map from `commands/index.js` to
+`kixx-dev.js` passes the map from `commands/index.js` to
 `lib/command-registry.js`, which lists and resolves commands from it. The CLI
 never reads the `commands/` directory. Static imports keep every command in the
 module graph, which is what lets the CLI run when installed from JSR, where
@@ -222,10 +222,10 @@ namespace in `commands/index.js` and add it to the default-exported map.
 Then verify:
 
 ```
-node devkit/kixx.js                                  # the command lists
-node devkit/kixx.js <command> --help                 # the sub-command lists
-node devkit/kixx.js <command> <subcommand> --help
-node devkit/kixx.js <command> <subcommand>           # the real thing
+node devkit/kixx-dev.js                                  # the command lists
+node devkit/kixx-dev.js <command> --help                 # the sub-command lists
+node devkit/kixx-dev.js <command> <subcommand> --help
+node devkit/kixx-dev.js <command> <subcommand>           # the real thing
 node devkit/run-tests.js devkit/test/commands
 node devkit/run-linter.js devkit
 ```

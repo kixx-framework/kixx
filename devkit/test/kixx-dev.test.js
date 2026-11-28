@@ -9,9 +9,9 @@ import { assert, assertEqual, assertMatches } from '../lib/vendor/kixx-assert/mo
 import manifest from '../deno.json' with { type: 'json' };
 
 
-const ENTRY_POINT = fileURLToPath(new URL('../kixx.js', import.meta.url));
+const ENTRY_POINT = fileURLToPath(new URL('../kixx-dev.js', import.meta.url));
 
-// The permission set an installed `kixx` gets on Deno, so these tests also
+// The permission set an installed `kixx-dev` gets on Deno, so these tests also
 // fail if the entry point needs more than users grant it.
 const DENO_RUN_ARGS = [ 'run', '-RWNE', '--allow-sys=homedir', '--allow-run', '--no-prompt' ];
 
@@ -20,7 +20,7 @@ const DENO_RUN_ARGS = [ 'run', '-RWNE', '--allow-sys=homedir', '--allow-run', '-
 const TIMEOUT = 10000;
 
 
-describe('kixx.js entry point', ({ it }) => {
+describe('kixx-dev.js entry point', ({ it }) => {
 
     it('prints the deno.json version for --version', async () => {
         const { code, stdout } = await runEntryPoint([ '--version' ]);
@@ -40,7 +40,7 @@ describe('kixx.js entry point', ({ it }) => {
         const { code, stdout } = await runEntryPoint([ '--help' ]);
 
         assertEqual(0, code);
-        assertMatches(/^Usage: kixx <command>/, stdout);
+        assertMatches(/^Usage: kixx-dev <command>/, stdout);
         assertMatches(/--version/, stdout);
         assertMatches(/^ {2}admin {2}/m, stdout);
         assertMatches(/^ {2}app {2}/m, stdout);
@@ -80,7 +80,7 @@ describe('kixx.js entry point', ({ it }) => {
 
         assertEqual(1, code);
         assertMatches('--yes', stderr);
-        assertMatches('kixx admin run-migration --help', stderr);
+        assertMatches('kixx-dev admin run-migration --help', stderr);
     }, { timeout: TIMEOUT });
 
     it('lists the cloudflare sub-commands in declaration order', async () => {
@@ -123,7 +123,7 @@ describe('kixx.js entry point', ({ it }) => {
         const { code, stdout } = await runEntryPoint([ 'local', 'create', '--help' ]);
 
         assertEqual(0, code);
-        assertMatches('Usage: kixx local create [options] <name> [directory]', stdout);
+        assertMatches('Usage: kixx-dev local create [options] <name> [directory]', stdout);
         assertMatches(/^Arguments:\n {2}name {7}Instance name/m, stdout);
         assertMatches(/^ {2}directory {2}Application directory/m, stdout);
         assertMatches(/^ {2}-t, --target <string> {2}/m, stdout);
@@ -151,11 +151,11 @@ describe('kixx.js entry point', ({ it }) => {
 
         assertEqual(1, code);
         assertMatches('--force', stderr);
-        assertMatches('kixx cloudflare deploy-version --help', stderr);
+        assertMatches('kixx-dev cloudflare deploy-version --help', stderr);
     }, { timeout: TIMEOUT });
 
     it('names the admin credential variable when stdin is not a terminal', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
 
         try {
             await fsp.mkdir(path.join(directory, '.kixx'));
@@ -185,12 +185,12 @@ describe('kixx.js entry point', ({ it }) => {
         const { code, stdout } = await runEntryPoint([ 'dev', 'start', '--help' ]);
 
         assertEqual(0, code);
-        assertMatches('Usage: kixx dev start [options] [directory]', stdout);
+        assertMatches('Usage: kixx-dev dev start [options] [directory]', stdout);
         assertMatches(/^ {2}directory {2}Application directory/m, stdout);
     }, { timeout: TIMEOUT });
 
     it('loads project config from the directory argument', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
 
         try {
             await fsp.mkdir(path.join(directory, '.kixx'));
@@ -257,7 +257,7 @@ describe('kixx.js entry point', ({ it }) => {
         const optionLines = optionsSection.split('\n').slice(1);
         const descriptions = [
             'Show this help',
-            'Print the kixx version',
+            'Print the kixx-dev version',
             'Required application environment',
             'Override the configured Admin API origin',
         ];
@@ -282,12 +282,12 @@ describe('kixx.js entry point', ({ it }) => {
 
         assertEqual(1, code);
         assertMatches('--nope', stderr);
-        assertMatches('kixx admin gen-secure-token --help', stderr);
+        assertMatches('kixx-dev admin gen-secure-token --help', stderr);
         assert(!stderr.includes('Failed to run command'), 'printed as a crash');
     }, { timeout: TIMEOUT });
 
     it('shows cloudflare help in a project with a malformed config file', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-entry-'));
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
 
         try {
             await fsp.mkdir(path.join(directory, '.kixx'));
@@ -298,7 +298,7 @@ describe('kixx.js entry point', ({ it }) => {
             const unknown = await runEntryPoint([ 'cloudflare', 'missing' ], { cwd: directory });
 
             assertEqual(0, help.code);
-            assertMatches('Usage: kixx cloudflare <subcommand>', help.stdout);
+            assertMatches('Usage: kixx-dev cloudflare <subcommand>', help.stdout);
             assertEqual(1, unknown.code);
             assertMatches('"cloudflare missing" sub command does not exist', unknown.stdout);
         } finally {

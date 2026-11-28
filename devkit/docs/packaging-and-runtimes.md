@@ -1,12 +1,12 @@
 Packaging and Runtimes
 ======================
 
-`kixx-devkit` ships to two registries and runs on two runtimes from one source tree:
+`kixx-dev` ships to two registries and runs on two runtimes from one source tree:
 
-- npm as `kixx-devkit` (`package.json`), on Node.js 24+.
-- JSR as `@kixx/devkit` (`deno.json`), on Deno 2.8+.
+- npm as `kixx-dev` (`package.json`), on Node.js 24+.
+- JSR as `@kixx/dev` (`deno.json`), on Deno 2.8+.
 
-Both install the `kixx` executable from `kixx.js`.
+Both install the `kixx-dev` executable from `kixx-dev.js`.
 
 Stand-alone Package
 -------------------
@@ -22,12 +22,16 @@ The Two Manifests
 
 `package.json` and `deno.json` must agree. `test/manifests.test.js` checks that they:
 
-- have the same `version`; `kixx --version` reads it from `deno.json`.
-- map `kixx` to `./kixx.js`.
+- are named `kixx-dev` and `@kixx/dev`.
+- have the same `version`; `kixx-dev --version` reads it from `deno.json`, so npm's `files` lists `deno.json`.
+- map the executable to the entry point: `bin["kixx-dev"]` in `package.json` and `exports["."]` in `deno.json` are both `./kixx-dev.js`. The default export is what lets `deno run jsr:@kixx/dev` resolve.
+- list `kixx-dev.js` in the published files.
 - declare no runtime dependencies (`dependencies` / `imports`).
 - leave `test/` out of the published files.
 
-When you add a top-level file or directory that must ship, add it to both `package.json` `files` and `deno.json` `publish.include`. Bump the version in both.
+When you add a top-level file or directory that must ship, add it to both `package.json` `files` and `deno.json` `publish.include`.
+
+Core, plugins, and the CLI share one version. `test/conformance/versions.test.js` checks that `package.json`, `deno.json`, and core's `kixx/plugin.json` hold the same one, so bump all three together. It also checks that each devkit `devDependencies` version equals the root `package.json`'s: the devkit has no `node_modules/` of its own, and its runners resolve `kixx-test` and `kixx-linting` from the root's.
 
 Node.js and Deno Differences
 ----------------------------
@@ -37,7 +41,7 @@ Write to the `node:` APIs; Deno supports them. Branch on the runtime only where 
 - `lib/devserver/app-process.js` spawns the app with `deno run -A` under Deno.
 - `lib/devserver/dev-server.js` deduplicates Deno's multiple watch events per save.
 
-Run the suite on both runtimes before a release:
+CI runs the suite on both runtimes on every push (`devkit-test-node`, `devkit-test-deno`). To run it yourself:
 
 ```
 node devkit/run-tests.js
@@ -47,9 +51,13 @@ deno run -A devkit/run-tests.js
 Deno Permissions
 ----------------
 
-The JSR install grants `-RWNE --allow-sys=homedir --allow-run`. The README explains each flag. If a change needs a new permission (a new environment variable is fine under `-E`; FFI or broader `--allow-sys` is not), update the install and upgrade commands in `README.md`, the `kixx` task in `deno.json`, and the permission list in the README. Prefer designs that need no new permission.
+The JSR install grants `-RWNE --allow-sys=homedir --allow-run`. The README explains each flag. If a change needs a new permission (a new environment variable is fine under `-E`; FFI or broader `--allow-sys` is not), update the install and upgrade commands in `README.md`, the `kixx-dev` task in `deno.json`, and the permission list in the README. Prefer designs that need no new permission.
 
-Only `kixx dev start`, `kixx local seed`, and `kixx local start` run project code (the app's `node-server.js`, in a child process). Every other command reads project files (such as `cloudflare-config.jsonc`) as data. Keep it that way.
+`test/kixx-dev.test.js` runs the entry point on Deno with exactly these permissions, so it fails if the CLI needs more.
+
+Only `kixx-dev dev start`, `kixx-dev local seed`, and `kixx-dev local start` run project code (the app's `node-server.js`, in a child process). Every other command reads project files (such as `cloudflare-config.jsonc`) as data. Keep it that way.
+
+`--allow-run` covers two things: the local `git` binary, which no code runs yet, and that app child process. `node:child_process` is imported only by `lib/devserver/app-process.js`, and `test/import-hygiene.test.js` pins the list. A new module that starts a process must be added there on purpose.
 
 Test Seams
 ----------

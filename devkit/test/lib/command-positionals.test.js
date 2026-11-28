@@ -63,7 +63,7 @@ describe('command-positionals', ({ describe }) => {
             assert(error, 'expected an error');
             assertEqual('UsageError', error.name);
             assertEqual(
-                'Missing required argument <name>. Run "kixx local create --help" for usage.',
+                'Missing required argument <name>. Run "kixx-dev local create --help" for usage.',
                 error.message,
             );
         });

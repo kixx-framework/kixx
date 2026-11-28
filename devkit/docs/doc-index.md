@@ -4,7 +4,7 @@ Paths are relative to `devkit/`.
 
 docs/architecture.md
 
-How `kixx.js`, `commands/`, and `lib/` divide the work; a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
+How `kixx-dev.js`, `commands/`, and `lib/` divide the work; a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
 
 ### Commands
 

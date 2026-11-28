@@ -7,12 +7,12 @@ Layers
 ------
 
 ```
-kixx.js       parse argv, load settings, check required keys, run the command, print errors
+kixx-dev.js   parse argv, load settings, check required keys, run the command, print errors
 commands/     wiring: parsed options + settings -> one library call -> output
 lib/          all real logic, grouped by subsystem
 ```
 
-`kixx.js` owns help rendering, the single directory positional, settings loading, and error printing. A command module stays thin; logic shared or worth testing on its own goes in `lib/`. See `commands/README.md`.
+`kixx-dev.js` owns help rendering, the single directory positional, settings loading, and error printing. A command module stays thin; logic shared or worth testing on its own goes in `lib/`. See `commands/README.md`.
 
 `lib/` Subsystems
 -----------------

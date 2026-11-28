@@ -94,7 +94,7 @@ function renderHelp(sections) {
     }
 
     if (usage) {
-        lines.push(`Usage: kixx ${ usage }`);
+        lines.push(`Usage: kixx-dev ${ usage }`);
         lines.push('');
     }
 
@@ -131,7 +131,7 @@ function renderHelp(sections) {
             version: {
                 type: 'boolean',
                 short: 'v',
-                description: 'Print the kixx version',
+                description: 'Print the kixx-dev version',
             },
         };
 
@@ -345,7 +345,7 @@ async function main() {
         });
     } catch (cause) {
         // Unknown or malformed flags are operator mistakes, not crashes.
-        throw new UsageError(`${ cause.message }\nRun "kixx ${ commandName } ${ subCommandName } --help" for usage.`, { cause });
+        throw new UsageError(`${ cause.message }\nRun "kixx-dev ${ commandName } ${ subCommandName } --help" for usage.`, { cause });
     }
 
     const { values: positionalValues, directory } = splitPositionals(

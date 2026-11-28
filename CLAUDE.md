@@ -53,7 +53,7 @@ node run-linter.js test-app        # lint the integration suite
 Kixx Devkit
 -----------
 
-Notes for developers and agents working on the Kixx Devkit (`devkit/`, the `kixx` CLI).
+Notes for developers and agents working on the Kixx Devkit (`devkit/`, the `kixx-dev` CLI).
 
 **Read the docs first.** Before changing code in `devkit/`, read `devkit/docs/doc-index.md`. It lists every guide and reference with a summary. Read the ones relevant to your task.
 
@@ -64,17 +64,18 @@ node devkit/run-tests.js                     # full suite on Node.js
 deno run -A devkit/run-tests.js              # full suite on Deno
 node devkit/run-tests.js devkit/test/lib     # a subtree (must be inside devkit/test/)
 node devkit/run-linter.js devkit             # lint
-node devkit/kixx.js <command> <subcommand>   # run the CLI from source
+node devkit/kixx-dev.js <command> <subcommand>   # run the CLI from source
 ```
 
-Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js` runs them. The rest come back with their sections.
+Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js` runs them. The rest come back with their sections. CI lints the devkit and runs its suite on Node.js and Deno (`devkit-lint`, `devkit-test-node`, `devkit-test-deno`).
 
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 
 - Never import from outside `devkit/`. Only `devkit/test/conformance/` may read core (`kixx/`).
 - No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` by following `docs/vendored-code.md` (and never edit vendored code in place).
 - It must run on Node.js and Deno.
-- Keep `package.json` and `deno.json` in sync, including the version. See `devkit/docs/packaging-and-runtimes.md`.
+- Keep `package.json` and `deno.json` in sync, including the version, which equals `kixx/plugin.json`'s. See `devkit/docs/packaging-and-runtimes.md`.
+- `node:child_process` is imported only by the modules listed in `devkit/test/import-hygiene.test.js`.
 
 **The project skeleton** is `devkit/templates/project/`: the hand-written files a new project is copied from. It is data to the devkit.
 
@@ -90,7 +91,7 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 
 - Ported core modules: see "v6 material" above.
 - When a command's behavior or options change, update its page in `usage-docs/kixx-devkit/` and the command list in `devkit/README.md`.
-- A change needing a new Deno permission must update the install commands in `devkit/README.md` and the `kixx` task in `devkit/deno.json`.
+- A change needing a new Deno permission must update the install commands in `devkit/README.md` and the `kixx-dev` task in `devkit/deno.json`.
 
 Commit Messages
 ---------------

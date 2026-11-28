@@ -1,13 +1,13 @@
 {
-    "name": "@kixx/devkit",
-    "version": "0.2.0",
+    "name": "@kixx/dev",
+    "version": "7.0.0-alpha.0",
     "license": "MIT",
     "exports": {
-        "./kixx": "./kixx.js"
+        ".": "./kixx-dev.js"
     },
     "publish": {
         "include": [
-            "kixx.js",
+            "kixx-dev.js",
             "commands/",
             "lib/",
             "templates/",
@@ -22,6 +22,6 @@
     "tasks": {
         "test": "deno run -A run-tests.js",
         "lint": "deno run -A run-linter.js",
-        "kixx": "deno run -RWNE --allow-sys=homedir --allow-run kixx.js"
+        "kixx-dev": "deno run -RWNE --allow-sys=homedir --allow-run kixx-dev.js"
     }
 }

@@ -17,7 +17,7 @@ const COMMANDS_DIRECTORY = fileURLToPath(new URL('../../commands/', import.meta.
 
 const OPTION_TYPES = [ 'string', 'boolean' ];
 
-// kixx.js handles these before a sub-command runs, so a sub-command which
+// kixx-dev.js handles these before a sub-command runs, so a sub-command which
 // declared them would never see them.
 const RESERVED_FLAG_NAMES = [ 'help', 'version' ];
 const RESERVED_SHORT_FLAGS = [ 'h', 'v' ];

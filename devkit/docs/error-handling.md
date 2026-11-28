@@ -10,7 +10,7 @@ Two Categories
 
 Throw `UsageError` (`lib/usage-error.js`) for anything the operator can fix: a bad flag, a missing setting, invalid `cloudflare-config.jsonc`, a missing Cloudflare resource, an expired token.
 
-`kixx.js` prints the message alone, wrapped at 80 columns, with no stack trace, and exits `1`. So the message is the whole user interface:
+`kixx-dev.js` prints the message alone, wrapped at 80 columns, with no stack trace, and exits `1`. So the message is the whole user interface:
 
 - Say what was wrong and how to fix it.
 - Name the file and dotted key path the value belongs in (`app.environments.<environment>.publishingToken in .kixx/secrets.json`).
@@ -20,7 +20,7 @@ Subclass `UsageError` when callers need to branch on the case. `UnsupportedServe
 
 ### Defects: everything else
 
-Bugs, violated invariants, and unexpected remote responses propagate. `kixx.js` prints `Failed to run command:` with the full error and stack, and exits `1`. Do not catch and swallow them, and do not turn them into `UsageError`; the stack trace is what the developer needs.
+Bugs, violated invariants, and unexpected remote responses propagate. `kixx-dev.js` prints `Failed to run command:` with the full error and stack, and exits `1`. Do not catch and swallow them, and do not turn them into `UsageError`; the stack trace is what the developer needs.
 
 Assertions
 ----------
@@ -52,11 +52,11 @@ Each API client throws its own error class, carrying protocol details as propert
 
 `status` is `null` for a network failure. The Admin and Publishing modules export `create*ApiError()` factories that map a server JSON:API error `code` to a typed subclass (`ReleaseNotFoundError`, `MigrationConcurrencyError`, ...). Add a subclass and a map entry when a command needs to react to a new server code.
 
-All these classes set `name` and `code` to the class name. Branch with `error.name === 'CloudflareApiError'` or `error.code`; reserve `instanceof` for the `UsageError` check in `kixx.js`, which must also match subclasses.
+All these classes set `name` and `code` to the class name. Branch with `error.name === 'CloudflareApiError'` or `error.code`; reserve `instanceof` for the `UsageError` check in `kixx-dev.js`, which must also match subclasses.
 
 ### Cloudflare authentication
 
-`kixx.js` passes every command error through `toCloudflareAuthUsageError()` (`lib/cloudflare/cloudflare-auth-guidance.js`). A `CloudflareApiError` with a `tokenStatus` becomes a `UsageError` telling the operator whether the token is invalid or lacks a permission, and which secrets files to check. Commands do not handle auth failures themselves.
+`kixx-dev.js` passes every command error through `toCloudflareAuthUsageError()` (`lib/cloudflare/cloudflare-auth-guidance.js`). A `CloudflareApiError` with a `tokenStatus` becomes a `UsageError` telling the operator whether the token is invalid or lacks a permission, and which secrets files to check. Commands do not handle auth failures themselves.
 
 ### Retries
 

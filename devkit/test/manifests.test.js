@@ -11,9 +11,20 @@ describe('package manifests', ({ it }) => {
         assertEqual(denoManifest.version, npmManifest.version, 'package.json version');
     });
 
-    it('install the kixx executable from kixx.js on both registries', () => {
-        assertEqual('./kixx.js', npmManifest.bin?.kixx, 'package.json bin.kixx');
-        assertEqual('./kixx.js', denoManifest.exports?.['./kixx'], 'deno.json exports["./kixx"]');
+    it('install the kixx-dev executable from kixx-dev.js on both registries', () => {
+        assertEqual('kixx-dev', npmManifest.name, 'package.json name');
+        assertEqual('@kixx/dev', denoManifest.name, 'deno.json name');
+        assertEqual('./kixx-dev.js', npmManifest.bin?.['kixx-dev'], 'package.json bin["kixx-dev"]');
+        assertEqual(1, Object.keys(npmManifest.bin ?? {}).length, 'package.json bin has one executable');
+        // The default export is what `deno run jsr:@kixx/dev` resolves.
+        assertEqual('./kixx-dev.js', denoManifest.exports?.['.'], 'deno.json exports["."]');
+    });
+
+    it('ship the entry point in both published file lists', () => {
+        assert(npmManifest.files?.includes('kixx-dev.js'), 'package.json files has kixx-dev.js');
+        assert(denoManifest.publish?.include?.includes('kixx-dev.js'), 'deno.json publish.include has kixx-dev.js');
+        // --version reads deno.json, so npm must ship it too.
+        assert(npmManifest.files?.includes('deno.json'), 'package.json files has deno.json');
     });
 
     // Third-party runtime code is vendored under lib/vendor/. Dev tools come
