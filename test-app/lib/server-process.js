@@ -107,18 +107,25 @@ export async function isAnswering(options) {
     const controller = new AbortController();
     const timer = clock.setTimeout(() => controller.abort(), timeoutMs);
 
+    let response;
+
     try {
-        const response = await sendRequest(url, { redirect: 'manual', signal: controller.signal });
-
-        // Let go of the connection. The body is of no interest.
-        await response?.body?.cancel();
-
-        return true;
+        response = await sendRequest(url, { redirect: 'manual', signal: controller.signal });
     } catch {
         return false;
     } finally {
         clock.clearTimeout(timer);
     }
+
+    // Let go of the connection. The body is of no interest, and a failure to
+    // cancel it doesn't undo the answer.
+    try {
+        await response?.body?.cancel();
+    } catch {
+        // Ignore it.
+    }
+
+    return true;
 }
 
 /**
@@ -306,8 +313,10 @@ export function startServerProcess(options) {
             // eslint-disable-next-line no-await-in-loop
             if (await isAnswering({ fetch: sendRequest, url, clock })) {
                 // Something else on the port could have answered while the
-                // process was failing to bind it.
-                if (!exit) {
+                // process was failing to bind it. Give a failing process one
+                // interval to exit before trusting the answer.
+                // eslint-disable-next-line no-await-in-loop
+                if (!exit && !await waitOrExit(intervalMs)) {
                     return;
                 }
             } else if (!exit && clock.now() >= deadline) {

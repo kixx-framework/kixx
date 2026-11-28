@@ -8,8 +8,9 @@
  * unit suite runs it with fakes and starts no process.
  *
  * The deploy key and its hash are secrets. Each goes to one child, through
- * its environment only. Neither is ever on a command line, and every printed
- * line passes through a filter that would blank them.
+ * its environment only. Neither is ever on a command line, and every line
+ * this module prints passes through a filter that would blank them. The
+ * runner's own output goes straight to the terminal, unfiltered.
  */
 import path from 'node:path';
 

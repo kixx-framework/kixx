@@ -69,6 +69,23 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
             assertEqual(1, cancelled);
         });
 
+        it('counts a response whose body fails to cancel', async () => {
+            const fakeFetch = createFakeFetch(() => {
+                return {
+                    status: 200,
+                    body: {
+                        async cancel() {
+                            throw new Error('stream error');
+                        },
+                    },
+                };
+            });
+
+            const answered = await isAnswering({ fetch: fakeFetch, url: 'http://localhost:1/', clock: createFakeClock() });
+
+            assertEqual(true, answered);
+        });
+
         it('is false for a refused connection', async () => {
             const fakeFetch = createFakeFetch(() => undefined);
 
@@ -176,7 +193,8 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
 
             assertEqual(4, fakeFetch.calls.length);
             assertEqual('http://localhost:2026/', fakeFetch.calls[0].url);
-            assertEqual(300, clock.now() - started);
+            // Three intervals of refusals, then one of grace after the answer.
+            assertEqual(400, clock.now() - started);
             assertEqual(0, child.signals.length);
         });
 
@@ -229,6 +247,17 @@ describe('test-app/lib/server-process.js', ({ describe }) => {
             });
 
             const caught = await catchAsyncError(() => server.waitUntilReady());
+
+            assertEqual('ServerExitedEarly', caught.code);
+        });
+
+        it('does not trust an answer when the process exits within an interval of it', async () => {
+            const clock = createFakeClock();
+            const { server, child } = start({ fetch: createFakeFetch(() => ({ status: 200 })), clock });
+
+            clock.setTimeout(() => child.exit(1), 50);
+
+            const caught = await catchAsyncError(() => server.waitUntilReady({ intervalMs: 100 }));
 
             assertEqual('ServerExitedEarly', caught.code);
         });

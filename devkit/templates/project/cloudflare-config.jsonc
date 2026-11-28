@@ -4,7 +4,6 @@
     // Cloudflare resources.
     "environments": {
         "production": {
-            "LOGGER": { "level": "INFO" },
             "WORKER": { "name": "replace-with-worker-name" },
             "KEY_VALUE_STORE": {
                 "namespaceName": "replace-with-key-value-namespace-name",

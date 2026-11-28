@@ -79,6 +79,12 @@ describe('bootApplication', ({ it, describe }) => {
     });
 
     // CORE-2: boot needs no LOGGER block.
+    it('boots when BUILD_ID is empty', () => {
+        const { appContext } = boot({ env: { BUILD_ID: '' } });
+
+        assertEqual(undefined, appContext.runtime.build.id);
+    });
+
     it('returns a logger at INFO when the config has no LOGGER block', () => {
         const config = makeConfig();
         delete config.env.LOGGER;

@@ -90,8 +90,10 @@ export function bootApplication(options) {
 
     // BUILD_ID identifies a single deploy rather than an environment, so it stays
     // an environment variable while the application name and log level do not.
+    // An empty BUILD_ID (`BUILD_ID=` in a dotenv file) counts as missing, so the
+    // server boots and answers 503 rather than failing.
     const runtime = new AppRuntime({
-        build: { id: env.BUILD_ID },
+        build: { id: env.BUILD_ID === '' ? undefined : env.BUILD_ID },
         server: { name: config.name },
     });
 

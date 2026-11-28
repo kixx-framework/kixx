@@ -80,7 +80,7 @@ name and a section for each environment:
     "name": "my-app",
     "environments": {
         "development": { "LOGGER": { "level": "DEBUG" } },
-        "production": { "LOGGER": { "level": "INFO" } }
+        "production": {}
     }
 }
 ```

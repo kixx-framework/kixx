@@ -342,12 +342,12 @@ export async function startNodeServer(options) {
     }
 
     // Covers a response whose headers were already sent when the drain
-    // began, which can't carry `Connection: close`. The connection is
-    // already idle when the response's 'close' event fires (Node.js 24 and
-    // Deno 2.9), so the call needs no deferral.
+    // began, which can't carry `Connection: close`. Runtimes differ on
+    // whether the connection is idle yet when the response's 'close' event
+    // fires, so wait one turn of the event loop before closing idle ones.
     function releaseConnectionsWhileDraining() {
         if (isShuttingDown) {
-            nodeServer.closeIdleConnections();
+            setTimeout(() => nodeServer.closeIdleConnections(), 0);
         }
     }
 
