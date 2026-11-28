@@ -82,20 +82,23 @@ export async function readSecretsManifest(args) {
     return { required, optional, requiredOutsideDevelopment };
 }
 
-// A line of this file may hold a pasted secret value, and a parser may quote
-// the line it could not read. Remove every line's text from the message, so
-// it keeps the line number and the reason and nothing else.
+// A line of this file may hold a pasted secret value, and core's parser
+// quotes the line it could not read. Remove each quoted line from the
+// message, so it keeps the line number and the reason and nothing else.
+// Only a quoted whole line is removed: a short line, such as `e` or `12`, is
+// also part of ordinary words and numbers in the message.
 function withoutLineText(message, text) {
-    const lines = text.split(/\r?\n/)
+    const quotedLines = text.split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line !== '' && !line.startsWith('#'))
+        .map((line) => `"${ line }"`)
         // Longest first, so a line that contains another is removed whole.
         .sort((a, b) => b.length - a.length);
 
     let safe = String(message);
 
-    for (const line of lines) {
-        safe = safe.split(line).join(NOT_SHOWN);
+    for (const quoted of quotedLines) {
+        safe = safe.split(quoted).join(NOT_SHOWN);
     }
 
     return safe;

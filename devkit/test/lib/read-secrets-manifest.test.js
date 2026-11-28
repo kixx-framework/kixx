@@ -106,6 +106,16 @@ describe('readSecretsManifest()', ({ it }) => {
         assertEqual(undefined, error.cause);
     });
 
+    // A short line is also part of the words and numbers around it.
+    it('keeps the rest of the message whole when the line is short', async () => {
+        const text = 'A=1\n'.repeat(11) + '12\n';
+        const error = await catchAsyncError(() => read(text));
+
+        assertEqual('UsageError', error?.name);
+        assertMatches('on line 12: expected NAME=value: (not shown)', error.message);
+        assertMatches(`Invalid secrets manifest ${ FILEPATH }`, error.message);
+    });
+
     it('lets any other error from the parser through as a defect', async () => {
         const defect = new TypeError('broken parser');
 
