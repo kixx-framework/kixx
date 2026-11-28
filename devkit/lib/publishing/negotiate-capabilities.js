@@ -100,7 +100,7 @@ export default async function negotiateCapabilities(client, expected) {
     // one check, and learning them one command at a time wastes a cutover.
     if (failures.length > 0) {
         throw new UnsupportedServerError(
-            'The target application environment is incompatible with this version of the devkit. ' +
+            'The target application environment is incompatible with this version of kixx-dev. ' +
             'Upgrade the deployment to a Kixx release serving build assignment protocol ' +
             `${ BUILD_ASSIGNMENT_PROTOCOL_VERSION } and addressing format ${ addressingFormat }, ` +
             'or target an environment that already serves them.\n' +

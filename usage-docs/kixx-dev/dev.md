@@ -1,6 +1,4 @@
-# `kixx dev` — Local Development
-
-## `start`
+# `kixx-dev dev` — Local Development
 
 Runs the app's `node-server.js` behind a local proxy. The devserver listens on
 its own port and forwards every request to the app server, which runs as a
@@ -8,7 +6,7 @@ child process on a free port. The app server restarts on the next request
 after a server-side file changes.
 
 ```sh
-kixx dev start [-p <port>] [-e <env>] [--dotenv <file>] [directory]
+kixx-dev dev [-p <port>] [-e <env>] [--dotenv <file>] [directory]
 ```
 
 | Option | Description |
@@ -17,9 +15,10 @@ kixx dev start [-p <port>] [-e <env>] [--dotenv <file>] [directory]
 | `-e`, `--environment` | Application environment passed to `node-server.js`; default `development` |
 | `--dotenv` | Dotenv file passed to `node-server.js`. Relative paths resolve against the current directory. |
 
-The app server is `node-server.js` in the project directory: the nearest
-ancestor of `directory` (default: the working directory) with a `.kixx/`
-directory, or `directory` itself when there is none. It runs with the project directory as its working directory. A missing
+The app server is `node-server.js` in your project's directory. The project is
+found from `directory`, or from the working directory when you pass none; see
+[configuration.md](configuration.md#how-a-project-is-found). The app server
+runs with the project directory as its working directory. A missing
 `node-server.js` is a usage error. So is a devserver port that is already in
 use; choose another with `--port`.
 
@@ -71,19 +70,26 @@ recent output, such as a stack trace.
 
 ## Runtimes
 
-The app server runs on the same runtime as `kixx`:
+The app server runs on the same runtime as `kixx-dev`:
 
 - Node.js: `node <project>/node-server.js ...`
 - Deno: `deno run -A <project>/node-server.js ...`
 
-On Deno, `kixx` needs `--allow-run` to start the child, and the child gets
-full access (`-A`). Whether the app's own dependencies, such as `node:sqlite`,
+On Deno, `kixx-dev` needs `--allow-run` to start the child, and the child gets
+full access (`-A`). The install command grants it. Whether the app's own dependencies, such as `node:sqlite`,
 work under Deno is up to the app.
 
 ## Stopping
 
 Ctrl-C stops the devserver and the app server together. The app server is in
 the same process group, so it receives the terminal's SIGINT directly.
+
+## `--json`
+
+With `--json`, stdout stays silent while the devserver runs, and log lines and
+your app's output go to stderr. When the devserver stops, stdout gets one
+object whose `data` is `{ "port", "environment" }`. See
+[commands.md](commands.md#--json).
 
 ## Limitations
 

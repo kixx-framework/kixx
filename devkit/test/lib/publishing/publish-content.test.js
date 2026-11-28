@@ -48,7 +48,7 @@ describe('publishing/publish-content', ({ it }) => {
             });
 
             assertEqual('discovery', caught.phase);
-            assertMatches('incompatible with this version of the devkit', caught.message);
+            assertMatches('incompatible with this version of kixx-dev', caught.message);
             assertEqual(0, client.statusChecks.length);
             assertEqual(0, client.uploads.length);
             assertEqual(0, client.releases.length);

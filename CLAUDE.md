@@ -67,7 +67,7 @@ node devkit/run-linter.js devkit             # lint
 node devkit/kixx-dev.js <command>            # run the CLI from source
 ```
 
-Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js` runs them. The rest come back with their sections. CI lints the devkit and runs its suite on Node.js and Deno (`devkit-lint`, `devkit-test-node`, `devkit-test-deno`).
+Every kept devkit module's tests are in `devkit/test/`. What is left in `test-v6/devkit/` is eleven tests of removed command modules, parked for the sections that rebuild those commands. CI lints the devkit and runs its suite on Node.js and Deno (`devkit-lint`, `devkit-test-node`, `devkit-test-deno`).
 
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 
@@ -93,8 +93,9 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 **Update what depends on the devkit.**
 
 - When core's tooling entry or the Publishing API protocol changes, run `node devkit/run-tests.js devkit/test/conformance`.
-- When a command's behavior or options change, update its page in `usage-docs/kixx-devkit/` and the command list in `devkit/README.md`.
-- A change needing a new Deno permission must update the install commands in `devkit/README.md` and the `kixx-dev` task in `devkit/deno.json`.
+- When a command's behavior or options change, update its page in `usage-docs/kixx-dev/`. When a command is added or becomes available, also update `usage-docs/kixx-dev/commands.md`, the command list in `devkit/README.md`, and `devkit/test/commands/tree.test.js`.
+- The exit-code table is in three places that must agree: `devkit/lib/exit-codes.js`, `devkit/commands/README.md` (a test compares these two), and `usage-docs/kixx-dev/commands.md`.
+- A change needing a new Deno permission must update the install commands in `devkit/README.md` and `usage-docs/README.md`, and the `kixx-dev` task in `devkit/deno.json`.
 
 Commit Messages
 ---------------

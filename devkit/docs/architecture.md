@@ -70,9 +70,9 @@ Commands read three inputs, all as data:
 - `cloudflare-config.jsonc`: read by `lib/cloudflare-config-loader.js`. The runner does not load it, because no registered command reads it in this version. Most values are under `environments.<env>`, so the code that uses it validates what it uses at run time.
 - `.env.<env>` and `example.env.secrets`: read by the Cloudflare pipeline.
 
-The registry holds the CLI-5 command tree plus `generate`. The commands that are not built yet are placeholders, registered from the factory with no module. The v6 `admin`, `app`, and `cloudflare` command modules, and `local seed` and `local publish`, are removed; their logic stays in `lib/` for the commands that replace them.
+The registry holds the whole command tree. The commands that are not built yet are placeholders, registered from the factory with no module. The v6 `admin`, `app`, and `cloudflare` command modules, and `local seed` and `local publish`, are removed; their logic stays in `lib/` for the commands that replace them.
 
-User-facing docs for these files are in `../usage-docs/kixx-devkit/configuration.md`.
+User-facing docs for these files are in `../usage-docs/kixx-dev/configuration.md`.
 
 Check, Then Act
 ---------------

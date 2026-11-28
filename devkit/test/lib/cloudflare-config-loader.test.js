@@ -50,7 +50,7 @@ describe('CloudflareConfigLoader', ({ it }) => {
     });
 
     it('reads the file from disk by default', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-devkit-cloudflare-config-'));
+        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-cloudflare-config-'));
 
         try {
             await fsp.writeFile(path.join(directory, 'cloudflare-config.jsonc'), '{ "environments": {} }\n');

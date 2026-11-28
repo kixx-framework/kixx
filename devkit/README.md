@@ -21,24 +21,34 @@ Or with Deno 2.8 or later:
 deno install -g -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
 ```
 
+You also need `git` installed. `kixx-dev` may run your local `git`; no
+command in this version does yet.
+
 The Deno permissions:
 
-- `-R` read and `-W` write: project files, `.kixx` settings, Cloudflare state
-  files, and the generated `cloudflare-config.generated.js`. Reading also
-  covers loading your project's own Kixx tooling from its `kixx/` directory.
-- `-N` net: the Cloudflare API and your application's Admin and Publishing
-  APIs.
-- `-E` env: the `KIXX_ADMIN_*` prompt variables.
+- `-R` read and `-W` write: your project's files and the `.kixx` settings and
+  instance directories. Reading also covers loading your project's own Kixx
+  tooling from its `kixx/` directory.
+- `-N` net: the local devserver, and later your application's Admin and
+  Publishing APIs and the Cloudflare API.
+- `-E` env: checking your shell for names that collide with an instance's
+  dotenv files, and the environment your app's process inherits.
 - `--allow-sys=homedir`: find the `~/.kixx` settings layer.
-- `--allow-run`: `kixx-dev dev` and `kixx-dev local start` run your app's
-  `node-server.js` in a child Deno process with `-A`, so this grants it full
-  access.
+- `--allow-run`: two things only. `kixx-dev dev` and `kixx-dev local start`
+  run your app's `node-server.js` in a child Deno process with `-A`, so this
+  grants it full access. And `kixx-dev` may run your local `git`.
 
-No FFI access is needed. `kixx-dev dev` and `kixx-dev local start` run
-your app in a child process, and `kixx-dev generate` and
-`kixx-dev local create` load the Kixx tooling
-from your project's `kixx/` directory. Everything else in a project is read as
-data.
+No FFI access is needed.
+
+`kixx-dev` runs your project's code in two ways, and no other:
+
+- **In its own process:** `kixx-dev generate` and `kixx-dev local create`
+  load the Kixx tooling from your project's `kixx/` directory. Your `app/`
+  code, your plugins, and your entry points are never loaded this way.
+- **As a child process:** `kixx-dev dev` and `kixx-dev local start` run your
+  app's `node-server.js`.
+
+Everything else in a project is read as data.
 
 Upgrade:
 
@@ -59,7 +69,7 @@ Exit codes mean the same thing for every command: `0` success, `1` an
 unexpected error, `2` a mistake you can fix (bad arguments or settings), `3`
 not inside a Kixx project or an unsupported project version, and `4` a command
 that is not available in this version. `kixx-dev --help --json` returns the
-table.
+table, and [commands.md][commands-doc] documents it.
 
 Run a command anywhere inside your project. A Kixx project is the nearest
 directory, at or above where you are, that holds `kixx/plugin.json`. You can
@@ -85,41 +95,40 @@ Commands
 - `kixx-dev local destroy` — delete a stopped instance.
 
 `kixx-dev --help` also lists the commands that are not available in this
-version, under their own heading: `new`, `add`, `remove`, `upgrade`, `agents sync`,
-`check`, `routes`, `render`, `publish`, `deploy`, `release list` and `assign`,
-`media upload`, `env create` and `list`, `cloudflare provision`, `secrets set`
-and `rotate`, `deploy-key generate` and `rotate`, `admin invite`, `reset`,
-`migrations`, and `jobs`, and `local seed` and `publish`. Each has `--help`,
-and running one exits `4`.
+version, under their own heading. Each has `--help`, and running one exits
+`4`:
 
-The v6 command names (`kixx dev start`, the `app` commands, the `cloudflare`
-worker commands, and the old `admin` commands) are gone, with no alias.
+- `new`, `add`, `remove`, `upgrade`
+- `agents sync`
+- `local seed`, `local publish`
+- `check`, `routes`, `render`
+- `publish`, `deploy`
+- `release list`, `release assign`
+- `media upload`
+- `env create`, `env list`
+- `cloudflare provision`
+- `secrets set`, `secrets rotate`
+- `deploy-key generate`, `deploy-key rotate`
+- `admin invite`, `admin reset`, `admin migrations`, `admin jobs`
+
+The Kixx 6 command names (`kixx dev start`, the `app` commands, the
+`cloudflare` worker commands, and the old `admin` commands) are gone, with no
+alias.
 
 Documentation:
 
-- [configuration.md][configuration-doc]: `.kixx` settings,
-  `cloudflare-config.jsonc`, `.env.<env>`, and `example.env.secrets`.
-- [admin.md][admin-doc]: admin accounts, tokens, and migrations.
-- [app.md][app-doc]: publishing content.
-- [cloudflare.md][cloudflare-doc]: Workers, versions, deployment, and
-  workflows.
+- [commands.md][commands-doc]: every command and whether it is available,
+  `generate`, `--help`, `--json` and its output, and the exit codes.
+- [configuration.md][configuration-doc]: how a project is found, supported
+  project versions, the `.kixx` settings, and the project files the CLI reads.
 - [dev.md][dev-doc]: the local devserver.
 - [local.md][local-doc]: throwaway local instances.
 
-`app` commands require an application serving content contract 2, addressing
-format 4, and build assignment protocol 4; see [app.md][app-doc-server-requirement].
-
-Not included: creating D1, KV, or R2 resources, and managing Worker secrets.
-Use the Cloudflare dashboard or Wrangler for those.
-
 <!-- Absolute links so they resolve on npmjs.com and jsr.io. -->
-[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/configuration.md
-[admin-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/admin.md
-[app-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md
-[app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md#server-requirement
-[cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/cloudflare.md
-[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/dev.md
-[local-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/local.md
+[commands-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/commands.md
+[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/configuration.md
+[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/dev.md
+[local-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/local.md
 
 Development
 -----------

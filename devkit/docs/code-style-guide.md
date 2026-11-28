@@ -62,7 +62,7 @@ This project uses JavaScript in the **ECMAScript 2022** standard using **ES modu
 
 - Import Node.js built-ins with the `node:` prefix (`import path from 'node:path'`). Deno resolves the same specifiers.
 - Import everything else by relative path. There are no runtime dependencies; third-party code is vendored under `lib/vendor/`. See `docs/packaging-and-runtimes.md`.
-- Never import from outside `devkit/`. Only `test/conformance/` may read the repository's `lib/`.
+- Never import from outside `devkit/`. Only `test/conformance/` may read core (the repository's `kixx/`). At run time, framework logic comes from the project through `lib/project/load-project-tooling.js`; see `docs/architecture.md`.
 
 ### Naming Conventions
 

@@ -65,7 +65,7 @@ Everything else in a project is read as data: `kixx/plugin.json` for discovery a
 
 The dynamic import of a local file needs only `-R`, which the install already grants. `test/kixx-dev.test.js` proves it: under Deno it runs `generate` against a real project in a child process with exactly the installed permissions.
 
-`--allow-run` covers two things: the local `git` binary, which no code runs yet, and that app child process. `node:child_process` is imported only by `lib/devserver/app-process.js`, and `test/import-hygiene.test.js` pins the list. A new module that starts a process must be added there on purpose.
+`--allow-run` covers two things: the local `git` binary, which no code runs yet (git is a documented prerequisite of the CLI), and that app child process. `node:child_process` is imported only by `lib/devserver/app-process.js`, and `test/import-hygiene.test.js` pins the list. A new module that starts a process must be added there on purpose.
 
 Test Seams
 ----------

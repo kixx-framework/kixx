@@ -1,7 +1,5 @@
 # Unit Testing Guide
 
-> **Status:** Some devkit tests are back in `devkit/test/`; the rest are parked in `test-v6/devkit/` until their sections bring them back. `node devkit/run-tests.js` runs what is here. The helpers and fixtures named below are all back in `devkit/test/helpers/` and `devkit/test/fixtures/`. CI runs the suite on Node.js and Deno.
-
 This project uses two ES module libraries:
 
 - `kixx-test` provides the test runner API: `describe`, `it`, `before`, `after`, `xit`, `xdescribe`, and `MockTracker`. It is installed in `node_modules/` and imported by bare module name.
@@ -19,7 +17,7 @@ deno run -A devkit/run-tests.js                           # full suite on Deno
 node devkit/run-linter.js devkit                          # lint
 ```
 
-Pathnames resolve from your working directory and must be inside `devkit/test/`. The runner then changes directory to `devkit/` before importing tests. Install the dev dependencies first with `cd devkit && npm install`.
+Pathnames resolve from your working directory and must be inside `devkit/test/`. The runner then changes directory to `devkit/` before importing tests. Install the dev dependencies first with `npm install` at the repository root; the devkit has no `node_modules/` of its own.
 
 ## File Conventions
 

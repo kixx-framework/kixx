@@ -63,7 +63,7 @@ kixx/
 │   ├── lib/                     # The command runner and command logic; vendored code in lib/vendor/
 │   ├── templates/project/       # The project skeleton a new project is copied from
 │   ├── docs/                    # Developer guides; start with doc-index.md
-│   ├── test/                    # Unit tests (some still parked in test-v6/devkit/)
+│   ├── test/                    # Unit tests
 │   ├── run-tests.js             # Test runner (`node devkit/run-tests.js [path]`)
 │   └── run-linter.js            # Linter (`node devkit/run-linter.js <path>`)
 ├── reference-app/               # What remains of the v6 starter app: source material, not runnable
@@ -102,7 +102,7 @@ Kixx Devkit
 
 The Kixx Devkit lives in `devkit/`. It provides the `kixx-dev` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
 
-Every command supports `--help` and `--json`, and exits with a code from one documented table (`devkit/commands/README.md`). It finds your project by its `kixx/plugin.json`, and loads the framework's own logic from your project's `kixx/`, so one `kixx-dev` works across project versions. In this version you can:
+Every command supports `--help` and `--json`, and exits with a code from one documented table (`usage-docs/kixx-dev/commands.md`). It finds your project by its `kixx/plugin.json`, and loads the framework's own logic from your project's `kixx/`, so one `kixx-dev` works across project versions. In this version you can:
 
 - `kixx-dev generate` - Rewrite your project's generated files after you change a manifest.
 - `kixx-dev dev` - Run your app locally. It restarts when you change the code.

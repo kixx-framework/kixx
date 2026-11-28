@@ -44,6 +44,6 @@ Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-a
 
 ### Devkit Usage Docs
 
-../usage-docs/kixx-devkit/
+../usage-docs/kixx-dev/
 
-Public docs for `kixx` users: `configuration.md` (`.kixx` settings, `cloudflare-config.jsonc`, `.env.<env>`, `example.env.secrets`), `admin.md`, `app.md`, `cloudflare.md`, `dev.md`, and `local.md`. Update the matching page when a command's behavior or options change.
+Public docs for `kixx-dev` users: `commands.md` (every command and whether it is available, `generate`, `--help`, `--json` and its envelope, and the exit-code table), `configuration.md` (how a project is found, supported project versions, the `.kixx` settings layers, and the project files the CLI reads), `dev.md`, and `local.md`. Update the matching page when a command's behavior or options change, and `commands.md` when a command is added, becomes available, or the envelope or exit codes gain something. The section that builds a command writes its page.
