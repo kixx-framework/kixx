@@ -1,0 +1,7 @@
+{
+    "template": "page.html",
+    "page": {
+        "title": "Integration probe page",
+        "description": "A page the test app's plugin supplies."
+    }
+}

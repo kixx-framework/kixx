@@ -1,0 +1,22 @@
+{
+    "name": "kixx-test-app",
+    // The integration suite's test app on Cloudflare. It replaces the
+    // skeleton's cloudflare-config.jsonc when the test app is built. The
+    // ids are filled in when the test app's resources are provisioned.
+    "environments": {
+        "production": {
+            "LOGGER": { "level": "INFO" },
+            "WORKER": { "name": "kixx-test-app" },
+            "KEY_VALUE_STORE": {
+                "namespaceName": "kixx-test-app-key-value-store",
+                "namespaceId": "replace-with-key-value-namespace-id"
+            },
+            "CONTENT_STORE": {
+                "kvNamespace": {
+                    "namespaceName": "kixx-test-app-content-store",
+                    "namespaceId": "replace-with-content-namespace-id"
+                }
+            }
+        }
+    }
+}

@@ -182,7 +182,7 @@ Rules:
 
 - **Commit them.** A fresh clone boots with no generate step, and a plugin change shows up as a diff.
 - **Never edit one.** Change a manifest and regenerate.
-- **A test catches drift.** `test/fixtures/project.test.js` fails while the fixture's committed files differ from what the generator writes.
+- **A test catches drift.** `test/fixtures/project.test.js` fails while the fixture's committed files differ from what the generator writes. A project has the same test, `test/generated-files.test.js`, from the skeleton: it renders with the project's own `kixx/tooling/mod.js` and fails, naming the file, when a generated file is missing or differs.
 - **Generated JavaScript is not linted.** Each file turns lint off for itself with `/* eslint-disable */`.
 
 In this repository, regenerate a project with:
@@ -256,6 +256,10 @@ A plugin owns the config sections it lists in `config.keys`, and gives them defa
 Objects merge key by key. An array or any other value replaces the default whole.
 
 So a project's config holds only what has no default, or what it wants to change. The manifest is the single source of a default: a lifecycle module reads the merged value from `context.config.env` and asserts it, with a message naming the config path. It keeps no fallback of its own.
+
+Core's Node.js defaults are the example: `KEY_VALUE_STORE.path` is `data/key-value-store.sqlite` and `CONTENT_STORE.rootDirectory` is `data/content-store`. A lifecycle module resolves such a path with `context.config.resolveFilepath()`, which puts it under `DATA_DIRECTORY` when that is set and under the project root otherwise.
+
+A project's config needs no `LOGGER` block: a missing block or level logs at INFO. And a server with no `BUILD_ID` still boots; it answers page requests with 503 `BuildNotServable` until it is deployed with one.
 
 ## Secrets
 
@@ -424,7 +428,7 @@ Those are all the imports each may have. `cloudflare-config.generated.js` is wri
 
 The server logic lives in the two core modules, which take every platform service as an argument and are unit tested:
 
-- `startNodeServer()` parses the command line, reads the dotenv files and `node-config.jsonc`, boots, listens, runs the `start()` hooks, and shuts down on SIGTERM (drain) or SIGINT (at once).
+- `startNodeServer()` parses the command line, reads the dotenv files and `node-config.jsonc`, boots, listens, runs the `start()` hooks, and shuts down on SIGTERM (drain) or SIGINT (at once). A drain lets each request in flight finish, answers it with `Connection: close`, and exits as soon as the last response is written; a 10-second timer forces the exit.
 - `createWorker()` boots when the module loads and returns `{ fetch }`. It builds each request's context from that request's environment.
 
 Unit tests never import an entry point. `test/fixtures/project/` holds a small project whose registries the unit suite boots on both targets.

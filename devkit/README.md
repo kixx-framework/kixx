@@ -116,6 +116,23 @@ also takes `--skip <path>` (repeatable). See
 [commands/README.md][commands-readme] for adding a command and
 [test/README.md][test-readme] for writing tests.
 
+### The project skeleton
+
+`templates/project/` holds every hand-written file of a new Kixx project
+with no plugins: the app, its entry points and configs for each target,
+placeholder pages, and its own test and lint setup. It ships in the package
+as data. The scaffold command (`kixx-dev new`, not written yet) will copy it
+into a new project, copy core in beside it as `kixx/`, and generate the
+registries.
+
+- Its files import core as `./kixx/...`, which exists only once a project is
+  built. Nothing in the devkit imports, runs, or lints them.
+- It holds no core and no generated file.
+- `gitignore` is written into the project as `.gitignore`. It is the only
+  file that is renamed.
+- The repository's import hygiene test (`test/kixx/import-hygiene.test.js`)
+  checks its imports.
+
 [commands-readme]: https://github.com/kixx-framework/kixx/blob/main/devkit/commands/README.md
 [test-readme]: https://github.com/kixx-framework/kixx/blob/main/devkit/test/README.md
 

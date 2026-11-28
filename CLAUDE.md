@@ -23,7 +23,7 @@ node run-linter.js test-app        # lint the integration suite
 **Read the Testing Guide before you write a test:** `test/README.md`. It says which suite a test belongs in, how a module gets its platform services, how to keep a Durable Object thin, how to write a fake, and how to write a conformance suite.
 
 - `run-tests.js` runs the unit suite only: Kixx code against fakes, with no network and no credentials.
-- The integration suite lives in `test-app/` and runs against a real target. Agents write its tests and the operator runs them. Never run it against a target, and never deploy. See `test-app/README.md`.
+- The integration suite lives in `test-app/` and runs against a real target. Agents write its tests. CI runs them against a test app on the runner (`test-app/run-local.js`), and the operator runs them locally and against deployed targets. Never run `test-app/run-tests.js` or `test-app/run-local.js` yourself, and never deploy: push, then read the `integration-local` CI job. See `test-app/README.md`.
 
 **Keep the layers apart.**
 
@@ -36,6 +36,8 @@ node run-linter.js test-app        # lint the integration suite
 - `test/kixx/import-hygiene.test.js` enforces the import rules above.
 - The plugin guide is `plugins/README.md`: manifests, lifecycle modules, generated registries, entry points, and the ports-and-adapters rules.
 - Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A generated JavaScript file turns lint off for itself.
+- `node tools/build-project.js <directory>` builds a project with no plugins from the skeleton (`devkit/templates/project/`) and core, and runs the generator. Build one under `tmp/` to try a change in a real project. It replaces a directory it built before and refuses any other directory that isn't empty.
+- `node tools/build-test-app.js` builds the integration suite's test app into `test-app/build/` (git-ignored): the skeleton, core, and the test-only plugin in `test-app/integration-probe/`. Building it runs nothing. Never edit, lint, or commit the build.
 - Every change must work on Node.js, Deno, and Cloudflare.
 - Vendored code (`kixx/vendor/`, `kixx/errors/`, `kixx/assertions/`, `devkit/lib/vendor/`) is never edited in place. It changes only by following `docs/vendored-code.md`.
 
@@ -46,7 +48,6 @@ node run-linter.js test-app        # lint the integration suite
 - When a `test-v6/` file mixes cases for the current work with cases for code a later section reworks, split it. `git mv` the file into the active suite in a commit that holds only renames. Then trim the moved copy to the cases that cover the current work, and restore the rest at the old path unchanged. Delete cases that cover removed code. The parked rest waits for its own section.
 - The v6 devkit ports four core modules: `kixx/config/parse-jsonc.js`, `kixx/config/secrets-manifest.js`, and `kixx/content-addressable-store/{addressing,content-layout}.js`. Most of the devkit's conformance tests are still parked in `test-v6/devkit/conformance/` and don't run; `devkit/test/conformance/content-contract.test.js` runs. The devkit's contract pin (`devkit/lib/publishing/negotiate-capabilities.js`) and the manifest shape it composes must stay in step with core. The four ported modules needn't be kept in step until the devkit sections decide their fate.
 - The v6 integration suites wait in `test-v6/test-app/` until they are rewritten for v7. Their runner moved to `test-app/`.
-- `tools/build-test-app.js` is v6 and knowingly broken. Never run it: it would wipe `test-app/`.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 
 Kixx Devkit
@@ -74,6 +75,14 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 - No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` by following `docs/vendored-code.md` (and never edit vendored code in place).
 - It must run on Node.js and Deno.
 - Keep `package.json` and `deno.json` in sync, including the version. See `devkit/docs/packaging-and-runtimes.md`.
+
+**The project skeleton** is `devkit/templates/project/`: the hand-written files a new project is copied from. It is data to the devkit.
+
+- Its files import core as `./kixx/...`. Never import, run, or lint one in place.
+- It holds no `*.generated.js` file, no `example.env.secrets`, and no `kixx/` directory.
+- Code in its `app/` and its `virtual-hosts.js` imports no `node:*` or `cloudflare:*` module and no adapter. Its entry points import exactly what `plugins/README.md` lists.
+- Its config files hold only what has no default.
+- `test/kixx/import-hygiene.test.js` enforces the import rules. List a new entry point there.
 
 **Keep commands thin.** A command in `commands/` wires options and settings to one call into `devkit/lib/`, where the logic lives. Add a command by following `devkit/commands/README.md`. Throw `UsageError` for anything the user can fix (see `devkit/docs/error-handling.md`).
 

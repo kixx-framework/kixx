@@ -18,9 +18,9 @@ Each runner imports test files first, which register top-level `describe` blocks
 | Runs with | `run-tests.js` | `test-app/run-tests.js`, pointed at a test app that is already running or deployed |
 | Needs | Node.js or Deno, git, and the dev dependencies. No network, credentials, account, emulator (wrangler, miniflare, workerd), container, or database server. | A running or deployed test app, and credentials for a deployed one. |
 | Takes | Seconds | Minutes |
-| Runs | On every change, in CI, and by agents | Before each release and after a change to platform-facing code. Agents write its tests. The operator runs them. |
+| Runs | On every change, in CI, and by agents | In CI on every push, against a test app started on the runner. By the operator, locally and against deployed targets, before each release and after a change to platform-facing code. Agents write its tests and never run them. |
 
-`run-tests.js` never collects `test-app/`, and CI doesn't run the integration suite.
+`run-tests.js` never collects `test-app/`. CI runs the integration suite in a job of its own, `integration-local`, against local Node.js and Deno targets only.
 
 **Where does a new test belong?** If it needs a real platform, a running or deployed app, credentials, or the network, it belongs in the integration suite. Everything else belongs in the unit suite, with each platform service replaced by a fake.
 
@@ -47,7 +47,8 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
 ## File Conventions
 
 - Put unit tests under `test/`, mirroring the source tree: `kixx/logger/logger.js` is tested by `test/kixx/logger/logger.test.js`, adapters by `test/kixx/adapters/<platform>/<name>/…`, and plugins (once they exist) by `test/plugins/<name>/…`.
-- Unit tests for code under `test-app/` (the integration runner and the probe) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target.
+- Unit tests for code under `test-app/` (the integration runner, the probe, and the test app's plugin) live in `test/test-app/`, mirroring that tree: `test-app/probe/probe-handler.js` is tested by `test/test-app/probe/probe-handler.test.js`. They are unit tests. They run with `run-tests.js` and never contact a target. `test/test-app/lib/` tests `run-local.js`'s logic and the server process helper with the fake clock, `spawn`, and `fetch` in `test/test-app/lib/process-fakes.js`, so no process is started. `test/test-app/integration-probe/` runs each port's conformance suite through the plugin's factories: the Node.js ones over SQLite in a temporary directory, the Cloudflare ones over the fakes.
+- Unit tests for the scripts' shared code in `tools/lib/` live in `test/tools/`: `tools/lib/assemble-project.js` is tested by `test/tools/assemble-project.test.js`. A test that assembles a project builds it in a temporary directory, removes it afterwards, and shares one assembly among the tests of a `describe`.
 - Integration tests live in `test-app/test/`.
 - Fakes of platform services live in `test/fakes/` (see "Fakes").
 - Name test files with the project convention `*.test.js`.
@@ -55,6 +56,10 @@ Pathnames resolve from your working directory and must be inside `test/`. The ru
   - A fixture directory holds no `*.test.js` file: the runner would collect it. Its tests sit beside it.
   - Its generated files are never edited. Regenerate them after changing a manifest.
   - A unit test imports its registries, `virtual-hosts.js`, and `app/app.js`. It never imports an entry point or the Durable Object registry.
+- `test/skeleton/` tests the project skeleton (`devkit/templates/project/`) as a project. `test/skeleton/core-only-project.test.js` assembles the skeleton and core into a temporary directory, once for the file, and boots that project with no plugins: on the Node.js adapters in development and in production, and as a Worker against fakes. It publishes over HTTP with `test-app/test/test-helpers/publish.js`, the helper the integration suite uses. `test/skeleton/test-app.test.js` does the same with the integration suite's test app (`assembleTestApp()`), and runs a probe test in it. `test/skeleton/assembled-project-boot.js` assembles, loads, and boots:
+  - It loads every module of a boot from the assembled project with a dynamic `import()`, the project's own copy of core included. Never mix in a core module imported from this repository: two copies of a class don't share identity.
+  - It never loads an entry point or the Durable Object registry.
+  - It captures the project's log lines, because the skeleton's config logs at `DEBUG` and `INFO`.
 - Build any other fixture in a temporary directory (`fsp.mkdtemp`) and remove it afterwards, or resolve it from `import.meta.url`. Never read files through the working directory or from `reference-app/`.
 - `test-v6/` holds v6 tests that are not run. When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass.
 - The integration runner lives in `test-app/`. The v6 integration suites wait in `test-v6/test-app/`, and are not run, until they are rewritten for v7.
@@ -302,21 +307,26 @@ To let the integration suite run a suite, import it in `test-app/probe/probe-sui
 
 ## Import Hygiene Rules
 
-`test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear:
+`test/kixx/import-hygiene.test.js` reads the static imports of the maintained code and enforces where each kind may appear. Its import walker (`extractSpecifiers()` and `readImportGraph()`) is in `tools/lib/import-graph.js`, shared with the project assembly:
 
 - **Core's layers.** Every relative import in `kixx/` stays inside `kixx/` and resolves. `node:*` modules appear only under `kixx/adapters/`, and core imports no package by bare name. No core module outside `kixx/adapters/` imports an adapter: adapters are reached through generated registries and entry points. A module that is leaving core is imported from the rest of core only through the edges in `KNOWN_EDGES`.
+- **Core's contents (CORE-1).** The top level of `kixx/` holds exactly the modules CORE-1 names, the operator-approved additions, and the modules leaving core. A new directory or file there fails until it is listed.
 - **The content compiler and the tooling entry.** Nothing reachable from `kixx/content-compiler/mod.js` or `kixx/tooling/mod.js` imports a `node:*` or `cloudflare:*` module or a package, or is a file under `kixx/adapters/`. That is what lets the compiler run in a command line tool, a server, and a Worker. The rules above imply it. This one follows the imports and prints the chain of files that leads to a break. The entries are listed in `PLATFORM_NEUTRAL_ENTRIES`.
 - **The Durable Object shells.** The core files that import a `cloudflare:*` module are exactly the files in `DURABLE_OBJECT_SHELLS`. Each of them imports only `cloudflare:workers` and relative modules. Core's manifest (`kixx/plugin.json`) declares exactly the same files under `cloudflare.durableObjects`.
 - **What a unit test may reach.** Nothing that a file under `test/` imports, directly or through other modules, is a shell, imports a `cloudflare:*` module, or is one of the `CLOUDFLARE_ONLY_MODULES`. A failure prints the chain of files that leads there. No `*.test.js` file reaches an entry point in `ENTRY_POINTS`.
 - **The fixture project.** Each of its entry points imports exactly the modules a thin shell may (`FIXTURE_ENTRY_POINT_IMPORTS`). Nothing its Cloudflare registry reaches imports a `node:*` module, and nothing its `routes.generated.js` or `virtual-hosts.js` reaches imports a `node:*` or `cloudflare:*` module.
-- **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module.
+- **The project skeleton** (`devkit/templates/project/`). Each of its entry points imports exactly the modules a thin shell may (`SKELETON_ENTRY_POINT_IMPORTS`). Every import of `./kixx/` names a module core has. It holds no generated file and no `kixx/` directory.
+- **App and plugin code (CORE-5).** Nothing that the skeleton's `app/` files, its `virtual-hosts.js`, or a first-party plugin's files outside its `adapters/` import, directly or through other modules, is a `node:*` or `cloudflare:*` module or a core adapter. A plugin is covered as soon as its directory under `plugins/` has a `plugin.json`. Nothing enforces the rule inside a project.
+- **What the probe may reach.** Everything reachable from `test-app/probe/` imports by relative path only: the probe, the suites it registers, and the core modules under them. Nothing under `test-app/` imports a `cloudflare:*` module but the test-only Durable Object shell listed in `TEST_APP_DURABLE_OBJECT_SHELLS`; the built test app in `test-app/build/` is skipped.
+- **The test app's plugin** (`test-app/integration-probe/`). Its files outside `adapters/` are held to the CORE-5 rule above. Everything it reaches imports by relative path only, except `node:*` modules in its own `adapters/node/` and what core's adapters import. Nothing its `adapters/cloudflare/` reaches imports a `node:*` module. Its Durable Object shell imports only `cloudflare:workers` and the plain class beside it, delegates each method in one line, is declared in the plugin's manifest, and is reached by none of the plugin's other files, so the plugin's lifecycle module and routes load in a unit test.
 
 Its lists are constants at the top of the file:
 
 - `DURABLE_OBJECT_SHELLS`: add the file of a new Durable Object class, and remove a deleted one. An entry that no longer imports a `cloudflare:*` module fails too. Declare the class in core's manifest in the same change.
-- `CLOUDFLARE_ONLY_MODULES`: the files under `test/` that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
-- `ENTRY_POINTS`: a project's entry points under `test/`. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS`.
+- `CLOUDFLARE_ONLY_MODULES`: the files that only Cloudflare can load: a project's Cloudflare entry point and its Durable Object registry, for the fixture and the skeleton. The walk from unit tests starts at none of them and doesn't read past one. Add both files of a new fixture or test project. An entry that imports no `cloudflare:*` module and no shell is stale and fails.
+- `ENTRY_POINTS`: the entry points of the fixture and the skeleton. Add both of a new project's, and give each its allowed import list in `FIXTURE_ENTRY_POINT_IMPORTS` or `SKELETON_ENTRY_POINT_IMPORTS`.
 - `PLATFORM_NEUTRAL_ENTRIES`: add the entry module of core code that must load on every runtime.
+- `CORE_1_MODULES` and `APPROVED_CORE_ADDITIONS`: with `LEAVING_CORE`, exactly what the top level of `kixx/` holds (CORE-1). A new top-level module needs the operator's approval and an entry in `APPROVED_CORE_ADDITIONS` with its reason.
 - `LEAVING_CORE` and `KNOWN_EDGES`: delete an entry when its module or edge is gone. The rule "lists no module or edge that is already gone" fails until you do.
 
 The rules follow static `import` and `export … from` statements. A dynamic `import()` isn't followed.

@@ -38,6 +38,10 @@
                     "allowJsonResponse": false
                 }
             },
+            "node": {
+                "KEY_VALUE_STORE": { "path": "data/key-value-store.sqlite" },
+                "CONTENT_STORE": { "rootDirectory": "data/content-store" }
+            },
             "cloudflare": {
                 "KEY_VALUE_STORE": { "bindingName": "KEY_VALUE_STORE" },
                 "CONTENT_STORE": {

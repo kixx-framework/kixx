@@ -21,14 +21,32 @@
 // imports exactly what a thin shell may (PLUG-5). Its platform-neutral
 // files stay platform-neutral.
 //
+// The project skeleton in devkit/templates/project/ is what a new project
+// is copied from, so the same rules hold for it: its entry points are thin
+// shells no test reaches, its Cloudflare entry point is Cloudflare-only, and
+// every import of ./kixx/ names a module core really has. It holds no core
+// and no generated file of its own.
+//
+// Code in a project's app/, and a plugin's code outside its adapters/, never
+// imports a platform module or a platform adapter (CORE-5). The rule is
+// tested here, for the skeleton and for every first-party plugin. Nothing
+// enforces it inside a project.
+//
 // The probe in test-app/probe/ is bundled into every target the
 // integration suite runs on (QA-8). So everything it reaches imports by
 // relative path only, and nothing under test-app/ imports a cloudflare:*
-// module.
+// module. The test-only plugin that mounts it,
+// test-app/integration-probe/, is held to a plugin's rules: platform-neutral
+// outside its adapters/, relative imports only but for node:* in its
+// Node.js adapter, and no node:* reached from its Cloudflare adapter. The
+// built test app in test-app/build/ is never read.
 //
 // The content compiler runs in a command line tool, a server, and a Worker,
 // and a tool loads it through the tooling entry. So nothing either entry
 // reaches imports a platform module, a package, or an adapter.
+//
+// CORE-1 names what core contains. The top level of kixx/ is pinned to
+// that list, the operator-approved additions, and LEAVING_CORE.
 //
 // When a section extracts a module or removes an edge, delete its entry
 // from LEAVING_CORE or KNOWN_EDGES. The rule "lists no module or edge that
@@ -39,6 +57,8 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assertEqual } from 'kixx-assert';
 
+import { extractSpecifiers, readImportGraph } from '../../tools/lib/import-graph.js';
+
 
 const REPOSITORY_DIRECTORY = fileURLToPath(new URL('../../', import.meta.url));
 const CORE_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'kixx/');
@@ -46,6 +66,50 @@ const CORE_MANIFEST_FILE = path.join(CORE_DIRECTORY, 'plugin.json');
 const TEST_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test/');
 const TEST_APP_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'test-app/');
 const PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'probe/');
+const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'plugins/');
+
+// The integration suite's test-only plugin, and the test app built from it.
+// The build is git-ignored output: a copy of files checked where they live.
+const INTEGRATION_PROBE_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'integration-probe/');
+const TEST_APP_BUILD_DIRECTORY = path.join(TEST_APP_DIRECTORY, 'build/');
+
+// The project skeleton. It holds no core: a project built from it has core
+// at ./kixx/, so its imports of ./kixx/ are resolved to core here.
+const SKELETON_DIRECTORY = path.join(REPOSITORY_DIRECTORY, 'devkit/templates/project/');
+const SKELETON_CORE_DIRECTORY = path.join(SKELETON_DIRECTORY, 'kixx/');
+
+// What core's directory holds, at its top level, is these three lists and
+// nothing else. A new entry fails "holds exactly the modules CORE-1 allows"
+// until it is listed with its reason.
+//
+// The modules CORE-1 names, with core's manifest.
+const CORE_1_MODULES = [
+    'adapters',
+    'assertions',
+    'config',
+    'content-addressable-store',
+    'content-compiler',
+    'context',
+    'errors',
+    'http-router',
+    'hyperview',
+    'key-value-store',
+    'logger',
+    'plugin.json',
+    'publishing-api',
+    'static-assets',
+    'utils',
+    'vendor',
+];
+
+// Modules the operator approved in core beyond CORE-1's list, and why
+// each is there.
+const APPROVED_CORE_ADDITIONS = {
+    'code-fingerprint': 'the publish gates compare a commit\'s code with a build\'s',
+    'deploy-key': 'authenticates the Publishing API',
+    'publish-gates': 'what the Publishing API requires of a build write',
+    'tooling': 'the generator and compiler entry a project runs from its own core',
+};
 
 // Modules still in core that a later section removes.
 const LEAVING_CORE = {
@@ -71,21 +135,33 @@ const DURABLE_OBJECT_SHELLS = [
     'adapters/cloudflare/content-store/lib/content-addressable-index-store.js',
 ];
 
-// Files under test/ that only Cloudflare can load, as repository-relative
-// paths: a Cloudflare entry point, and a generated registry that exports
-// Durable Object shells. No unit test may reach one. List a file here when a
-// fixture gains one.
+// Files that only Cloudflare can load, as repository-relative paths: a
+// Cloudflare entry point, and a generated registry that exports Durable
+// Object shells. No unit test may reach one. List a file here when a fixture
+// or a project template gains one.
 const CLOUDFLARE_ONLY_MODULES = [
     'test/fixtures/project/cloudflare-server.js',
     'test/fixtures/project/cloudflare-durable-objects.generated.js',
+    'devkit/templates/project/cloudflare-server.js',
 ];
 
-// Entry points under test/, as repository-relative paths. An entry point
-// starts a server when it loads, so no test file may import one: the
-// integration suite covers them. List a fixture's entry point here.
+// The integration suite's test-only Durable Object classes, as
+// repository-relative paths. These are the only files under test-app/ that
+// import a cloudflare:* module. Each is a thin shell over a plain class named
+// `<shell>-core.js` beside it, and the integration-probe plugin's manifest
+// declares it. No unit test reaches one.
+const TEST_APP_DURABLE_OBJECT_SHELLS = [
+    'test-app/integration-probe/adapters/cloudflare/lib/integration-probe-sql-store.js',
+];
+
+// Entry points, as repository-relative paths. An entry point starts a server
+// when it loads, so no test file may import one: the integration suite
+// covers them. List the entry points of a fixture or a project template here.
 const ENTRY_POINTS = [
     'test/fixtures/project/node-server.js',
     'test/fixtures/project/cloudflare-server.js',
+    'devkit/templates/project/node-server.js',
+    'devkit/templates/project/cloudflare-server.js',
 ];
 
 const FIXTURE_PROJECT_DIRECTORY = path.join(TEST_DIRECTORY, 'fixtures/project/');
@@ -120,16 +196,25 @@ const FIXTURE_ENTRY_POINT_IMPORTS = {
     ],
 };
 
-// Static import and export specifiers, including multi-line import lists.
-// Excluding `(` and `=` keeps it from matching `export function f(…)`,
-// `export const x = '…'`, and JSDoc `import('…')` type references.
-const SPECIFIER_PATTERN = /^[ \t]*(?:import[ \t]*|(?:import|export)\b[^'";()=]*?\bfrom[ \t]*)(['"])([^'"]+)\1/gm;
-
-
-export function extractSpecifiers(source) {
-    return Array.from(source.matchAll(SPECIFIER_PATTERN), (match) => match[2]);
-}
-
+// The same lists for the skeleton, where core is at ./kixx/. They are the
+// entry points in plugins/README.md ("Entry Points").
+const SKELETON_ENTRY_POINT_IMPORTS = {
+    'node-server.js': [
+        './kixx/adapters/node/server/lib/node-server.js',
+        './node-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+    ],
+    'cloudflare-server.js': [
+        'cloudflare:workers',
+        './kixx/adapters/cloudflare/server/lib/cloudflare-worker.js',
+        './cloudflare-config.generated.js',
+        './cloudflare-registry.generated.js',
+        './virtual-hosts.js',
+        './app/app.js',
+        './cloudflare-durable-objects.generated.js',
+    ],
+};
 
 describe('import hygiene', ({ it }) => {
     const imports = readCoreImports();
@@ -266,6 +351,16 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
+    it('holds exactly the modules CORE-1 allows', () => {
+        const allowed = [
+            ...CORE_1_MODULES,
+            ...Object.keys(APPROVED_CORE_ADDITIONS),
+            ...Object.keys(LEAVING_CORE),
+        ].sort();
+
+        assertEqual(allowed.join('\n'), fs.readdirSync(CORE_DIRECTORY).sort().join('\n'));
+    });
+
     it('lists no module or edge that is already gone', () => {
         const stale = [];
 
@@ -370,6 +465,82 @@ describe('import hygiene', ({ it }) => {
         assertEqual(Object.keys(FIXTURE_ENTRY_POINT_IMPORTS).sort().join(','), listed.sort().join(','));
     });
 
+    it('keeps the skeleton\'s entry points to the imports of a thin shell', () => {
+        for (const [ fileName, expected ] of Object.entries(SKELETON_ENTRY_POINT_IMPORTS)) {
+            const source = fs.readFileSync(path.join(SKELETON_DIRECTORY, fileName), 'utf8');
+
+            assertEqual(expected.join('\n'), extractSpecifiers(source).join('\n'), fileName);
+        }
+
+        // Every listed entry point of the skeleton has a list above.
+        const listed = ENTRY_POINTS
+            .filter((entry) => isInsideDirectory(SKELETON_DIRECTORY, path.join(REPOSITORY_DIRECTORY, entry)))
+            .map((entry) => path.basename(entry));
+
+        assertEqual(Object.keys(SKELETON_ENTRY_POINT_IMPORTS).sort().join(','), listed.sort().join(','));
+    });
+
+    it('holds no generated file and no core in the skeleton', () => {
+        // The scaffold copies core in and runs the generator. A copy kept
+        // here would drift from what they write.
+        const found = fs.readdirSync(SKELETON_DIRECTORY, { recursive: true })
+            .map((name) => name.split(path.sep).join('/'))
+            .filter((name) => {
+                return name.endsWith('.generated.js')
+                    || path.posix.basename(name) === 'example.env.secrets'
+                    || name === 'kixx';
+            });
+
+        assertEqual('', found.join('\n'));
+    });
+
+    it('resolves every import of core from the skeleton', () => {
+        // A core module that moves breaks the build here, and not in a
+        // project generated from the skeleton.
+        const violations = listJavaScriptFiles(SKELETON_DIRECTORY).flatMap((filepath) => {
+            return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
+                .filter((specifier) => specifier.startsWith('.'))
+                .map((specifier) => ({ specifier, target: path.resolve(path.dirname(filepath), specifier) }))
+                .filter(({ target }) => isInsideDirectory(SKELETON_CORE_DIRECTORY, target))
+                .filter(({ target }) => !fs.existsSync(resolveSkeletonCore(target)))
+                .map(({ specifier }) => ({ file: toRepositoryPath(filepath), specifier }));
+        });
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('imports no platform module or adapter from the skeleton\'s app code or a plugin\'s platform-neutral code (CORE-5)', () => {
+        const violations = [];
+
+        const entryFiles = [
+            ...listJavaScriptFiles(path.join(SKELETON_DIRECTORY, 'app/')),
+            path.join(SKELETON_DIRECTORY, 'virtual-hosts.js'),
+            ...listPluginPlatformNeutralFiles(),
+            ...listPlatformNeutralFiles(INTEGRATION_PROBE_DIRECTORY),
+        ];
+
+        // A generated file isn't in the skeleton, and isn't app code.
+        const stopAt = (filepath) => filepath.endsWith('.generated.js') && isInsideDirectory(SKELETON_DIRECTORY, filepath);
+
+        const resolve = (file, specifier) => resolveSkeletonCore(path.resolve(path.dirname(file), specifier));
+
+        for (const { file, specifiers, chain } of readImportGraph(entryFiles, stopAt, resolve)) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            if (isInsideCore(file) && toCorePath(file).startsWith('adapters/')) {
+                violations.push({ file: trail, specifier: '(an adapter)' });
+            }
+
+            for (const specifier of specifiers) {
+                if (specifier.startsWith('node:') || specifier.startsWith('cloudflare:')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
     it('keeps the fixture\'s platform-neutral files platform-neutral', () => {
         const violations = [];
 
@@ -404,15 +575,138 @@ describe('import hygiene', ({ it }) => {
         assertEqual('', formatViolations(violations));
     });
 
-    it('imports no cloudflare:* module in test-app/', () => {
-        // The runner, its helpers, and the integration tests run on a laptop.
-        // A test app's Cloudflare entry point needs its own list here when
-        // the first test app exists.
-        const violations = listJavaScriptFiles(TEST_APP_DIRECTORY).flatMap((filepath) => {
+    it('reaches only relative imports from the integration-probe plugin, but for node:* in its Node.js adapter and cloudflare:workers in its shell', () => {
+        const violations = [];
+        const nodeAdapterDirectory = path.join(INTEGRATION_PROBE_DIRECTORY, 'adapters/node/');
+
+        // The plugin is bundled into the test app's Worker and copied into
+        // its Node.js project, so it can hold no package. What core's own
+        // adapters import is core's to check.
+        for (const { file, specifiers, chain } of readImportGraph(listJavaScriptFiles(INTEGRATION_PROBE_DIRECTORY))) {
+            if (isInsideCore(file) && toCorePath(file).startsWith('adapters/')) {
+                continue;
+            }
+
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            for (const specifier of specifiers) {
+                const allowed = specifier.startsWith('.')
+                    || (specifier.startsWith('node:') && isInsideDirectory(nodeAdapterDirectory, file))
+                    || (specifier === 'cloudflare:workers' && TEST_APP_DURABLE_OBJECT_SHELLS.includes(toRepositoryPath(file)));
+
+                if (!allowed) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('reaches no node:* module from the integration-probe plugin\'s Cloudflare adapter', () => {
+        const violations = [];
+        const entryFiles = listJavaScriptFiles(path.join(INTEGRATION_PROBE_DIRECTORY, 'adapters/cloudflare/'));
+
+        // It is bundled into a Worker with everything it reaches.
+        for (const { specifiers, chain } of readImportGraph(entryFiles)) {
+            const trail = chain.map(toRepositoryPath).join(' -> ');
+
+            for (const specifier of specifiers) {
+                if (specifier.startsWith('node:')) {
+                    violations.push({ file: trail, specifier });
+                }
+            }
+        }
+
+        assertEqual('', formatViolations(violations));
+    });
+
+    it('imports cloudflare:* modules in test-app/ only in its Durable Object shells', () => {
+        // The runner, its helpers, the integration tests, and the test-only
+        // plugin. The built test app is skipped: its Cloudflare entry point
+        // is the skeleton's, which CLOUDFLARE_ONLY_MODULES lists.
+        const files = listJavaScriptFiles(TEST_APP_DIRECTORY).filter((filepath) => {
+            return !isInsideDirectory(TEST_APP_BUILD_DIRECTORY, filepath);
+        });
+
+        const cloudflareImports = files.flatMap((filepath) => {
             return extractSpecifiers(fs.readFileSync(filepath, 'utf8'))
                 .filter((specifier) => specifier.startsWith('cloudflare:'))
                 .map((specifier) => ({ file: toRepositoryPath(filepath), specifier }));
         });
+
+        // The importers must be exactly the listed shells, so an entry that
+        // no longer imports a cloudflare:* module fails too.
+        const problems = cloudflareImports
+            .filter(({ file }) => !TEST_APP_DURABLE_OBJECT_SHELLS.includes(file))
+            .map(({ file, specifier }) => `${ file } -> ${ specifier } (not in TEST_APP_DURABLE_OBJECT_SHELLS)`);
+
+        for (const shell of TEST_APP_DURABLE_OBJECT_SHELLS) {
+            if (!cloudflareImports.some(({ file }) => file === shell)) {
+                problems.push(`TEST_APP_DURABLE_OBJECT_SHELLS lists ${ shell }, which imports no cloudflare:* module`);
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('keeps every Durable Object shell in test-app/ thin', () => {
+        const problems = [];
+
+        for (const shell of TEST_APP_DURABLE_OBJECT_SHELLS) {
+            const source = fs.readFileSync(path.join(REPOSITORY_DIRECTORY, shell), 'utf8');
+            const specifiers = extractSpecifiers(source);
+
+            // cloudflare:workers, and the plain class beside it that holds
+            // the behavior.
+            const core = `./${ path.basename(shell, '.js') }-core.js`;
+
+            if (specifiers.slice().sort().join(',') !== [ core, 'cloudflare:workers' ].sort().join(',')) {
+                problems.push(`${ shell } imports ${ specifiers.join(', ') }; a shell imports cloudflare:workers and ${ core }`);
+            }
+
+            // Each method hands its arguments to the plain class in one
+            // line. Anything else in a method body is behavior.
+            const bodies = [ ...source.matchAll(/^ {4}(\w+)\(([^)]*)\) \{\n([\s\S]*?)\n {4}\}/gm) ]
+                .filter(([ , name ]) => name !== 'constructor');
+
+            if (bodies.length === 0) {
+                problems.push(`${ shell } declares no method`);
+            }
+
+            for (const [ , name, parameters, body ] of bodies) {
+                if (body.trim() !== `return this.#core.${ name }(${ parameters });`) {
+                    problems.push(`${ shell }: ${ name }() does more than delegate to the plain class`);
+                }
+            }
+        }
+
+        assertEqual('', problems.join('\n'));
+    });
+
+    it('declares exactly the test-app Durable Object shells in the integration-probe plugin\'s manifest', () => {
+        const manifest = JSON.parse(fs.readFileSync(path.join(INTEGRATION_PROBE_DIRECTORY, 'plugin.json'), 'utf8'));
+
+        const declared = (manifest.cloudflare?.durableObjects ?? []).map(({ module }) => {
+            return toRepositoryPath(path.join(INTEGRATION_PROBE_DIRECTORY, module));
+        });
+
+        assertEqual(TEST_APP_DURABLE_OBJECT_SHELLS.slice().sort().join('\n'), declared.sort().join('\n'));
+    });
+
+    it('reaches no test-app Durable Object shell from the plugin\'s other files', () => {
+        // The Cloudflare registry imports the plugin's lifecycle module and
+        // routes, and must load in a unit test. Only the generated Durable
+        // Object registry imports a shell.
+        const shells = TEST_APP_DURABLE_OBJECT_SHELLS.map((shell) => path.join(REPOSITORY_DIRECTORY, shell));
+        const entryFiles = listJavaScriptFiles(INTEGRATION_PROBE_DIRECTORY).filter((filepath) => !shells.includes(filepath));
+        const violations = [];
+
+        for (const { file, chain } of readImportGraph(entryFiles)) {
+            if (shells.includes(file)) {
+                violations.push({ file: chain.map(toRepositoryPath).join(' -> '), specifier: '(a Durable Object shell)' });
+            }
+        }
 
         assertEqual('', formatViolations(violations));
     });
@@ -435,39 +729,35 @@ function readCoreImports() {
     });
 }
 
-// Follows static relative specifiers from the entry files (absolute paths)
-// to every file they reach, reading each file once. Returns one record per
-// reached file: its path, its specifiers, and the chain of files that led to
-// it, starting at an entry file.
-//
-// A dynamic import() isn't followed, because SPECIFIER_PATTERN doesn't
-// match one.
-//
-// A file that `stopAt` accepts is recorded but never read, so its imports
-// aren't followed: it may import a file that doesn't exist here.
-function readImportGraph(entryFiles, stopAt = () => false) {
-    const graph = new Map();
-    const queue = entryFiles.map((filepath) => [ filepath ]);
-
-    while (queue.length > 0) {
-        const chain = queue.shift();
-        const file = chain.at(-1);
-
-        if (graph.has(file)) {
-            continue;
-        }
-
-        const specifiers = stopAt(file) ? [] : extractSpecifiers(fs.readFileSync(file, 'utf8'));
-        graph.set(file, { file, specifiers, chain });
-
-        for (const specifier of specifiers) {
-            if (specifier.startsWith('.')) {
-                queue.push([ ...chain, path.resolve(path.dirname(file), specifier) ]);
-            }
-        }
+// Maps a path inside the skeleton's ./kixx/, which the skeleton doesn't
+// hold, to the same path in core. Any other path is returned unchanged.
+function resolveSkeletonCore(filepath) {
+    if (!isInsideDirectory(SKELETON_CORE_DIRECTORY, filepath)) {
+        return filepath;
     }
 
-    return Array.from(graph.values());
+    return path.join(CORE_DIRECTORY, path.relative(SKELETON_CORE_DIRECTORY, filepath));
+}
+
+// Every .js file of each first-party plugin outside its adapters/, as
+// absolute paths. A plugin is a directory under plugins/ with a plugin.json.
+function listPluginPlatformNeutralFiles() {
+    if (!fs.existsSync(PLUGINS_DIRECTORY)) {
+        return [];
+    }
+
+    return fs.readdirSync(PLUGINS_DIRECTORY, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => path.join(PLUGINS_DIRECTORY, entry.name))
+        .filter((directory) => fs.existsSync(path.join(directory, 'plugin.json')))
+        .flatMap(listPlatformNeutralFiles);
+}
+
+// Every .js file of a plugin outside its adapters/, as absolute paths.
+function listPlatformNeutralFiles(pluginDirectory) {
+    return listJavaScriptFiles(pluginDirectory).filter((filepath) => {
+        return !isInsideDirectory(path.join(pluginDirectory, 'adapters/'), filepath);
+    });
 }
 
 // Absolute paths of every .js file under the directory, at any depth.

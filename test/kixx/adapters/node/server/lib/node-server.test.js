@@ -29,11 +29,6 @@ const SOURCE_CONFIG = {
     },
 };
 
-// Asks the server to close the connection after the response. Node.js keeps a
-// connection that finishes a request during a drain open until the client lets
-// go of it, so a request that is in flight when a drain begins sends this.
-const CLOSE_CONNECTION = { connection: 'close' };
-
 
 // A LoggerWriter class that keeps every entry it is given in `entries`.
 function makeLoggerWriter(entries) {
@@ -212,6 +207,26 @@ function sendRawRequest(port, text) {
             received += data;
         });
         socket.on('close', () => resolve(received));
+    });
+}
+
+// Sends one GET on a keep-alive connection of the given agent and resolves
+// with the status, headers, and body. fetch() hides the Connection header on
+// some runtimes; node:http shows it.
+function getWithAgent(agent, url) {
+    return new Promise((resolve, reject) => {
+        const request = http.get(url, { agent }, (response) => {
+            let body = '';
+
+            response.setEncoding('utf8');
+            response.on('data', (chunk) => {
+                body += chunk;
+            });
+            response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, body }));
+            response.on('error', reject);
+        });
+
+        request.on('error', reject);
     });
 }
 
@@ -580,7 +595,7 @@ describe('node server', ({ describe }) => {
             };
 
             await withTestServer(options, async ({ origin }) => {
-                const response = await fetch(`${ origin }/hello`, { headers: CLOSE_CONNECTION });
+                const response = await fetch(`${ origin }/hello`);
 
                 assertEqual(200, response.status);
                 assertEqual('hello', await response.text());
@@ -796,7 +811,7 @@ describe('node server', ({ describe }) => {
             };
 
             await withTestServer(options, async ({ origin, fakeProcess, logEntries }) => {
-                const response = await fetch(`${ origin }/broken`, { headers: CLOSE_CONNECTION });
+                const response = await fetch(`${ origin }/broken`);
 
                 assertEqual(500, response.status);
                 assertEqual('no-store', response.headers.get('cache-control'));
@@ -830,7 +845,7 @@ describe('node server', ({ describe }) => {
             };
 
             await withTestServer(options, async ({ origin, fakeProcess }) => {
-                const response = await fetch(`${ origin }/broken`, { method: 'HEAD', headers: CLOSE_CONNECTION });
+                const response = await fetch(`${ origin }/broken`, { method: 'HEAD' });
 
                 assertEqual(500, response.status);
                 assertEqual('no-store', response.headers.get('cache-control'));
@@ -870,7 +885,7 @@ describe('node server', ({ describe }) => {
                 // must close for the server to exit.
                 await (await fetch(`${ origin }/hello`)).text();
 
-                const pending = fetch(`${ origin }/held`, { headers: CLOSE_CONNECTION });
+                const pending = fetch(`${ origin }/held`);
 
                 await held.entered.promise;
                 events.length = 0;
@@ -896,6 +911,105 @@ describe('node server', ({ describe }) => {
 
                 assertEqual(0, closed.info.exitCode);
             });
+        });
+
+        // S07 OP11: Node.js kept the connection of a request that finished
+        // during a drain open until the client let go of it, about three
+        // seconds with fetch(), and the exit waited for it.
+        it('exits promptly after a drain when the in-flight request is on a keep-alive connection', async () => {
+            const events = [];
+            const held = makeHeldRoute(events);
+
+            await withTestServer({ routes: [ held.route ] }, async ({ origin, fakeProcess }) => {
+                // No `connection` request header: fetch() keeps the connection alive.
+                const pending = fetch(`${ origin }/held`);
+
+                await held.entered.promise;
+
+                fakeProcess.handlers.get('SIGTERM')();
+
+                const releasedAt = Date.now();
+                held.release.resolve();
+
+                const response = await pending;
+
+                assertEqual(200, response.status);
+                assertEqual('late', await response.text());
+                assertEqual(0, await fakeProcess.exited);
+
+                const elapsed = Date.now() - releasedAt;
+
+                assert(elapsed < 1500, `the exit came ${ elapsed } ms after the response`);
+                assertEqual('0', fakeProcess.exitCodes.join(','));
+            });
+        }, { timeout: 8000 });
+
+        // Its headers are already sent, so it can't carry Connection: close.
+        it('exits promptly after a drain when a response was already streaming', async () => {
+            const finish = makeDeferred();
+
+            const route = makeRoute('/stream', (_context, _request, response) => {
+                const body = new ReadableStream({
+                    async start(controller) {
+                        controller.enqueue(new TextEncoder().encode('first, '));
+                        await finish.promise;
+                        controller.enqueue(new TextEncoder().encode('second'));
+                        controller.close();
+                    },
+                });
+
+                return response.respond(200, null, body);
+            });
+
+            await withTestServer({ routes: [ route ] }, async ({ origin, fakeProcess }) => {
+                // Resolves once the headers have arrived.
+                const response = await fetch(`${ origin }/stream`);
+
+                fakeProcess.handlers.get('SIGTERM')();
+
+                const releasedAt = Date.now();
+                finish.resolve();
+
+                assertEqual('first, second', await response.text());
+                assertEqual(0, await fakeProcess.exited);
+
+                const elapsed = Date.now() - releasedAt;
+
+                assert(elapsed < 1500, `the exit came ${ elapsed } ms after the response`);
+            });
+        }, { timeout: 8000 });
+
+        it('answers Connection: close during a drain, and not before one', async () => {
+            const held = makeHeldRoute([]);
+            const agent = new http.Agent({ keepAlive: true });
+
+            const options = {
+                routes: [ held.route, makeRoute('/hello', (_context, _request, response) => response.respond(200, null, 'hello')) ],
+            };
+
+            try {
+                await withTestServer(options, async ({ origin, fakeProcess }) => {
+                    const before = await getWithAgent(agent, `${ origin }/hello`);
+
+                    const pending = getWithAgent(agent, `${ origin }/held`);
+
+                    await held.entered.promise;
+
+                    fakeProcess.handlers.get('SIGTERM')();
+                    held.release.resolve();
+
+                    const during = await pending;
+
+                    assertEqual(200, before.status);
+                    assert(before.headers.connection !== 'close', 'a response before a drain keeps the connection');
+                    assertEqual(200, during.status);
+                    assertEqual('late', during.body);
+                    assertEqual('close', during.headers.connection);
+                    assertEqual(0, await fakeProcess.exited);
+                });
+            } finally {
+                agent.destroy();
+            }
         });
 
         it('forces on SIGINT: an in-flight request is dropped and the server exits 0', async () => {

@@ -6,6 +6,7 @@ import { assert, assertEqual, assertFalsy, isFunction } from 'kixx-assert';
 
 import { renderProjectFiles } from '../../kixx/tooling/mod.js';
 import { createProjectFileSystem } from '../../kixx/adapters/node/tooling/lib/project-file-system.js';
+import { parseJsonc } from '../../kixx/config/parse-jsonc.js';
 import { parseSecretsManifest } from '../../kixx/config/secrets-manifest.js';
 import { sha256Hex } from '../../kixx/utils/crypto.js';
 import HttpRouter from '../../kixx/http-router/http-router.js';
@@ -68,9 +69,6 @@ const WORKING_TREE_REFUSED_MESSAGE = 'CONTENT_STORE.workingTree can be true only
 // so it answers 503. test/fixtures/project-pages.test.js assigns one.
 const NO_RELEASE_CODE = 'BuildNotServable';
 
-// Asks the server to close the connection after the response, so a drain that
-// follows finds no connection open on either runtime.
-const CLOSE_CONNECTION = { connection: 'close' };
 
 
 function readManifest(fileName) {
@@ -276,9 +274,12 @@ describe('fixture project', ({ describe }) => {
             assertEqual('a default for Cloudflare', cloudflareRegistry.configDefaults.VISITS.platformNote);
             assertEqual('Fixture panel', nodeRegistry.configDefaults.PANEL.title);
 
-            // Core's Cloudflare defaults name its bindings; Node.js has none.
+            // Core's Cloudflare defaults name its bindings, and its Node.js
+            // defaults say where the stores live (OP-C).
             assertEqual('KEY_VALUE_STORE', cloudflareRegistry.configDefaults.KEY_VALUE_STORE.bindingName);
-            assertFalsy(Object.hasOwn(nodeRegistry.configDefaults, 'KEY_VALUE_STORE'));
+            assertFalsy(Object.hasOwn(cloudflareRegistry.configDefaults.KEY_VALUE_STORE, 'path'));
+            assertEqual('data/key-value-store.sqlite', nodeRegistry.configDefaults.KEY_VALUE_STORE.path);
+            assertEqual('data/content-store', nodeRegistry.configDefaults.CONTENT_STORE.rootDirectory);
         });
 
         it('list every declared template helper: core\'s, the visits plugin\'s, and the app\'s', () => {
@@ -460,10 +461,12 @@ describe('fixture project', ({ describe }) => {
             );
         });
 
-        it('keeps its stores in DATA_DIRECTORY, not in the project', () => {
-            assert(fs.existsSync(path.join(booted.dataDirectory, 'key-value-store.sqlite')));
-            assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'key-value-store.sqlite')));
-            assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'content-store')));
+        // The fixture's config names no store path: these are core's
+        // defaults (OP-C), resolved under DATA_DIRECTORY.
+        it('keeps its stores under data/ in DATA_DIRECTORY, not in the project', () => {
+            assert(fs.existsSync(path.join(booted.dataDirectory, 'data', 'key-value-store.sqlite')));
+            assert(fs.existsSync(path.join(booted.dataDirectory, 'data', 'content-store')));
+            assertFalsy(fs.existsSync(path.join(PROJECT_DIRECTORY, 'data')));
         });
 
         it('serves the Publishing API behind the deploy key', () => {
@@ -475,6 +478,91 @@ describe('fixture project', ({ describe }) => {
         });
     });
 
+    describe('booted on the Node.js adapters with its own store paths', ({ before, after, it }) => {
+        let booted;
+
+        before(async () => {
+            // The committed config, with a store path of the project's own
+            // in the environment the fixture boots as.
+            const readFile = (filepath) => {
+                const source = fs.readFileSync(filepath, 'utf8');
+
+                if (path.basename(filepath) !== 'node-config.jsonc') {
+                    return source;
+                }
+
+                const sourceConfig = parseJsonc(source);
+
+                sourceConfig.environments.test.KEY_VALUE_STORE = { path: 'my-stores/kv.sqlite' };
+                sourceConfig.environments.test.CONTENT_STORE = { rootDirectory: 'my-stores/content' };
+
+                return JSON.stringify(sourceConfig);
+            };
+
+            booted = await bootOnNode(nodeRegistry, { readFile });
+
+            // One request to each store: both create their files on first
+            // use. No Release is assigned, so the page answers 503.
+            for (const pathname of [ '/visits', '/about' ]) {
+                const response = await fetch(`${ booted.origin }${ pathname }`);
+                await response.text();
+            }
+        });
+
+        after(async () => {
+            await booted.close();
+        });
+
+        it('keeps its stores where the project\'s config says, not at the defaults', () => {
+            assert(fs.existsSync(path.join(booted.dataDirectory, 'my-stores', 'kv.sqlite')));
+            assert(fs.existsSync(path.join(booted.dataDirectory, 'my-stores', 'content')));
+            assertFalsy(fs.existsSync(path.join(booted.dataDirectory, 'data')));
+        });
+    });
+
+    // OP-B: a host with no BUILD_ID can serve no Release. It answers 503 and
+    // keeps running, so the Publishing API stays reachable.
+    describe('booted on the Node.js adapters without a BUILD_ID', ({ before, after, it }) => {
+        let booted;
+        let firstPage;
+        let secondPage;
+        let discovery;
+
+        before(async () => {
+            booted = await bootOnNode(nodeRegistry, { buildId: null });
+
+            firstPage = await fetchJSON(`${ booted.origin }/about`);
+            secondPage = await fetchJSON(`${ booted.origin }/about`);
+
+            const response = await fetch(`${ booted.origin }/publishing-api/v1`, {
+                headers: { authorization: `Bearer ${ FIXTURE_DEPLOY_KEY }` },
+            });
+
+            discovery = { status: response.status, body: await response.json() };
+        });
+
+        after(async () => {
+            await booted.close();
+        });
+
+        it('answers a page request with 503, twice', () => {
+            for (const { response, body } of [ firstPage, secondPage ]) {
+                assertEqual(503, response.status);
+                assertEqual(NO_RELEASE_CODE, body.errors[0].code);
+            }
+        });
+
+        it('keeps running', () => {
+            assert(booted.server.listening);
+            assertEqual(0, booted.fakeProcess.exitCodes.length);
+        });
+
+        it('still answers the Publishing API, which reports no running build', () => {
+            assertEqual(200, discovery.status);
+            assertEqual(null, discovery.body.data.attributes.runningBuildId);
+        });
+    });
+
     describe('shut down on the Node.js adapters', ({ before, after, it }) => {
         let booted;
         let exitCode;
@@ -483,7 +571,7 @@ describe('fixture project', ({ describe }) => {
             booted = await bootOnNode();
 
             // One request, so the stores have been used when they close.
-            const response = await fetch(`${ booted.origin }/visits`, { headers: CLOSE_CONNECTION });
+            const response = await fetch(`${ booted.origin }/visits`);
             await response.text();
 
             // SIGTERM is the deploy path: drain, stop, close, exit.
@@ -649,6 +737,27 @@ describe('fixture project', ({ describe }) => {
             assertEqual(0, fs.readdirSync(dataDirectory).length);
             assertEqual(0, fakeProcess.handlers.size);
             assertEqual(0, fakeProcess.exitCodes.length);
+        });
+    });
+
+    // OP-B on Cloudflare: 503, not the 500 an unexpected error gets.
+    describe('booted on the Cloudflare adapters against fakes without a BUILD_ID', ({ before, it }) => {
+        let page;
+
+        before(async () => {
+            const booted = bootOnCloudflare({
+                DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
+                FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
+                PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
+            }, cloudflareRegistry, { buildId: null });
+            const response = await booted.fetch('/about');
+
+            page = { status: response.status, body: await response.json() };
+        });
+
+        it('answers a page request with 503', () => {
+            assertEqual(503, page.status);
+            assertEqual(NO_RELEASE_CODE, page.body.errors[0].code);
         });
     });
 

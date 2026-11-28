@@ -10,6 +10,9 @@ tmp/
 # Site data
 data/
 
+# The integration suite's test app, built by tools/build-test-app.js
+test-app/build/
+
 # Dev tooling only; there are no runtime dependencies (TECH-2)
 node_modules/
 package-lock.json

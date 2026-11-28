@@ -62,6 +62,25 @@ config and turns config-relative store paths into real paths.
 config path's POSIX-style segments against `DATA_DIRECTORY` when set, or
 against the project directory otherwise.
 
+**What boot needs (CORE-2).** A Node.js config needs only `name` and a
+section for the selected environment.
+
+- Core's manifest gives the Node.js target two store defaults:
+  `KEY_VALUE_STORE.path` is `data/key-value-store.sqlite` and
+  `CONTENT_STORE.rootDirectory` is `data/content-store`. Both go through
+  `resolveFilepath`, so they land under `DATA_DIRECTORY` when it is set and
+  under the project directory otherwise. The two store plugins still assert
+  the merged value and keep no fallback of their own.
+- `bootApplication()` passes `config.env.LOGGER?.level` to the `Logger`. A
+  missing block or level gives INFO. An invalid level name still throws.
+- A missing or empty `BUILD_ID` is not a boot failure.
+  `ContentAddressableStore#openSnapshot()` throws the expected
+  `OperationalError` with code `BuildNotServable` (503) without asking the
+  store for a build, and logs `build cannot serve content` once. Supplied
+  content (the development working tree) is served before the build id is
+  read. The check is in the platform-neutral store, so every platform
+  behaves alike.
+
 ## Environment merging
 
 `kixx/adapters/node/server/lib/node-environment.js` (`readEnvironment`,
@@ -101,13 +120,10 @@ file.
 ## Config templates
 
 `node-config.jsonc` and `cloudflare-config.jsonc` can be rendered from
-templates in `lib/`. Today two things render them:
-`test/config-templates.test.js`, and `tools/build-test-app.js`
-(from the repo root), which renders `test-app`'s configs from its own
-context files. No devkit command uses them yet.
-
-`tools/build-test-app.js` is a v6 tool and knowingly broken. Don't run it:
-it would wipe `test-app/`, which now holds the integration suite.
+templates in `lib/`. This is v6 material: `test/config-templates.test.js`
+rendered them, and so did a v6 build tool that has been deleted. Nothing
+renders them today, and no devkit command uses them. The project skeleton
+(`devkit/templates/project/`) holds plain config files instead.
 
 | File | Purpose |
 | --- | --- |
@@ -230,6 +246,4 @@ Paths are below `environments.<envName>` unless marked root.
 Follow "Adding a new setting" in the usage configuration doc. For a
 per-environment setting, also add the key to the matching `.jsonc.template`,
 its example context, and the [Config templates](#config-templates) tables,
-or `config-templates.test.js` fails. Add it to `test-app`'s context files
-too, or `tools/build-test-app.js` fails to render. That tool is v6 and
-knowingly broken, and must not be run: it would wipe `test-app/`.
+or `config-templates.test.js` fails.

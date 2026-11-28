@@ -867,6 +867,36 @@ describe('ContentAddressableStore', ({ describe, it }) => {
             assertEqual(1, errors.length);
         });
 
+        // OP-B: a deploy with no BUILD_ID answers 503 and keeps running.
+        it('reports 503 naming BUILD_ID, without asking the store, when the build id is missing', async () => {
+            const { store, contentStore, errors } = makeStore();
+            const context = { runtime: { build: { id: undefined } } };
+
+            const first = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual('OperationalError', first.name);
+            assertEqual(503, first.httpStatusCode);
+            assertEqual('BuildNotServable', first.code);
+            assert(first.message.includes('BUILD_ID'));
+            assertEqual(1, errors.length);
+
+            const second = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual('BuildNotServable', second.code);
+            assertEqual(1, errors.length, 'the fault is logged once');
+            assertEqual(false, contentStore.calls.includes('getBuild'));
+        });
+
+        it('reports 503 naming BUILD_ID when the build id is an empty string', async () => {
+            const { store, contentStore, errors } = makeStore();
+            const context = { runtime: { build: { id: '' } } };
+
+            const caught = await catchAsyncError(() => store.openSnapshot(context));
+            assertEqual(503, caught.httpStatusCode);
+            assertEqual('BuildNotServable', caught.code);
+            assert(caught.message.includes('BUILD_ID'));
+            assertEqual(1, errors.length);
+            assertEqual(false, contentStore.calls.includes('getBuild'));
+        });
+
         it('reports 503 naming both versions when the Release contract is unsupported', async () => {
             const { store, contentStore, errors } = makeStore();
             const object = await uploadText(store, 'abc');

@@ -86,15 +86,22 @@ export function makeProcess(env, environment = 'test') {
 // Boots the fixture the way its node-server.js does, from the committed
 // registry, with a fake process and the stores in a temporary directory. The
 // caller must await close(). A test may pass a changed copy of the registry,
-// another environment of node-config.jsonc, or a copy of the project to boot
-// in place of the committed one.
+// another environment of node-config.jsonc, a copy of the project to boot
+// in place of the committed one, a `buildId` (null for a host with no
+// BUILD_ID), or a `readFile` that serves a changed config.
 export async function bootOnNode(registry = nodeRegistry, options = {}) {
-    const { environment = 'test', baseDirectory = PROJECT_DIRECTORY } = options;
+    const {
+        environment = 'test',
+        baseDirectory = PROJECT_DIRECTORY,
+        buildId = BUILD_ID,
+        readFile,
+    } = options;
+
     const dataDirectory = await makeDataDirectory();
 
     const fakeProcess = makeProcess({
         DATA_DIRECTORY: dataDirectory,
-        BUILD_ID,
+        ...(buildId === null ? {} : { BUILD_ID: buildId }),
         DEPLOY_KEY_HASH: SECRET_VALUES.DEPLOY_KEY_HASH,
         FIXTURE_APP_SECRET: SECRET_VALUES.FIXTURE_APP_SECRET,
         PANEL_SIGNING_SECRET: SECRET_VALUES.PANEL_SIGNING_SECRET,
@@ -109,6 +116,7 @@ export async function bootOnNode(registry = nodeRegistry, options = {}) {
             app,
             baseDirectory,
             process: fakeProcess,
+            readFile,
             hostname: '127.0.0.1',
         });
     } catch (error) {
@@ -138,15 +146,18 @@ export async function bootOnNode(registry = nodeRegistry, options = {}) {
 // Builds the fixture's Worker the way its cloudflare-server.js does, from the
 // committed registry, with fakes for the bindings core's manifest declares.
 // `secrets` are the secret values the environment holds. A test may pass a
-// changed copy of the registry.
-export function bootOnCloudflare(secrets, registry = cloudflareRegistry) {
+// changed copy of the registry, or a `buildId` (null for a Worker with no
+// BUILD_ID binding).
+export function bootOnCloudflare(secrets, registry = cloudflareRegistry, options = {}) {
+    const { buildId = BUILD_ID } = options;
+
     // Workers KV allows one write per second to a key, and so does the fake.
     // A test moves this clock on between visits instead of waiting.
     const clock = { now: Date.now() };
 
     const env = {
         ENVIRONMENT: 'test',
-        BUILD_ID,
+        ...(buildId === null ? {} : { BUILD_ID: buildId }),
         ...secrets,
         KEY_VALUE_STORE: createFakeKVNamespace({ now: () => clock.now }),
         CA_STORE_KV_STORE: createFakeKVNamespace(),

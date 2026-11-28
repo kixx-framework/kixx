@@ -132,7 +132,10 @@ describe('core manifest', ({ it }) => {
         );
         assertEqual(JSON.stringify(node.configDefaults.HYPERVIEW), JSON.stringify(cloudflare.configDefaults.HYPERVIEW));
 
-        assertEqual('HYPERVIEW', Object.keys(node.configDefaults).join(','));
+        // OP-C: the Node.js store paths, so a project's config needn't name them.
+        assertEqual('HYPERVIEW,KEY_VALUE_STORE,CONTENT_STORE', Object.keys(node.configDefaults).join(','));
+        assertEqual('{"path":"data/key-value-store.sqlite"}', JSON.stringify(node.configDefaults.KEY_VALUE_STORE));
+        assertEqual('{"rootDirectory":"data/content-store"}', JSON.stringify(node.configDefaults.CONTENT_STORE));
 
         assertEqual('KEY_VALUE_STORE', cloudflare.configDefaults.KEY_VALUE_STORE.bindingName);
         assertEqual(

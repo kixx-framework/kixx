@@ -36,6 +36,12 @@ export const configDefaults = {
         "pageCacheExpirationSeconds": 86400,
         "allowJsonResponse": false
     },
+    "KEY_VALUE_STORE": {
+        "path": "data/key-value-store.sqlite"
+    },
+    "CONTENT_STORE": {
+        "rootDirectory": "data/content-store"
+    },
     "VISITS": {
         "greeting": "hello",
         "tags": [
