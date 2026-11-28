@@ -67,6 +67,12 @@ function parseEnvelope(stdout) {
     return JSON.parse(stdout);
 }
 
+// Error text is wrapped at 80 columns, and where it breaks depends on the
+// length of the temporary directory's path on the machine.
+function unwrap(text) {
+    return text.replace(/\s+/g, ' ');
+}
+
 // The default loader of these tests: a test that expects tooling passes its
 // own, and every other test proves the loader was never called.
 function failToLoadTooling() {
@@ -320,7 +326,7 @@ describe('runCli()', ({ describe }) => {
                 assertEqual(3, text.code);
                 assertEqual('', text.stdout);
                 assertMatches(directory, text.stderr);
-                assertMatches('inside a Kixx project', text.stderr);
+                assertMatches('is not inside a Kixx project', unwrap(text.stderr));
                 assert(!/\n\s+at /.test(text.stderr), 'printed a stack');
 
                 assertEqual(3, json.code);
@@ -791,7 +797,7 @@ describe('runCli()', ({ describe }) => {
 
             assertEqual(2, code);
             assertMatches(path.join(EMPTY_DIRECTORY, 'no-such-directory'), stderr);
-            assertMatches('does not exist', stderr);
+            assertMatches('does not exist', unwrap(stderr));
         });
 
         it('exits 2 for a missing required setting, naming the key and the files', async () => {
