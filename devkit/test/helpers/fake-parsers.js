@@ -45,8 +45,9 @@ export function parseSecretsManifest(text) {
 }
 
 /**
- * Stands in for core's `parseJsonc()`: whole-line `//` comments, a comma
- * before a closing bracket, and JSON.
+ * Stands in for core's `parseJsonc()`: whole-line `//` comments, a `//`
+ * comment after a line's trailing comma, a comma before a closing bracket,
+ * and JSON.
  * @param {string} source
  * @returns {*}
  * @throws {Error} Named `OperationalError` when what is left is not JSON
@@ -55,6 +56,7 @@ export function parseJsonc(source) {
     const json = source
         .split('\n')
         .filter((line) => !line.trim().startsWith('//'))
+        .map((line) => line.replace(/,\s*\/\/.*$/, ','))
         .join('\n')
         .replace(/,(\s*[}\]])/g, '$1');
 

@@ -2,7 +2,7 @@ import fsp from 'node:fs/promises';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches, assertUndefined } from '../../../lib/vendor/kixx-assert/mod.js';
 import { buildDurableObjectExports } from '../../../lib/cloudflare/durable-object-exports.js';
-import { parseJsonc } from '../../../lib/parse-jsonc.js';
+import { parseJsonc } from '../../helpers/fake-parsers.js';
 
 
 describe('cloudflare/durable-object-exports', ({ describe }) => {

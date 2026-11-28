@@ -278,13 +278,19 @@ files, so a helper module is never collected as a suite.
   temporary directory, and `writeProjectMarker(directory, { version })` writes
   the `kixx/plugin.json` that makes a directory a project to the CLI. Use them
   for a `requiresProject` command; pass a fake loader when it needs tooling.
-- `fake-cloudflare-client.js`: a recording Cloudflare client for
-  `create-worker-version`; any endpoint outside its allowed set throws, and
+- `fake-cloudflare-client.js`: a recording Cloudflare client for the
+  `lib/cloudflare/` tests; any endpoint outside its allowed set throws, and
   `forbiddenCalls()` reports it.
 
-Fixtures: `lib-cloudflare-config.jsonc` (a copy of the v6 `lib/` config) and
-`worker-project/` (a minimal project; copy it to a temp directory before
-writing into it).
+- `fake-parsers.js`: stand-ins for the `parseJsonc()` and
+  `parseSecretsManifest()` a command takes from the project's tooling. They
+  read only what these tests write. The conformance tests use core's.
+
+Fixtures: `lib-cloudflare-config.jsonc` (a copy of the v6 `lib/` config, which
+still holds blocks the devkit no longer reads) and `worker-project/` (the three
+text files of a minimal project: `cloudflare-config.jsonc`, `.env.production`,
+and `example.env.secrets`). Tests read them as text and never write there.
+Delete a fixture when its last test goes.
 
 Useful mock APIs:
 
