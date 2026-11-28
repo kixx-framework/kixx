@@ -14,7 +14,6 @@ import {
 } from '../vendor/kixx-assert/mod.js';
 
 import { parseRetryAfter } from '../parse-retry-after.js';
-import { getBlobSize } from './addressing.js';
 import PublishingApiError, { createPublishingApiError } from './publishing-api-error.js';
 
 const JSON_API_CONTENT_TYPE = 'application/vnd.api+json';
@@ -162,7 +161,7 @@ export default class PublishingAPIClient {
             'uploadObject() requires a positive maxObjectBytes limit',
         );
 
-        const size = getBlobSize(body);
+        const size = getByteLength(body);
         assert(size > 0, 'uploadObject() body must not be empty');
         assert(
             size <= maxObjectBytes,
@@ -415,6 +414,17 @@ export default class PublishingAPIClient {
 
         return redact(message, this.#token);
     }
+}
+
+// The size the server will count: UTF-8 bytes for text.
+function getByteLength(body) {
+    if (isString(body)) {
+        return new TextEncoder().encode(body).byteLength;
+    }
+    if (body instanceof ArrayBuffer) {
+        return body.byteLength;
+    }
+    throw new TypeError('uploadObject() body must be a string or an ArrayBuffer');
 }
 
 function toBytes(body) {

@@ -1,13 +1,12 @@
 /**
- * Publish source content as a Release and assign it to a build pointer.
+ * Publish compiled content as a Release and assign it to a build pointer.
  * @module publishing/publish-release
  */
 
 import defaultAssignRelease from './assign-release.js';
-import defaultFileSystem from '../file-system.js';
 import defaultPublishContent from './publish-content.js';
 import { UnsupportedServerError } from './negotiate-capabilities.js';
-import UsageError from '../usage-error.js';
+import { assertFunction } from '../vendor/kixx-assert/mod.js';
 
 /**
  * A Release that was created successfully but could not be assigned to a
@@ -51,55 +50,60 @@ export class ReleaseAssignmentError extends Error {
     }
 }
 
-// The content scanner moved into Kixx core as the content compiler. The
-// devkit can't import core, so until the CLI that loads the compiler is
-// built there is nothing to scan with. An injected `scan` still works.
-function defaultScan() {
-    throw new UsageError(
-        '"kixx app publish" and "kixx local publish" do not work in this version of the devkit: ' +
-        'the content compiler moved into Kixx core, and the CLI that loads it is not built yet.',
-    );
-}
+/**
+ * The `client` value of a Release's provenance.
+ * @type {string}
+ */
+export const PROVENANCE_CLIENT = 'kixx-dev';
 
 /**
- * Scans the project's content, publishes it as a Release, and assigns the
+ * Compiles the project's content, publishes it as a Release, and assigns the
  * Release to the build unless this is a dry run.
+ *
+ * The devkit holds no content compiler. The caller passes `compile`, which
+ * runs the project's own (`compileProjectContent()` from the project's
+ * tooling), with that tooling's `serializeContentObject()` and the contract
+ * versions it composes.
  * @param {Object} args - Publish inputs
  * @param {Object} args.client - Publishing API client
- * @param {string} args.projectDirectory - Application directory to scan
+ * @param {function(): Promise<Object>} args.compile - Resolves what the project's `compileProjectContent()` resolves
+ * @param {function(Object): (string|ArrayBuffer)} args.serializeContentObject - The project's serializer for an object's upload body
+ * @param {Object} args.expected - The contract versions the project's Kixx composes; see `negotiateCapabilities()`
  * @param {string} args.buildId - Build pointer to assign
  * @param {boolean} [args.dryRun=false] - Preview without writes
- * @param {Object} [args.fileSystem] - File system used by the scan
- * @param {Function} [args.scan] - Content source scanner
  * @param {Function} [args.publishContent] - Release publisher
  * @param {Function} [args.assignRelease] - Build pointer assigner
  * @param {function({releaseId: string, buildId: string}): string} [args.formatRecovery]
  *     Returns the recovery line appended to an assignment failure
  * @returns {Promise<Object>} `publishContent()` result plus `buildId` and `assignmentId`
- * @throws {UsageError} When no `scan` is given: the devkit has no scanner in this version
+ * @throws {UsageError} When the compilation has problems
  * @throws {UnsupportedServerError} When the server does not serve the assignment protocol
  * @throws {ReleaseAssignmentError} When the Release was created but not assigned
  */
 export default async function publishRelease(args) {
     const {
         client,
-        projectDirectory,
+        compile,
+        serializeContentObject,
+        expected,
         buildId,
         dryRun = false,
-        fileSystem = defaultFileSystem,
-        scan = defaultScan,
         publishContent = defaultPublishContent,
         assignRelease = defaultAssignRelease,
         formatRecovery,
     } = args ?? {};
 
-    const contentSources = await scan(projectDirectory, { fileSystem });
+    assertFunction(compile, 'publishRelease() requires a compile function');
+
+    const compilation = await compile();
 
     const result = await publishContent({
         client,
-        contentSources,
+        compilation,
+        serializeContentObject,
+        expected,
         dryRun,
-        provenance: { client: 'kixx-devkit', intendedForBuildId: buildId },
+        provenance: { client: PROVENANCE_CLIENT, intendedForBuildId: buildId },
     });
 
     let assignment;
@@ -110,6 +114,7 @@ export default async function publishRelease(args) {
                 client,
                 buildId,
                 releaseId: result.releaseId,
+                expected,
                 reason: 'publish',
             });
         } catch (cause) {

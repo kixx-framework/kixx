@@ -19,6 +19,7 @@ import {
  * @param {Object} args.client - Publishing API client
  * @param {string} args.buildId - Build pointer id
  * @param {string} args.releaseId - Release to assign
+ * @param {Object} args.expected - The contract versions the project's Kixx composes; see `negotiateCapabilities()`
  * @param {string} [args.reason=publish] - Assignment audit reason
  * @returns {Promise<Object>} Resulting build pointer record
  * @throws {UnsupportedServerError} When the server does not serve this protocol
@@ -29,12 +30,13 @@ export default async function assignRelease(args) {
         client,
         buildId,
         releaseId,
+        expected,
         reason = 'publish',
     } = args ?? {};
 
     // Refuse an incompatible server before reading anything, so a caller can
     // tell "nothing was attempted" from "the assignment failed".
-    await negotiateCapabilities(client);
+    await negotiateCapabilities(client, expected);
 
     let expectedAssignmentId;
 

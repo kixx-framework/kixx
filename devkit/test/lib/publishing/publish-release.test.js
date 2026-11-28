@@ -1,21 +1,28 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual } from '../../../lib/vendor/kixx-assert/mod.js';
 
-import publishRelease from '../../../lib/publishing/publish-release.js';
+import publishRelease, { PROVENANCE_CLIENT } from '../../../lib/publishing/publish-release.js';
 import { UnsupportedServerError } from '../../../lib/publishing/negotiate-capabilities.js';
 
 const CLIENT = { name: 'fake-client' };
+const COMPILATION = { objects: [], release: { manifest: {} }, report: { problems: [], unmatchedFiles: [] } };
+const EXPECTED = Object.freeze({ contentContractVersion: 2, addressingFormat: 4 });
+const serializeContentObject = () => '';
 
 
 describe('publishRelease()', ({ it }) => {
 
-    it('scans, publishes with provenance, assigns, and returns the assignment id', async () => {
+    it('compiles, publishes with provenance, assigns, and returns the assignment id', async () => {
         const calls = [];
         const result = await publishRelease(makeArgs({ calls }));
 
-        assertEqual('scan,publish,assign', calls.join(','));
-        assertEqual('/app', calls.scannedDirectory);
-        assertEqual('kixx-devkit', calls.provenance.client);
+        assertEqual('compile,publish,assign', calls.join(','));
+        assert(calls.publishArgs.compilation === COMPILATION, 'passes the compilation on');
+        assert(calls.publishArgs.serializeContentObject === serializeContentObject, 'passes the serializer on');
+        assert(calls.publishArgs.expected === EXPECTED, 'passes the expected versions to the publish');
+        assert(calls.assignArgs.expected === EXPECTED, 'passes the expected versions to the assignment');
+        assertEqual('kixx-dev', PROVENANCE_CLIENT);
+        assertEqual('kixx-dev', calls.provenance.client);
         assertEqual('build-1', calls.provenance.intendedForBuildId);
         assertEqual(CLIENT, calls.assignArgs.client);
         assertEqual('build-1', calls.assignArgs.buildId);
@@ -30,10 +37,32 @@ describe('publishRelease()', ({ it }) => {
         const calls = [];
         const result = await publishRelease(makeArgs({ calls, dryRun: true }));
 
-        assertEqual('scan,publish', calls.join(','));
+        assertEqual('compile,publish', calls.join(','));
         assertEqual(true, calls.dryRun);
         assertEqual(undefined, result.assignmentId);
         assertEqual('build-1', result.buildId);
+    });
+
+    it('requires a compile function', async () => {
+        const calls = [];
+        const error = await catchAsyncError(() => publishRelease({ ...makeArgs({ calls }), compile: undefined }));
+
+        assertEqual('AssertionError', error?.name);
+        assertEqual('', calls.join(','));
+    });
+
+    it('lets a refused compilation through, and assigns nothing', async () => {
+        const calls = [];
+        const failure = new Error('The content has problems');
+        const error = await catchAsyncError(() => publishRelease({
+            ...makeArgs({ calls }),
+            publishContent: async () => {
+                throw failure;
+            },
+        }));
+
+        assert(error === failure, 'expected the original error');
+        assertEqual('compile', calls.join(','));
     });
 
     it('rethrows UnsupportedServerError unwrapped', async () => {
@@ -91,18 +120,18 @@ function makeArgs(args) {
 
     return {
         client: CLIENT,
-        projectDirectory: '/app',
         buildId: 'build-1',
         dryRun,
-        fileSystem: {},
         formatRecovery,
-        scan: async (directory) => {
-            calls.push('scan');
-            calls.scannedDirectory = directory;
-            return { resources: [], unmatchedFiles: [] };
+        serializeContentObject,
+        expected: EXPECTED,
+        compile: async () => {
+            calls.push('compile');
+            return COMPILATION;
         },
         publishContent: async (options) => {
             calls.push('publish');
+            calls.publishArgs = options;
             calls.provenance = options.provenance;
             calls.dryRun = options.dryRun;
             return { dryRun: options.dryRun, releaseId: options.dryRun ? undefined : 'release-1' };

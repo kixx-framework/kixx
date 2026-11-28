@@ -46,7 +46,7 @@ node run-linter.js test-app        # lint the integration suite
 - `reference-app/` and `test-v6/` aren't maintained and may be broken. Don't run, lint, or fix them.
 - When you change, move, or keep a module, bring its tests back from `test-v6/` with `git mv` (never copy), fix their imports, and make them pass. Tests must not read files by cwd-relative path or from `reference-app/`.
 - When a `test-v6/` file mixes cases for the current work with cases for code a later section reworks, split it. `git mv` the file into the active suite in a commit that holds only renames. Then trim the moved copy to the cases that cover the current work, and restore the rest at the old path unchanged. Delete cases that cover removed code. The parked rest waits for its own section.
-- The v6 devkit still ports two core modules: `kixx/content-addressable-store/{addressing,content-layout}.js`. Their conformance tests are parked in `test-v6/devkit/conformance/` and don't run; `devkit/test/conformance/content-contract.test.js` runs. The devkit's contract pin (`devkit/lib/publishing/negotiate-capabilities.js`) and the manifest shape it composes must stay in step with core. The two ported modules needn't be kept in step until the devkit sections decide their fate. The devkit holds no JSONC or secrets manifest parser: it takes `parseJsonc()` and `parseSecretsManifest()` from the project's tooling (`kixx/tooling/mod.js`), so don't remove or rename either export.
+- The devkit ports no core module. It takes `parseJsonc()`, `parseSecretsManifest()`, `compileProjectContent()`, and `serializeContentObject()` from the project's tooling (`kixx/tooling/mod.js`), so don't remove or rename one of them. Its publishing code sends the compiler's manifest as it is. Its one pin, `BUILD_ASSIGNMENT_PROTOCOL_VERSION` in `devkit/lib/publishing/negotiate-capabilities.js`, must equal `kixx/publishing-api/constants.js`'s; `devkit/test/conformance/publish-pipeline.test.js` fails when they differ.
 - The v6 integration suites wait in `test-v6/test-app/` until they are rewritten for v7. Their runner moved to `test-app/`.
 - When public behavior changes, update `usage-docs/kixx-app/`.
 
@@ -92,7 +92,7 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 
 **Update what depends on the devkit.**
 
-- Ported core modules: see "v6 material" above.
+- When core's tooling entry or the Publishing API protocol changes, run `node devkit/run-tests.js devkit/test/conformance`.
 - When a command's behavior or options change, update its page in `usage-docs/kixx-devkit/` and the command list in `devkit/README.md`.
 - A change needing a new Deno permission must update the install commands in `devkit/README.md` and the `kixx-dev` task in `devkit/deno.json`.
 

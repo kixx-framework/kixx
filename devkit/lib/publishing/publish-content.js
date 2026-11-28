@@ -1,21 +1,20 @@
 /**
- * Creates an immutable Publishing API Release from scanned local content.
+ * Creates an immutable Publishing API Release from compiled content.
+ *
+ * This module holds none of the content contract. The objects, their hashes
+ * and sizes, and the Release manifest come from the project's own content
+ * compiler, and the bytes of an upload from its `serializeContentObject()`.
  * @module publish-content
  */
-
-import path from 'node:path';
 
 import {
     assert,
     assertArray,
-    isString,
-    isUndefined,
+    assertFunction,
+    isPlainObject,
 } from '../vendor/kixx-assert/mod.js';
 
 import UsageError from '../usage-error.js';
-import { canonicalize, getBlobSize } from './addressing.js';
-import { normalizePathname } from './content-layout.js';
-import { assertPublishableContentSources } from './content-source-report.js';
 import negotiateCapabilities from './negotiate-capabilities.js';
 
 const MAX_CONCURRENCY = 6;
@@ -65,52 +64,65 @@ export class PublishContentError extends Error {
  * Uploads missing content objects and creates one complete immutable Release.
  * @param {Object} args - Publish inputs and options
  * @param {Object} args.client - Publishing API client
- * @param {Object} args.contentSources - Result from `scanContentSources()`
+ * @param {Object} args.compilation - What the project's `compileProjectContent()` resolved
+ * @param {Array<Object>} args.compilation.objects - Content objects: `{ type, pathname, payload, hash, size, sourceFiles }`
+ * @param {?{manifest: Object}} args.compilation.release - Null when the content has problems
+ * @param {{problems: Array<Object>, unmatchedFiles: string[]}} args.compilation.report - The compiler's report
+ * @param {function(Object): (string|ArrayBuffer)} args.serializeContentObject - The project's serializer for an object's upload body
+ * @param {Object} args.expected - The contract versions the project's Kixx composes; see `negotiateCapabilities()`
  * @param {Object} [args.provenance] - Non-binding Release metadata
  * @param {boolean} [args.dryRun=false] - Report the server-backed diff without writes
  * @returns {Promise<Object>} Structured object diff and Release result
- * @throws {UsageError} When content validation prevents publishing
+ * @throws {UsageError} When the compilation has problems, before any request
  * @throws {PublishContentError} When a Publishing API phase fails
  */
 export default async function publishContent(args) {
     const {
         client,
-        contentSources,
+        compilation,
+        serializeContentObject,
+        expected,
         provenance,
         dryRun = false,
     } = args ?? {};
 
     assert(client, 'publishContent() requires a Publishing API client');
-    assert(contentSources, 'publishContent() requires scanned content sources');
-    assertArray(contentSources.resources, 'publishContent() contentSources.resources');
-    assertPublishableContentSources(contentSources);
+    assert(compilation, 'publishContent() requires a compilation');
+    assertArray(compilation.objects, 'publishContent() compilation.objects');
+    assert(isPlainObject(compilation.report), 'publishContent() requires compilation.report');
+    assertFunction(serializeContentObject, 'publishContent() requires serializeContentObject');
+    assert(isPlainObject(expected), 'publishContent() requires the expected contract versions');
+    assertPublishable(compilation);
 
-    const result = makeInitialResult(contentSources, dryRun);
+    const { objects } = compilation;
+    const { manifest } = compilation.release;
+
+    const result = makeInitialResult(compilation.report, dryRun);
     let capabilities;
 
     try {
         // Negotiation owns the version checks; only the per-Release manifest
         // limit is this pipeline's own concern.
-        capabilities = await negotiateCapabilities(client);
-        assertManifestSize(capabilities, contentSources.resources.length);
+        capabilities = await negotiateCapabilities(client, expected);
+        assertManifestSize(capabilities, objects.length);
     } catch (cause) {
         throw makePublishError('discovery', cause, result);
     }
 
     const storedObjects = await runPhase('status', result, () => {
         return client.getObjectStatus(
-            contentSources.resources.map(({ hash }) => hash),
+            objects.map(({ hash }) => hash),
             { maxObjectStatusIds: capabilities.limits.maxObjectStatusIds },
         );
     });
     const storedIds = new Set(storedObjects.map(({ objectId }) => objectId));
-    const pendingResources = contentSources.resources.filter(({ hash }) => !storedIds.has(hash));
-    const matchedResources = contentSources.resources.filter(({ hash }) => storedIds.has(hash));
+    const pendingResources = objects.filter(({ hash }) => !storedIds.has(hash));
+    const matchedResources = objects.filter(({ hash }) => storedIds.has(hash));
 
     result.matchedCount = matchedResources.length;
     result.uploadedCount = pendingResources.length;
     result.uploadedResources = pendingResources.map(summarizeResource);
-    result.resources = contentSources.resources.map((resource) => ({
+    result.resources = objects.map((resource) => ({
         ...summarizeResource(resource),
         disposition: storedIds.has(resource.hash) ? 'matched' : 'uploaded',
     }));
@@ -119,7 +131,7 @@ export default async function publishContent(args) {
         return result;
     }
 
-    const pendingObjects = deduplicateObjects(pendingResources);
+    const pendingObjects = deduplicateObjects(pendingResources, serializeContentObject);
     assertPendingObjectSizes(
         pendingObjects,
         capabilities.limits.maxObjectBytes,
@@ -140,7 +152,6 @@ export default async function publishContent(args) {
         });
     });
 
-    const manifest = makeReleaseManifest(contentSources.resources);
     const release = await runPhase('release', result, () => {
         return client.createRelease(manifest, provenance);
     });
@@ -154,7 +165,25 @@ export default async function publishContent(args) {
     return result;
 }
 
-function makeInitialResult(contentSources, dryRun) {
+// A compilation with problems has no Release. Every problem is listed, so
+// one run shows everything there is to fix.
+function assertPublishable(compilation) {
+    if (compilation.release) {
+        return;
+    }
+
+    const problems = compilation.report.problems ?? [];
+
+    throw new UsageError([
+        'The content has problems:',
+        ...problems.map(({ filepath, message }) => {
+            return filepath ? `- ${ filepath }: ${ message }` : `- ${ message }`;
+        }),
+        'Nothing was published.',
+    ].join('\n'));
+}
+
+function makeInitialResult(report, dryRun) {
     return {
         dryRun,
         created: false,
@@ -163,7 +192,7 @@ function makeInitialResult(contentSources, dryRun) {
         completedUploadCount: 0,
         uploadedResources: [],
         resources: [],
-        unmatchedFiles: [ ...contentSources.unmatchedFiles ],
+        unmatchedFiles: [ ...(report.unmatchedFiles ?? []) ],
         releaseId: null,
         objectCount: null,
         totalBytes: null,
@@ -179,7 +208,7 @@ function assertManifestSize(capabilities, manifestEntryCount) {
     );
 }
 
-function deduplicateObjects(resources) {
+function deduplicateObjects(resources, serializeContentObject) {
     const objects = new Map();
 
     for (const resource of resources) {
@@ -189,11 +218,10 @@ function deduplicateObjects(resources) {
             continue;
         }
 
-        const payload = getObjectPayload(resource.payload);
         objects.set(resource.hash, {
             objectId: resource.hash,
-            payload,
-            size: getBlobSize(payload),
+            payload: serializeContentObject(resource),
+            size: resource.size,
             resources: [ resource ],
         });
     }
@@ -229,81 +257,6 @@ function assertPendingObjectSizes(objects, maxObjectBytes) {
         ...details,
         'Nothing was published.',
     ].join('\n'));
-}
-
-function getObjectPayload(payload) {
-    if (isString(payload) || payload instanceof ArrayBuffer) {
-        return payload;
-    }
-    return canonicalize(payload);
-}
-
-/**
- * Builds the Release manifest `POST /releases` receives from scanned resources.
- * @param {Array<Object>} resources - `resources` from `scanContentSources()`
- * @returns {Object} Release manifest
- */
-export function makeReleaseManifest(resources) {
-    const manifest = {
-        staticAssets: {},
-        pages: {},
-    };
-
-    for (const resource of resources) {
-        const reference = makeReference(resource);
-
-        switch (resource.type) {
-            case 'StaticAsset':
-                manifest.staticAssets[normalizePathname(resource.pathname)] = reference;
-                break;
-            case 'GlobalTemplatePartials':
-                manifest.globalTemplatePartials = reference;
-                break;
-            case 'BaseTemplates':
-                manifest.baseTemplates = reference;
-                break;
-            case 'PageMetadata':
-                getPage(manifest, resource.pathname).metadata = reference;
-                break;
-            case 'PagePartials':
-                getPage(manifest, resource.pathname).partials = reference;
-                break;
-            case 'PageIncludes':
-                getPage(manifest, resource.pathname).includes = reference;
-                break;
-            case 'PageTemplate': {
-                const pagePathname = normalizePathname(path.posix.dirname(resource.pathname));
-                const filename = path.posix.basename(resource.pathname);
-                const page = getPage(manifest, pagePathname);
-                page.templates ??= {};
-                page.templates[filename] = reference;
-                break;
-            }
-            default:
-                assert(false, `Unsupported publishing resource type: ${ resource.type }`);
-        }
-    }
-
-    return manifest;
-}
-
-function makeReference(resource) {
-    const reference = {
-        objectId: resource.hash,
-        size: resource.size,
-    };
-
-    if (resource.type === 'StaticAsset' && !isUndefined(resource.mediaType)) {
-        reference.mediaType = resource.mediaType;
-    }
-
-    return reference;
-}
-
-function getPage(manifest, pathname) {
-    const normalized = normalizePathname(pathname);
-    manifest.pages[normalized] ??= {};
-    return manifest.pages[normalized];
 }
 
 function summarizeResource(resource) {

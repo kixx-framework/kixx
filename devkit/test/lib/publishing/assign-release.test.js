@@ -12,6 +12,9 @@ import {
 const CURRENT_ASSIGNMENT_ID = '4a2f7b2e-6d1c-4f0a-9b83-1c5d7e9a0f21';
 const OBSERVED_ASSIGNMENT_ID = '8f3c1d40-52ab-4e19-8d77-6b0e2a4c9153';
 
+// What the project's Kixx composes; the caller passes it in.
+const EXPECTED = Object.freeze({ contentContractVersion: 2, addressingFormat: 4 });
+
 describe('assignRelease()', ({ it }) => {
     it('quotes the assignment identity observed on the build read', async () => {
         const tracker = new MockTracker();
@@ -23,6 +26,7 @@ describe('assignRelease()', ({ it }) => {
 
         await assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'new-release',
             reason: 'rollback',
@@ -46,6 +50,7 @@ describe('assignRelease()', ({ it }) => {
 
         await assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'new-release',
         });
@@ -65,6 +70,7 @@ describe('assignRelease()', ({ it }) => {
 
         const result = await assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'new-build',
             releaseId: 'release-id',
             reason: 'carry-forward',
@@ -89,6 +95,7 @@ describe('assignRelease()', ({ it }) => {
 
         const caught = await catchAsyncError(() => assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'release-id',
         }));
@@ -106,6 +113,7 @@ describe('assignRelease()', ({ it }) => {
 
         const caught = await catchAsyncError(() => assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'release-id',
         }));
@@ -131,6 +139,7 @@ describe('assignRelease()', ({ it }) => {
         // Activation. The absent history entry is not a failure.
         const result = await assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'same-release',
         });
@@ -159,6 +168,7 @@ describe('assignRelease()', ({ it }) => {
 
         const caught = await catchAsyncError(() => assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'new-release',
         }));
@@ -200,6 +210,7 @@ describe('assignRelease()', ({ it }) => {
 
         const caught = await catchAsyncError(() => assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'production',
             releaseId: 'new-release',
         }));
@@ -222,6 +233,7 @@ describe('assignRelease()', ({ it }) => {
 
         const caught = await catchAsyncError(() => assignRelease({
             client,
+            expected: EXPECTED,
             buildId: 'new-build',
             releaseId: 'release-id',
         }));
@@ -244,9 +256,9 @@ function makeClient(tracker, build, options) {
         async discover() {
             return await Promise.resolve({
                 runningBuildId: 'production',
-                contentContractVersion: 1,
+                contentContractVersion: 2,
                 addressingFormat: 4,
-                buildAssignmentProtocolVersion: 2,
+                buildAssignmentProtocolVersion: 4,
                 limits: {
                     maxObjectBytes: 26_214_400,
                     maxObjectStatusIds: 100,

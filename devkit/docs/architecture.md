@@ -53,7 +53,7 @@ So one `kixx-dev` works with every project version the gate allows, and what it 
 |---|---|---|
 | `lib/` (root) | everything | The runner and its modules (above), `cloudflare-config.jsonc` loading, JSONC, `.env.<env>` parsing, terminal prompts, text wrapping, the `fileSystem` seam, `UsageError`, hashing, token generation, and JavaScript parsing over vendored `acorn` (`parse-javascript.js`) |
 | `lib/admin/` | no command in this version | Admin API client, invite redemption, credential prompting, and environment resolution |
-| `lib/publishing/` | no command in this version | Content addressing, capability negotiation, Release creation, and build assignment over the Publishing API |
+| `lib/publishing/` | no command in this version | Capability negotiation, uploading a compilation's objects, Release creation, and build assignment over the Publishing API |
 | `lib/bundler/` | no command in this version | Crawls an app's static ES module graph and strips comments for upload, using `parse-javascript.js` |
 | `lib/cloudflare/` | no command in this version | Cloudflare API client, config validation, bindings, secrets parity, resource checks, Durable Object exports, and the Worker version and deploy pipelines |
 | `lib/devserver/` | `dev`, `local` | Proxy server, app child process, and restart decisions on file change |
@@ -95,18 +95,19 @@ The two config dialects come from the project's tooling, and the devkit holds no
 
 Unit tests pass the stand-ins in `test/helpers/fake-parsers.js`; `test/conformance/project-tooling.test.js` runs the same code with core's real parsers.
 
-The v6 modules below still port their rules, and are deleted or rewired later in this section's work:
+The content contract comes from the project too. `lib/publishing/` holds no addressing, no content layout, and no manifest builder:
 
-| Devkit module | Ported from (repo `lib/`) | Conformance test |
+| What | Where it comes from | Devkit code that takes it as an argument |
 |---|---|---|
-| `lib/publishing/addressing.js` | `kixx/content-addressable-store/addressing.js` | `test/conformance/addressing.test.js` |
-| `lib/publishing/content-layout.js` | `kixx/content-addressable-store/content-layout.js` | `test/conformance/content-layout.test.js` |
+| The content objects, with each one's `hash` and `size`, the Release manifest, and the report | `compileProjectContent()`, through the caller's `compile` function | `publishRelease()` and `publishContent()` |
+| The bytes of an object's upload | `serializeContentObject()` | `publishContent()` |
+| The content contract version and the addressing format the compiler writes | The project's Kixx, passed as `expected: { contentContractVersion, addressingFormat }` | `negotiateCapabilities()`, and through it `publishContent()` and `assignRelease()` |
 
-The content scanner, the stylesheet bundler, and the asset comment stripper moved into Kixx core as the content compiler (`kixx/content-compiler/`). The devkit can't import core, so `publishRelease()` has no default scanner, and no command calls it in this version. A caller can still inject `scan`.
+- `publishContent()` sends `compilation.release.manifest` as it is. A compilation with problems has no Release: it throws a `UsageError` that lists every problem, before any request.
+- `lib/publishing/negotiate-capabilities.js` pins one version, `BUILD_ASSIGNMENT_PROTOCOL_VERSION`, because it describes the requests the devkit's own client sends. It refuses, before any write, a server whose protocol, content contract, or addressing format differs. Bump the pin with the client when the server's protocol changes.
+- No command calls the publishing code in this version. Core's tooling entry does not export the contract version or the addressing format yet; the command that publishes adds those exports with their first caller.
+- `test/conformance/publish-pipeline.test.js` compiles a real project's content with the project's compiler, runs `publishContent()` against a fake client, and checks that core's validator accepts the manifest sent and that every upload has the size the manifest gives it. It also checks the protocol pin against core's.
 
-Rules:
+The devkit keeps no port of a core module. Don't add one: take the function from the project's tooling as an argument, pass a stand-in in the unit test, and prove the real one in `test/conformance/`.
 
-- When you change one side, change the other in the same commit, and run `node devkit/run-tests.js devkit/test/conformance`.
-- A new port gets a header comment naming its source and a conformance test that compares results with the original.
-- `addressing.js` pins `FORMAT`. A format change upstream changes object ids, so treat it as a migration; see the module header.
-- The publishing code speaks Publishing API build assignment protocol 4, content contract 2, and addressing format 4. `lib/publishing/negotiate-capabilities.js` pins these versions and refuses, before any write, a server that does not support them. Bump them there when the server protocol changes. `test/conformance/content-contract.test.js` checks that the pinned contract matches core's and that `makeReleaseManifest()` output passes core's validator.
+The Worker bundler's comment stripper (`lib/bundler/strip-comments.js`, over `lib/parse-javascript.js` and vendored acorn) is not a port. It needs the parsed module to find imports, which core's `stripJavaScriptComments()` does not return, and it writes different bytes for a comment.

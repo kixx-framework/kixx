@@ -98,7 +98,7 @@ Use `before` when a group intentionally exercises one setup/action/result across
 
 ## Conformance Tests Against Core
 
-Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/content-contract.test.js` passes a devkit-composed Release manifest to core's validator).
+Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/publish-pipeline.test.js` passes the Release manifest the publishing pipeline sends to core's validator).
 
 `conformance/project-tooling.test.js` runs the devkit against core as a project has it: it builds a real project in a temporary directory (the skeleton, with this repository's core as its `kixx/`), runs `kixx-dev generate` in process with the real tooling loader, and compares what was written with what the project's own generator renders. `conformance/built-project.js` builds that project. It is not a test, and it lives there because it reads core; `test/kixx-dev.test.js` imports it to run `generate` in a child process.
 

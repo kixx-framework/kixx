@@ -4,7 +4,7 @@ Paths are relative to `devkit/`.
 
 docs/architecture.md
 
-How `kixx-dev.js`, the runner (`lib/run-cli.js`) and its modules, `commands/`, and `lib/` divide the work; how framework logic is loaded from the project's own `kixx/` (discovery, the version gate, the tooling loader); a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver, project); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
+How `kixx-dev.js`, the runner (`lib/run-cli.js`) and its modules, `commands/`, and `lib/` divide the work; how framework logic is loaded from the project's own `kixx/` (discovery, the version gate, the tooling loader); a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver, project); the settings inputs; the check-before-write rule for remote pipelines; and how the devkit stays compatible with the Kixx Library: the parsers and the content contract it takes from the project as arguments, and the conformance tests that prove them against core.
 
 ### Commands
 
@@ -40,7 +40,7 @@ Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules
 
 test/README.md
 
-Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests (mostly parked in `test-v6/devkit/conformance/` and not run, R16), hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
+Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests against core, hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
 
 ### Devkit Usage Docs
 
