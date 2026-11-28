@@ -167,7 +167,7 @@ Each check runs before construction. A missing value is a usage error naming the
 
 **`requiresProject`**: `true` for a command that runs inside a project. The runner finds the project, checks its version, loads the settings, accepts the trailing `[directory]`, and passes `projectDirectory`, `config`, and `secrets`. See "Finding the Project".
 
-**`requiresTooling`**: `true` for a command that calls the project's own Kixx code. It implies `requiresProject`, and the runner also passes `tooling`.
+**`requiresTooling`**: `true` for a command that calls the project's own Kixx code (`generate` runs the generator; `local create` parses `example.env.secrets`). It implies `requiresProject`, and the runner also passes `tooling`.
 
 A command with neither runs anywhere. It is given its streams and nothing else.
 

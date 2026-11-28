@@ -4,10 +4,10 @@ import { assert, assertEqual, assertMatches, assertNotEqual } from '../../../lib
 
 import UsageError from '../../../lib/usage-error.js';
 import { hashValue } from '../../../lib/canonical-hash.js';
-import { parseJsonc } from '../../../lib/parse-jsonc.js';
 import { createWorkerVersion, TRIGGERED_BY } from '../../../lib/cloudflare/create-worker-version.js';
 import createFakeCloudflareClient from '../../helpers/fake-cloudflare-client.js';
 import createMemoryFileSystem from '../../helpers/memory-file-system.js';
+import { parseJsonc, parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 const PROJECT = '/app';
 const STATE_PATH = '/app/.kixx/cloudflare-state.production.json';
@@ -265,6 +265,39 @@ describe('cloudflare/create-worker-version', ({ describe }) => {
             assertEqual('ADMIN_BOOTSTRAP_TOKEN,API_SECRET', inherited.join(','));
         });
 
+        // The names the pipeline requires are what the v6 parser returned in
+        // `required`: the plain entries and those marked
+        // `# @required-outside-development`.
+        it('requires the names marked required outside development, and not the optional ones', async () => {
+            const secrets = [
+                'API_SECRET=',
+                '# @required-outside-development',
+                'DEPLOY_KEY_HASH=',
+                '# @optional',
+                'ADMIN_BOOTSTRAP_TOKEN=',
+                '',
+            ].join('\n');
+
+            const missing = await catchError(run({
+                project: await loadProject({ secrets }),
+                apiClient: provisionedClient([ makeVersion('v1', [ 'API_SECRET' ]) ]),
+            }));
+
+            assert(missing instanceof UsageError);
+            assertMatches('DEPLOY_KEY_HASH: required, but not set on the source version', missing.message);
+            assert(!missing.message.includes('ADMIN_BOOTSTRAP_TOKEN'), 'an optional secret is required');
+            assert(!missing.message.includes('API_SECRET:'), 'a secret that is set is reported');
+
+            const apiClient = provisionedClient([ makeVersion('v1', [ 'API_SECRET', 'DEPLOY_KEY_HASH' ]) ]);
+
+            await run({ project: await loadProject({ secrets }), apiClient });
+
+            const { bindings } = apiClient.callsTo('createWorkerVersion')[0].args[1];
+            const inherited = bindings.filter((binding) => binding.type === 'inherit').map((binding) => binding.name);
+
+            assertEqual('API_SECRET,DEPLOY_KEY_HASH', inherited.join(','));
+        });
+
         it('tells the operator to create a missing Worker', async () => {
             const project = await loadProject();
             const apiClient = createFakeCloudflareClient({ worker: null });
@@ -346,6 +379,7 @@ function run({ project, apiClient, force, deploy }) {
         environment: 'production',
         cloudflareConfig: project.cloudflareConfig,
         apiClient,
+        parseSecretsManifest,
         force,
         deploy,
         fileSystem: project.fileSystem,

@@ -50,7 +50,8 @@ export function readSecretBindingNames(version) {
  * present; any other remote secret is undeclared. The caller fails the build
  * when `missingRequired` or `undeclared` is non-empty.
  * @param {Object} args
- * @param {import('./secrets-manifest.js').SecretsManifest} args.manifest - Parsed `example.env.secrets`
+ * @param {{required: string[], optional: string[]}} args.manifest - Secret names from `example.env.secrets`, with the names
+ *     required outside development already in `required`
  * @param {string[]} args.remoteNames - Secret binding names on the remote version
  * @returns {DeclaredSecretComparison}
  */

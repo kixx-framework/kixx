@@ -14,7 +14,7 @@ A tool on Node.js or Deno loads three modules from the project's own `kixx/`. Th
 
 | Module | What it gives |
 |---|---|
-| `tooling/mod.js` | `compileProjectContent()`, `listPluginContentRoots()`, `compileContent()`, `serializeContentObject()` |
+| `tooling/mod.js` | `compileProjectContent()`, `listPluginContentRoots()`, `compileContent()`, `serializeContentObject()`, and the parsers of the config dialects a tool reads as data: `parseJsonc()` and `parseSecretsManifest()` |
 | `adapters/node/tooling/lib/project-file-system.js` | `createProjectFileSystem(projectDirectory)`, which reads the manifests |
 | `adapters/node/content-compiler/lib/file-system-content-source.js` | `createFileSystemContentSource(projectDirectory)`, which reads the content |
 

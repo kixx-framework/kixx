@@ -31,6 +31,7 @@ const CONTENT_SOURCE_MODULE = 'kixx/adapters/node/content-compiler/lib/file-syst
  */
 export const REQUIRED_TOOLING_EXPORTS = Object.freeze([
     'writeProjectFiles',
+    'parseSecretsManifest',
 ]);
 
 

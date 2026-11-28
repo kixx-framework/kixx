@@ -7,6 +7,8 @@ import commands, { groups } from '../../commands/index.js';
 import runCli from '../../lib/run-cli.js';
 import loadProjectTooling, { REQUIRED_TOOLING_EXPORTS } from '../../lib/project/load-project-tooling.js';
 import { OLDEST_SUPPORTED_PROJECT_VERSION, checkProjectVersion } from '../../lib/project/project-version.js';
+import { loadCloudflareConfig } from '../../lib/cloudflare-config-loader.js';
+import { readSecretsManifest } from '../../lib/read-secrets-manifest.js';
 import captureOutput from '../helpers/capture-output.js';
 import { GENERATED_FILE_NAMES, buildProject, readGeneratedFiles, removeProject } from './built-project.js';
 import denoManifest from '../../deno.json' with { type: 'json' };
@@ -21,6 +23,7 @@ const TIMEOUT = { timeout: 20000 };
 // by the module that calls it. Add to it with the call.
 const TOOLING_EXPORTS_CALLED = [
     'writeProjectFiles', // commands/generate.js
+    'parseSecretsManifest', // commands/local/create.js
 ];
 
 
@@ -79,6 +82,51 @@ describe('project tooling conformance with core', ({ before, after, it }) => {
 
         assert(isFunction(loaded.createProjectFileSystem), 'createProjectFileSystem()');
         assert(isFunction(loaded.createFileSystemContentSource), 'createFileSystemContentSource()');
+    });
+
+    // Exported for the kept Cloudflare code, which S19 wires to a command.
+    // No command calls it yet, so the loader does not require it.
+    it('exports parseJsonc() and parseSecretsManifest() from the project\'s tooling', () => {
+        assert(isFunction(loaded.tooling.parseJsonc), 'parseJsonc()');
+        assert(isFunction(loaded.tooling.parseSecretsManifest), 'parseSecretsManifest()');
+    });
+
+    it('reads the skeleton\'s cloudflare-config.jsonc with the project\'s parser', async () => {
+        const text = await fsp.readFile(path.join(projectDirectory, 'cloudflare-config.jsonc'), 'utf8');
+
+        // The file is JSONC: JSON.parse() alone cannot read it.
+        assert(/^\s*\/\//m.test(text), 'the skeleton\'s file has a comment');
+
+        const config = await loadCloudflareConfig(projectDirectory, { parseJsonc: loaded.tooling.parseJsonc });
+
+        assert(Object.keys(config.environments).length > 0, 'it has environments');
+    });
+
+    it('turns the real parser\'s error into a usage error without the text of the line', async () => {
+        const pasted = 'sk-live-0123456789abcdef';
+
+        const fileSystem = {
+            async readFile() {
+                return `A_SECRET=\n${ pasted }\n`;
+            },
+        };
+
+        let error = null;
+
+        try {
+            await readSecretsManifest({
+                projectDirectory,
+                fileSystem,
+                parseSecretsManifest: loaded.tooling.parseSecretsManifest,
+            });
+        } catch (cause) {
+            error = cause;
+        }
+
+        assertEqual('UsageError', error?.name);
+        assertMatches(path.join(projectDirectory, 'example.env.secrets'), error.message);
+        assertMatches('on line 2', error.message);
+        assert(!error.message.includes(pasted), 'the message holds the line');
     });
 
     it('names the five files the generator writes', async () => {
@@ -158,6 +206,47 @@ describe('project tooling conformance with core', ({ before, after, it }) => {
 
         // The human text moved to stderr.
         assertMatches(/^wrote /, stderr);
+    }, TIMEOUT);
+
+    // After generate has written example.env.secrets, above.
+    it('reads the generated example.env.secrets with the project\'s parser', async () => {
+        const manifest = await readSecretsManifest({
+            projectDirectory,
+            parseSecretsManifest: loaded.tooling.parseSecretsManifest,
+        });
+
+        // Core declares it with `# @required-outside-development`.
+        assert(manifest.requiredOutsideDevelopment.includes('DEPLOY_KEY_HASH'), 'DEPLOY_KEY_HASH');
+        assert(!manifest.required.includes('DEPLOY_KEY_HASH'), 'DEPLOY_KEY_HASH is in required');
+        assert(Array.isArray(manifest.optional), 'optional');
+    });
+
+    // A local instance runs with ENVIRONMENT=local, which is outside
+    // development, so it needs a value for DEPLOY_KEY_HASH.
+    it('creates a local instance with a secret for every name the project requires', async () => {
+        const target = path.join(projectDirectory, 'tmp-local-target');
+        const { code, stdout, stderr } = await runKixxDev([
+            'local', 'create', 'alpha', projectDirectory, '--target', target, '--port', '4999', '--json',
+        ]);
+
+        assertEqual(0, code, stderr);
+
+        const { data } = JSON.parse(stdout);
+
+        assertEqual('name,port,buildId,directory', Object.keys(data).join(','));
+
+        const dotenv = await fsp.readFile(path.join(data.directory, '.env.secrets'), 'utf8');
+
+        assertMatches(/^DEPLOY_KEY_HASH=[0-9a-f]{64}$/m, dotenv);
+
+        for (const line of dotenv.split('\n').filter((entry) => entry.includes('='))) {
+            const value = line.slice(line.indexOf('=') + 1);
+
+            assert(!stdout.includes(value), 'a secret value is in the data');
+            assert(!stderr.includes(value), 'a secret value was printed');
+        }
+
+        await fsp.rm(target, { recursive: true, force: true });
     }, TIMEOUT);
 
     it('replaces a generated file that was edited or deleted', async () => {

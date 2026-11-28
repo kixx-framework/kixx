@@ -65,7 +65,9 @@ describe('commands/index.js registry', ({ it }) => {
             assertEqual(true, requiresProject(commands[name]), `"${ name }"`);
         }
 
+        // These two call the project's own Kixx code.
         assertEqual(true, commands.generate.requiresTooling);
+        assertEqual(true, commands['local create'].requiresTooling);
     });
 
     it('has a module at its path for every command that is available', async () => {

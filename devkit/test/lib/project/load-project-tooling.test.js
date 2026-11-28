@@ -169,7 +169,10 @@ describe('loadProjectTooling()', ({ it }) => {
     it('imports real modules with the default importer', async () => {
         await withTemporaryDirectory(async (directory) => {
             const sources = {
-                [TOOLING]: 'export function writeProjectFiles() { return \'written\'; }\n',
+                // Every export the loader requires, each returning its own name.
+                [TOOLING]: REQUIRED_TOOLING_EXPORTS
+                    .map((name) => `export function ${ name }() { return '${ name }'; }\n`)
+                    .join(''),
                 [PROJECT_FILE_SYSTEM]: 'export function createProjectFileSystem() {}\n',
                 [CONTENT_SOURCE]: 'export function createFileSystemContentSource() {}\n',
             };
@@ -183,7 +186,8 @@ describe('loadProjectTooling()', ({ it }) => {
 
             const loaded = await loadProjectTooling(directory);
 
-            assertEqual('written', loaded.tooling.writeProjectFiles());
+            assertEqual('writeProjectFiles', loaded.tooling.writeProjectFiles());
+            assertEqual('parseSecretsManifest', loaded.tooling.parseSecretsManifest());
         });
     });
 });

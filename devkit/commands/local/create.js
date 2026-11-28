@@ -18,7 +18,8 @@ export default class LocalCreateCommand {
         and generated secrets in <target>/instances/<name>/
     `;
 
-    static requiresProject = true;
+    // The project's own parser reads its example.env.secrets.
+    static requiresTooling = true;
 
     static positionals = [ NAME_POSITIONAL ];
 
@@ -32,6 +33,7 @@ export default class LocalCreateCommand {
     };
 
     #projectDirectory;
+    #tooling;
     #output;
     #now;
     #getFreePort;
@@ -40,6 +42,7 @@ export default class LocalCreateCommand {
     constructor(args) {
         const {
             projectDirectory,
+            tooling,
             output = process.stdout,
             now,
             getFreePort = defaultGetFreePort,
@@ -47,6 +50,7 @@ export default class LocalCreateCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#tooling = tooling;
         this.#output = output;
         this.#now = now;
         this.#getFreePort = getFreePort;
@@ -65,6 +69,7 @@ export default class LocalCreateCommand {
             }),
             name,
             port,
+            parseSecretsManifest: this.#tooling.tooling.parseSecretsManifest,
             now: this.#now,
             getFreePort: this.#getFreePort,
         });

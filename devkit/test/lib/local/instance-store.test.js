@@ -18,6 +18,7 @@ import {
     resolveInstancesDirectory,
     writeCredentials,
 } from '../../../lib/local/instance-store.js';
+import { parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 const MANIFEST = [
     'CSRF_TOKEN_SIGNING_SECRET=x',
@@ -35,7 +36,6 @@ const CREDENTIALS = {
     baseUrl: 'http://localhost:5555/',
     username: 'root@alpha.local',
     password: 'password-password',
-    publishingApiToken: 'token',
     buildId: 'local-alpha-1',
     port: 5555,
 };
@@ -71,6 +71,7 @@ describe('local instance-store', ({ before, after, it, describe }) => {
         name: 'alpha',
         now: NOW,
         getFreePort: async () => 5555,
+        parseSecretsManifest,
         ...overrides,
     });
 
@@ -212,7 +213,7 @@ describe('local instance-store', ({ before, after, it, describe }) => {
             }));
 
             assertEqual('UsageError', error?.name);
-            assertMatches('run "kixx local create alpha" first', error.message);
+            assertMatches('run "kixx-dev local create alpha" first', error.message);
         });
 
         it('refuses an invalid instance.json', async () => {

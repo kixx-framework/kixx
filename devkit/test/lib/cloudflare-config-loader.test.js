@@ -8,6 +8,7 @@ import {
     loadCloudflareConfig,
 } from '../../lib/cloudflare-config-loader.js';
 import createMemoryFileSystem from '../helpers/memory-file-system.js';
+import { parseJsonc } from '../helpers/fake-parsers.js';
 
 
 const PROJECT_DIRECTORY = path.resolve('/work/project');
@@ -20,19 +21,32 @@ describe('CloudflareConfigLoader', ({ it }) => {
         assertEqual('cloudflare-config.jsonc', CLOUDFLARE_CONFIG_FILE_NAME);
     });
 
-    it('parses comments and trailing commas', async () => {
-        const fileSystem = createMemoryFileSystem({
-            [FILEPATH]: `{
-                // The Worker name
-                "name": "example-worker",
-                "environments": { "production": {}, },
-            }`,
+    // The grammar is the project's: the loader parses nothing itself.
+    it('gives the file\'s text to the injected parser and returns what it parses', async () => {
+        const source = '{ /* any JSONC */ }';
+        const fileSystem = createMemoryFileSystem({ [FILEPATH]: source });
+        const seen = [];
+
+        const config = await loadCloudflareConfig(PROJECT_DIRECTORY, {
+            fileSystem,
+            parseJsonc(text) {
+                seen.push(text);
+                return { name: 'example-worker', environments: { production: {} } };
+            },
         });
 
-        const config = await loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem });
-
+        assertEqual(source, seen.join('|'));
         assertEqual('example-worker', config.name);
         assert(Object.hasOwn(config.environments, 'production'));
+    });
+
+    it('requires the parser', async () => {
+        const fileSystem = createMemoryFileSystem({ [FILEPATH]: '{ "environments": {} }' });
+
+        const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem }));
+
+        assertEqual('AssertionError', caught?.name);
+        assertMatches('requires parseJsonc', caught.message);
     });
 
     it('reads the file from disk by default', async () => {
@@ -41,7 +55,7 @@ describe('CloudflareConfigLoader', ({ it }) => {
         try {
             await fsp.writeFile(path.join(directory, 'cloudflare-config.jsonc'), '{ "environments": {} }\n');
 
-            const config = await loadCloudflareConfig(directory);
+            const config = await loadCloudflareConfig(directory, { parseJsonc });
 
             assertEqual(0, Object.keys(config.environments).length);
         } finally {
@@ -51,7 +65,7 @@ describe('CloudflareConfigLoader', ({ it }) => {
 
     it('reports a missing file with its absolute path', async () => {
         const caught = await catchAsyncError(() => {
-            return loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem: createMemoryFileSystem() });
+            return loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem: createMemoryFileSystem(), parseJsonc });
         });
 
         assert(caught, 'expected an error to be thrown');
@@ -61,9 +75,16 @@ describe('CloudflareConfigLoader', ({ it }) => {
     });
 
     it('reports invalid JSONC with the parser message', async () => {
-        const fileSystem = createMemoryFileSystem({ [FILEPATH]: '{ "environments": { /* open' });
+        const fileSystem = createMemoryFileSystem({ [FILEPATH]: '{ "environments": {' });
 
-        const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem }));
+        const caught = await catchAsyncError(() => {
+            return loadCloudflareConfig(PROJECT_DIRECTORY, {
+                fileSystem,
+                parseJsonc() {
+                    throw new Error('unterminated block comment');
+                },
+            });
+        });
 
         assert(caught, 'expected an error to be thrown');
         assertEqual('UsageError', caught.name);
@@ -74,7 +95,7 @@ describe('CloudflareConfigLoader', ({ it }) => {
     it('rejects a top level value that is not an object', async () => {
         const fileSystem = createMemoryFileSystem({ [FILEPATH]: '[ { "environments": {} } ]' });
 
-        const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem }));
+        const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem, parseJsonc }));
 
         assert(caught, 'expected an error to be thrown');
         assertEqual('UsageError', caught.name);
@@ -87,7 +108,7 @@ describe('CloudflareConfigLoader', ({ it }) => {
             const fileSystem = createMemoryFileSystem({ [FILEPATH]: source });
 
             // eslint-disable-next-line no-await-in-loop
-            const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem }));
+            const caught = await catchAsyncError(() => loadCloudflareConfig(PROJECT_DIRECTORY, { fileSystem, parseJsonc }));
 
             assert(caught, `expected an error for ${ source }`);
             assertEqual('UsageError', caught.name);

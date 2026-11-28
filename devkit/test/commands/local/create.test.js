@@ -5,6 +5,7 @@ import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
 import LocalCreateCommand from '../../../commands/local/create.js';
 import captureOutput from '../../helpers/capture-output.js';
+import { parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 
 describe('local create', ({ before, after, it }) => {
@@ -16,7 +17,10 @@ describe('local create', ({ before, after, it }) => {
         source = path.join(root, 'app');
         await fsp.mkdir(source);
         await fsp.writeFile(path.join(source, 'node-server.js'), '');
-        await fsp.writeFile(path.join(source, 'example.env.secrets'), 'SIGNING_SECRET=x\n');
+        await fsp.writeFile(
+            path.join(source, 'example.env.secrets'),
+            'SIGNING_SECRET=x\n# @required-outside-development\nDEPLOY_KEY_HASH=x\n',
+        );
     });
 
     after(async () => {
@@ -27,6 +31,8 @@ describe('local create', ({ before, after, it }) => {
         const output = captureOutput();
         const command = new LocalCreateCommand({
             projectDirectory: source,
+            // Shaped as the loader returns it; only the parser is called.
+            tooling: { tooling: { parseSecretsManifest } },
             output,
             now: () => new Date(1700000000000),
             getFreePort: async () => 5555,
@@ -78,7 +84,9 @@ describe('local create', ({ before, after, it }) => {
             .map((line) => line.slice(line.indexOf('=') + 1))
             .filter((value) => value.length > 0);
 
-        assert(values.length > 0, 'the instance has generated secrets');
+        assertMatches(/^DEPLOY_KEY_HASH=[0-9a-f]{64}$/m, dotenv);
+        assertMatches(/^SIGNING_SECRET=[0-9a-f]{64}$/m, dotenv);
+        assert(values.length >= 2, 'the instance has generated secrets');
 
         for (const value of values) {
             assert(!JSON.stringify(data).includes(value), 'a secret value is in the data');

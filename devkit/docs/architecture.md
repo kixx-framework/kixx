@@ -82,16 +82,25 @@ Pipelines that change remote state check every precondition before writing anyth
 Compatibility With the Kixx Library
 -----------------------------------
 
-The devkit talks to a Kixx application over wire formats and reads files in the application's dialects. New code takes framework logic from the project (above). The v6 modules below still port their rules, and are deleted or rewired later in this section's work:
+The devkit talks to a Kixx application over wire formats and reads files in the application's dialects. It takes framework logic from the project (above).
+
+The two config dialects come from the project's tooling, and the devkit holds no parser for either:
+
+| Dialect | Parser, from the project's `kixx/tooling/mod.js` | Devkit code that takes it as an argument |
+|---|---|---|
+| JSONC (`cloudflare-config.jsonc`) | `parseJsonc()` | `loadCloudflareConfig()` in `lib/cloudflare-config-loader.js` |
+| `example.env.secrets` | `parseSecretsManifest()` | `readSecretsManifest()` in `lib/read-secrets-manifest.js`, and through it `lib/local/instance-env.js` and `lib/cloudflare/create-worker-version.js` |
+
+`readSecretsManifest()` resolves core's three lists (`required`, `optional`, `requiredOutsideDevelopment`), refuses a name the deployment tool owns, and turns the parser's `OperationalError` into a `UsageError` that names the file. It removes the text of every line of the file from that message, because a malformed line may be a pasted secret and the parser quotes it. A local instance (`ENVIRONMENT=local`) and the Worker version pipeline both treat the names required outside development as required.
+
+Unit tests pass the stand-ins in `test/helpers/fake-parsers.js`; `test/conformance/project-tooling.test.js` runs the same code with core's real parsers.
+
+The v6 modules below still port their rules, and are deleted or rewired later in this section's work:
 
 | Devkit module | Ported from (repo `lib/`) | Conformance test |
 |---|---|---|
-| `lib/parse-jsonc.js` | `kixx/config/parse-jsonc.js` | `test/conformance/parse-jsonc.test.js` |
-| `lib/cloudflare/secrets-manifest.js` | `kixx/config/secrets-manifest.js` | `test/conformance/secrets-manifest.test.js` |
 | `lib/publishing/addressing.js` | `kixx/content-addressable-store/addressing.js` | `test/conformance/addressing.test.js` |
 | `lib/publishing/content-layout.js` | `kixx/content-addressable-store/content-layout.js` | `test/conformance/content-layout.test.js` |
-
-`test/conformance/bundle-lib.test.js` also runs the bundler against the real `lib/` app, and `local-instance-env.test.js` checks generated instance files against `lib/`'s config reader and secrets manifest.
 
 The content scanner, the stylesheet bundler, and the asset comment stripper moved into Kixx core as the content compiler (`kixx/content-compiler/`). The devkit can't import core, so `publishRelease()` has no default scanner, and no command calls it in this version. A caller can still inject `scan`.
 

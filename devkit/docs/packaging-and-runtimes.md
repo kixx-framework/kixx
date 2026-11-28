@@ -59,7 +59,7 @@ The JSR install grants `-RWNE --allow-sys=homedir --allow-run`. The README expla
 The CLI runs project code in two ways, and no other:
 
 - `kixx-dev dev` and `kixx-dev local start` run the app's `node-server.js` in a child process.
-- A command that declares `requiresTooling` (today `kixx-dev generate`) imports the project's own Kixx tooling into the CLI's process: `kixx/tooling/mod.js` and two adapter modules under `kixx/adapters/node/`. It never imports the project's `app/`, `plugins/`, or entry points.
+- A command that declares `requiresTooling` (today `kixx-dev generate` and `kixx-dev local create`) imports the project's own Kixx tooling into the CLI's process: `kixx/tooling/mod.js` and two adapter modules under `kixx/adapters/node/`. It never imports the project's `app/`, `plugins/`, or entry points.
 
 Everything else in a project is read as data: `kixx/plugin.json` for discovery and the version gate, the `.kixx/` settings, and files such as `cloudflare-config.jsonc`. Keep it that way.
 

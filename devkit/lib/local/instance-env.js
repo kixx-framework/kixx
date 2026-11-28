@@ -8,7 +8,7 @@ import path from 'node:path';
 import defaultFileSystem from '../file-system.js';
 import { generateSecretToken } from '../crypto.js';
 import { parseEnvFile } from '../env-file.js';
-import { readSecretsManifest } from '../cloudflare/secrets-manifest.js';
+import { readSecretsManifest } from '../read-secrets-manifest.js';
 
 const EXAMPLE_ENV_FILE_NAME = 'example.env';
 
@@ -25,6 +25,7 @@ const DROPPED_PLAIN_NAMES = [ 'PORT', 'BUILD_ID' ];
  * @param {string} args.sourceDirectory - Application directory
  * @param {string} args.buildId - Build ID for the instance
  * @param {string} args.dataDirectory - Absolute instance directory
+ * @param {function(string): Object} args.parseSecretsManifest - `parseSecretsManifest` from the project's tooling
  * @param {import('../file-system.js').FileSystem} [args.fileSystem]
  * @returns {Promise<{plain: Object<string, string>, secrets: Object<string, string>}>}
  * @throws {UsageError} When `example.env.secrets` is missing or invalid, or
@@ -35,10 +36,15 @@ export async function buildInstanceEnv(args) {
         sourceDirectory,
         buildId,
         dataDirectory,
+        parseSecretsManifest,
         fileSystem = defaultFileSystem,
     } = args ?? {};
 
-    const manifest = await readSecretsManifest({ projectDirectory: sourceDirectory, fileSystem });
+    const manifest = await readSecretsManifest({
+        projectDirectory: sourceDirectory,
+        parseSecretsManifest,
+        fileSystem,
+    });
 
     const plain = await readExampleEnv(sourceDirectory, fileSystem);
 
@@ -52,7 +58,9 @@ export async function buildInstanceEnv(args) {
 
     const secrets = {};
 
-    for (const name of manifest.required) {
+    // An instance runs with ENVIRONMENT=local, which is outside development,
+    // so the names required outside development are required here.
+    for (const name of [ ...manifest.required, ...manifest.requiredOutsideDevelopment ].sort()) {
         secrets[name] = generateSecretToken();
     }
 

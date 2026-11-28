@@ -92,6 +92,7 @@ export async function createInstance(args) {
         instancesDirectory,
         name,
         port: requestedPort,
+        parseSecretsManifest,
         now = () => new Date(),
         getFreePort = defaultGetFreePort,
     } = args ?? {};
@@ -121,6 +122,7 @@ export async function createInstance(args) {
         sourceDirectory,
         buildId,
         dataDirectory: paths.directory,
+        parseSecretsManifest,
     });
 
     const plainText = formatEnvFile(plain);

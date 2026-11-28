@@ -35,7 +35,8 @@ The Deno permissions:
   access.
 
 No FFI access is needed. `kixx-dev dev` and `kixx-dev local start` run
-your app in a child process, and `kixx-dev generate` loads the Kixx tooling
+your app in a child process, and `kixx-dev generate` and
+`kixx-dev local create` load the Kixx tooling
 from your project's `kixx/` directory. Everything else in a project is read as
 data.
 

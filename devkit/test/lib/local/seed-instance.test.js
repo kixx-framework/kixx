@@ -5,9 +5,9 @@ import process from 'node:process';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
 import { createInstance } from '../../../lib/local/instance-store.js';
-import { ReleaseAssignmentError } from '../../../lib/publishing/publish-release.js';
 import seedInstance from '../../../lib/local/seed-instance.js';
 import UsageError from '../../../lib/usage-error.js';
+import { parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 
 const PORT = 4321;
@@ -40,6 +40,7 @@ describe('seedInstance', ({ before, after, it }) => {
             instancesDirectory,
             name: 'alpha',
             port: PORT,
+            parseSecretsManifest,
             now: () => new Date(1700000000000),
         });
 
@@ -51,10 +52,7 @@ describe('seedInstance', ({ before, after, it }) => {
             appProcesses: [],
             stopCount: 0,
             adminClients: [],
-            tokenRequests: [],
             invites: [],
-            publishingClients: [],
-            publishes: [],
         };
 
         const fakes = {
@@ -71,16 +69,7 @@ describe('seedInstance', ({ before, after, it }) => {
             },
             createAdminClient(options) {
                 calls.adminClients.push(options);
-                return {
-                    async createPublishingApiToken(tokenOptions) {
-                        calls.tokenRequests.push(tokenOptions);
-                        return { tokenId: 't1', token: 'publishing-token-secret' };
-                    },
-                };
-            },
-            createPublishingClient(options) {
-                calls.publishingClients.push(options);
-                return { kind: 'publishing-client' };
+                return { kind: 'admin-client' };
             },
             canConnect: async () => false,
             async acceptInvite(args) {
@@ -89,13 +78,6 @@ describe('seedInstance', ({ before, after, it }) => {
                     throw overrides.inviteError;
                 }
                 return { adminUserId: 'u1' };
-            },
-            async publishRelease(args) {
-                calls.publishes.push(args);
-                if (overrides?.publishError) {
-                    throw overrides.publishError;
-                }
-                return { releaseId: 'rel-1', buildId: args.buildId, assignmentId: 'as-1' };
             },
             generatePassword: () => 'generated-password-0123456789',
         };
@@ -125,15 +107,9 @@ describe('seedInstance', ({ before, after, it }) => {
         assertEqual('generated-password-0123456789', calls.invites[0].password);
         assertEqual('http://localhost:4321', calls.adminClients[0].origin);
 
-        assertEqual('root@alpha.local', calls.adminClients[1].email);
-        assertEqual('generated-password-0123456789', calls.adminClients[1].password);
-        assertEqual('kixx local seed', calls.tokenRequests[0].description);
-
-        assertEqual('publishing-token-secret', calls.publishingClients[0].token);
-        assertEqual('http://localhost:4321', calls.publishingClients[0].origin);
-        assertEqual('local-alpha-1700000000000', calls.publishes[0].buildId);
+        // Seeding creates the admin and nothing else: it does not publish.
+        assertEqual(1, calls.adminClients.length);
         assertMatches('BUILD_ID=local-alpha-1700000000000', env);
-        assertEqual(source, calls.publishes[0].projectDirectory);
 
         const credentials = JSON.parse(await fsp.readFile(path.join(directory, 'credentials.json'), 'utf8'));
 
@@ -141,13 +117,12 @@ describe('seedInstance', ({ before, after, it }) => {
             baseUrl: 'http://localhost:4321/',
             username: 'root@alpha.local',
             password: 'generated-password-0123456789',
-            publishingApiToken: 'publishing-token-secret',
             buildId: 'local-alpha-1700000000000',
             port: PORT,
         }), JSON.stringify(credentials));
 
         assertEqual(path.join(directory, 'credentials.json'), result.credentialsPath);
-        assertEqual('rel-1', result.publishResult.releaseId);
+        assertEqual('root@alpha.local', result.credentials.username);
         assertEqual(1, calls.stopCount);
 
         if (process.platform !== 'win32') {
@@ -175,7 +150,7 @@ describe('seedInstance', ({ before, after, it }) => {
         const error = await catchAsyncError(() => seedInstance({ sourceDirectory: source, instancesDirectory, name: 'beta', ...fakes }));
 
         assert(error instanceof UsageError, 'UsageError');
-        assertMatches('kixx local create beta', error.message);
+        assertMatches('kixx-dev local create beta', error.message);
         assertEqual(0, calls.appProcesses.length);
     });
 
@@ -231,7 +206,6 @@ describe('seedInstance', ({ before, after, it }) => {
         assertMatches('exited before accepting connections', error.message);
         assertMatches('boom: missing key', error.message);
         assertEqual(0, calls.adminClients.length);
-        assertEqual(0, calls.publishingClients.length);
         assertEqual(1, calls.stopCount);
     });
 
@@ -244,44 +218,6 @@ describe('seedInstance', ({ before, after, it }) => {
         assertMatches('invite token is unknown', error?.message);
         assertEqual(1, calls.stopCount);
         assertEqual(false, await exists(path.join(directory, 'credentials.json')));
-    });
-
-    it('keeps credentials and names the recovery when publishing fails', async () => {
-        const { instancesDirectory, directory } = await setup();
-        const cause = new Error('network down');
-        const { calls, fakes } = makeFakes({ publishError: cause });
-
-        const error = await catchAsyncError(() => seedInstance({
-            sourceDirectory: source,
-            instancesDirectory,
-            name: 'alpha',
-            formatCommand: (command) => `kixx local ${ command } app`,
-            ...fakes,
-        }));
-
-        assert(error instanceof UsageError, 'UsageError');
-        assertEqual(cause, error.cause);
-        assertMatches('network down', error.message);
-        assertMatches('kixx local start alpha app, then kixx local publish alpha app', error.message);
-        assertEqual(1, calls.stopCount);
-        assertEqual(true, await exists(path.join(directory, 'credentials.json')));
-    });
-
-    it('does not repeat the recovery line of an assignment failure', async () => {
-        const { instancesDirectory } = await setup();
-        const { fakes } = makeFakes({
-            fakes: {
-                async publishRelease(args) {
-                    const message = `assign failed\n${ args.formatRecovery({ releaseId: 'r', buildId: 'b' }) }`;
-                    throw new ReleaseAssignmentError(message, { releaseId: 'r', buildId: 'b', cause: new Error('x') });
-                },
-            },
-        });
-
-        const error = await catchAsyncError(() => seedInstance({ sourceDirectory: source, instancesDirectory, name: 'alpha', ...fakes }));
-
-        assertEqual(1, error.message.split('Recover with:').length - 1);
-        assertMatches('kixx local publish alpha', error.message);
     });
 });
 

@@ -29,7 +29,8 @@ const REQUIRED_STATE_FIELDS = [ 'workerName', 'versionId' ];
  * @param {string} args.workerName - Configured `WORKER.name`
  * @param {string} args.environment - Environment name
  * @param {?import('./worker-version-state.js').WorkerVersionState} args.state - Recorded state, or null
- * @param {import('./secrets-manifest.js').SecretsManifest} args.manifest - Parsed `example.env.secrets`
+ * @param {{required: string[], optional: string[]}} args.manifest - Secret names from `example.env.secrets`, with the names
+ *     required outside development already in `required`
  * @returns {Promise<SecretSource>}
  * @throws {UsageError} When the state is incomplete, names another Worker,
  *     records a missing or stale version, or the Worker has no versions while

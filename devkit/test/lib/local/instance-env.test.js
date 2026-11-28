@@ -2,10 +2,13 @@ import { describe } from 'kixx-test';
 import { assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
 import { buildInstanceEnv } from '../../../lib/local/instance-env.js';
 import createMemoryFileSystem from '../../helpers/memory-file-system.js';
+import { parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 const MANIFEST = [
     'B_SECRET=placeholder',
     'A_SECRET=placeholder',
+    '# @required-outside-development',
+    'DEPLOY_KEY_HASH=placeholder',
     '# @optional',
     'ADMIN_BOOTSTRAP_TOKEN=placeholder',
     '# @optional',
@@ -42,16 +45,17 @@ describe('buildInstanceEnv()', ({ it }) => {
         assertEqual('ENVIRONMENT,BUILD_ID,DATA_DIRECTORY', Object.keys(plain).join(','));
     });
 
-    it('generates required secrets plus ADMIN_BOOTSTRAP_TOKEN, each distinct', async () => {
+    // An instance runs with ENVIRONMENT=local, which is outside development.
+    it('generates the required secrets, those required outside development, and ADMIN_BOOTSTRAP_TOKEN, each distinct', async () => {
         const { secrets } = await build({ '/app/example.env.secrets': MANIFEST });
 
-        assertEqual('A_SECRET,B_SECRET,ADMIN_BOOTSTRAP_TOKEN', Object.keys(secrets).join(','));
+        assertEqual('A_SECRET,B_SECRET,DEPLOY_KEY_HASH,ADMIN_BOOTSTRAP_TOKEN', Object.keys(secrets).join(','));
 
         for (const value of Object.values(secrets)) {
             assertMatches(/^[0-9a-f]{64}$/, value);
         }
 
-        assertEqual(3, new Set(Object.values(secrets)).size);
+        assertEqual(4, new Set(Object.values(secrets)).size);
     });
 
     it('throws a UsageError when example.env.secrets is missing', async () => {
@@ -74,6 +78,7 @@ function build(files) {
         sourceDirectory: '/app',
         buildId: 'local-a-1',
         dataDirectory: '/data/a',
+        parseSecretsManifest,
         fileSystem: createMemoryFileSystem(files),
     });
 }

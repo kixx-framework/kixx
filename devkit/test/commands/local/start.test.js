@@ -6,6 +6,7 @@ import { assert, assertEqual, assertMatches } from '../../../lib/vendor/kixx-ass
 import LocalStartCommand from '../../../commands/local/start.js';
 import { createInstance } from '../../../lib/local/instance-store.js';
 import captureOutput from '../../helpers/capture-output.js';
+import { parseSecretsManifest } from '../../helpers/fake-parsers.js';
 
 
 describe('local start', ({ before, after, it }) => {
@@ -27,6 +28,7 @@ describe('local start', ({ before, after, it }) => {
             instancesDirectory: path.join(target, 'instances'),
             name: 'alpha',
             port: 4321,
+            parseSecretsManifest,
         }));
     });
 
