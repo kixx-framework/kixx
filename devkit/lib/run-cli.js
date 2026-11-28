@@ -351,11 +351,6 @@ function toData(name, result) {
         return {};
     }
 
-    // Transitional: the commands kept from v6 still return 0 for success.
-    if (result === 0) {
-        return {};
-    }
-
     if (!isPlainObject(result)) {
         throw new TypeError(`The "${ name }" command resolved ${ inspect(result) }; a command resolves a plain object or undefined`);
     }

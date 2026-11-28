@@ -40,19 +40,50 @@ describe('local create', ({ before, after, it }) => {
         const target = path.join(root, 'target-1');
         const { command, output } = makeCommand();
 
-        const code = await command.run({ target }, { name: 'alpha' });
+        const data = await command.run({ target }, { name: 'alpha' });
         const text = output.chunks.join('').replace(/\s+/g, ' ');
 
-        assertEqual(0, code);
-        assertMatches('[kixx local] Created local instance "alpha"', text);
+        assertMatches('[kixx-dev local] Created local instance "alpha"', text);
         assertMatches('Port: 5555', text);
         assertMatches('Build ID: local-alpha-1700000000000', text);
         assertMatches(`--target ${ target }`, text);
-        assertMatches('Next: kixx local seed alpha', text);
+        assertMatches('Next: kixx-dev local start alpha', text);
         assert(!text.includes('Warning'), 'no collision warning');
 
         const metadata = JSON.parse(await fsp.readFile(path.join(target, 'instances', 'alpha', 'instance.json'), 'utf8'));
         assertEqual(5555, metadata.port);
+
+        assertEqual(
+            JSON.stringify({
+                name: 'alpha',
+                port: 5555,
+                buildId: 'local-alpha-1700000000000',
+                directory: path.join(target, 'instances', 'alpha'),
+            }),
+            JSON.stringify(data),
+        );
+    });
+
+    // The instance's secrets are generated here. They go to its dotenv file
+    // and nowhere else.
+    it('keeps every generated secret out of its data and its text', async () => {
+        const target = path.join(root, 'target-secrets');
+        const { command, output } = makeCommand();
+
+        const data = await command.run({ target }, { name: 'alpha' });
+
+        const dotenv = await fsp.readFile(path.join(target, 'instances', 'alpha', '.env.secrets'), 'utf8');
+        const values = dotenv.split('\n')
+            .filter((line) => line.includes('=') && !line.startsWith('#'))
+            .map((line) => line.slice(line.indexOf('=') + 1))
+            .filter((value) => value.length > 0);
+
+        assert(values.length > 0, 'the instance has generated secrets');
+
+        for (const value of values) {
+            assert(!JSON.stringify(data).includes(value), 'a secret value is in the data');
+            assert(!output.chunks.join('').includes(value), 'a secret value was printed');
+        }
     });
 
     it('passes --port through', async () => {

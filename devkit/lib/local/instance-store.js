@@ -164,7 +164,7 @@ export async function readInstance(args) {
 
     if (!await exists(paths.directory)) {
         throw new UsageError(
-            `No local instance "${ name }" at ${ paths.directory }; run "kixx local create ${ name }" first.`,
+            `No local instance "${ name }" at ${ paths.directory }; run "kixx-dev local create ${ name }" first.`,
         );
     }
 

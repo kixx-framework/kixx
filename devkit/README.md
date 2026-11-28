@@ -30,11 +30,11 @@ The Deno permissions:
   APIs.
 - `-E` env: the `KIXX_ADMIN_*` prompt variables.
 - `--allow-sys=homedir`: find the `~/.kixx` settings layer.
-- `--allow-run`: `kixx-dev dev start`, `kixx-dev local seed`, and
-  `kixx-dev local start` run your app's `node-server.js` in a child Deno
-  process with `-A`, so this grants it full access.
+- `--allow-run`: `kixx-dev dev` and `kixx-dev local start` run your app's
+  `node-server.js` in a child Deno process with `-A`, so this grants it full
+  access.
 
-No FFI access is needed. `kixx-dev dev start` and `kixx-dev local start` run
+No FFI access is needed. `kixx-dev dev` and `kixx-dev local start` run
 your app in a child process, and `kixx-dev generate` loads the Kixx tooling
 from your project's `kixx/` directory. Everything else in a project is read as
 data.
@@ -62,7 +62,7 @@ table.
 
 Run a command anywhere inside your project. A Kixx project is the nearest
 directory, at or above where you are, that holds `kixx/plugin.json`. You can
-also pass a directory as the last argument: `kixx-dev dev start ../my-app`.
+also pass a directory as the last argument: `kixx-dev dev ../my-app`.
 Outside a project the command exits `3`.
 
 `kixx-dev` loads the framework's own logic from your project's `kixx/`
@@ -77,14 +77,22 @@ Commands
 - `kixx-dev generate` — rewrite the generated registries, routes, and
   `example.env.secrets` after you change a manifest (`kixx/plugin.json`, a
   plugin's `plugin.json`, or `app/app.json`). Commit what it writes.
-- `kixx-dev dev start` — run the app locally, restarting after code changes.
+- `kixx-dev dev` — run the app locally, restarting after code changes.
 - `kixx-dev local create` — create a throwaway local instance.
 - `kixx-dev local start` — run an instance under the devserver.
 - `kixx-dev local list` — list instances.
 - `kixx-dev local destroy` — delete a stopped instance.
 
-The v6 `admin`, `app`, and `cloudflare` commands, and `local seed` and
-`local publish`, are removed in this version.
+`kixx-dev --help` also lists the commands that are not available in this
+version, each marked so: `new`, `add`, `remove`, `upgrade`, `agents sync`,
+`check`, `routes`, `render`, `publish`, `deploy`, `release list` and `assign`,
+`media upload`, `env create` and `list`, `cloudflare provision`, `secrets set`
+and `rotate`, `deploy-key generate` and `rotate`, `admin invite`, `reset`,
+`migrations`, and `jobs`, and `local seed` and `publish`. Each has `--help`,
+and running one exits `4`.
+
+The v6 command names (`kixx dev start`, the `app` commands, the `cloudflare`
+worker commands, and the old `admin` commands) are gone, with no alias.
 
 Documentation:
 

@@ -41,7 +41,8 @@ describe('kixx-dev.js entry point', ({ it }) => {
         assertEqual(0, code);
         assertMatches(/^Usage: kixx-dev <command>/, stdout);
         assertMatches(/^ {2}generate {2}/m, stdout);
-        assertMatches(/^ {2}dev start {2}/m, stdout);
+        assertMatches(/^ {2}dev {2}/m, stdout);
+        assertMatches(/^ {2}deploy {2}.*\(Not available/m, stdout);
         assertMatches(/^ {2}local create {2}/m, stdout);
         assertMatches(/^ {6}--json {2}/m, stdout);
     }, { timeout: TIMEOUT });
@@ -65,6 +66,20 @@ describe('kixx-dev.js entry point', ({ it }) => {
         assertMatches('Missing required argument <name>', stderr);
         assert(!stderr.includes('Failed to run command'), 'printed as a crash');
         assert(!/\n\s+at /.test(stderr), 'printed a stack');
+    }, { timeout: TIMEOUT });
+
+    it('exits 4 for a command that is not available, with one envelope under --json', async () => {
+        const text = await runEntryPoint([ 'deploy', '-e', 'production' ]);
+        const json = await runEntryPoint([ 'deploy', '-e', 'production', '--json' ]);
+
+        assertEqual(4, text.code);
+        assertEqual('', text.stdout);
+        assertMatches('not available in this version of kixx-dev', text.stderr);
+        assert(!/\n\s+at /.test(text.stderr), 'printed a stack');
+
+        assertEqual(4, json.code);
+        assertEqual('', json.stderr);
+        assertEqual('CommandNotAvailable', JSON.parse(json.stdout).error.code);
     }, { timeout: TIMEOUT });
 
     it('shows a kept command\'s help', async () => {
@@ -91,6 +106,7 @@ describe('kixx-dev.js entry point', ({ it }) => {
             assertEqual(0, json.code);
             assertMatches('No local instances in', json.stderr);
             assertEqual('local list', JSON.parse(json.stdout).command);
+            assertEqual(0, JSON.parse(json.stdout).data.instances.length);
         });
     }, { timeout: TIMEOUT });
 

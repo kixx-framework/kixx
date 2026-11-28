@@ -21,7 +21,7 @@ describe('runDevServer()', ({ before, after, it }) => {
         await fsp.rm(directory, { recursive: true, force: true });
     });
 
-    it('prefixes log lines with the label and resolves 0 after SIGINT', async () => {
+    it('prefixes log lines with the label and resolves what it listened on after SIGINT', async () => {
         const subject = makeSubject();
 
         const pending = runDevServer(subject.args({
@@ -37,13 +37,16 @@ describe('runDevServer()', ({ before, after, it }) => {
         assertEqual('local', subject.created[0].environment);
         assertEqual('/instances/alpha/.env', subject.created[0].dotenv);
         assertEqual(directory, subject.created[0].projectDirectory);
-        assertMatches('[kixx local] listening on http://localhost:4321', subject.output.chunks.join(''));
+        assertMatches('[kixx-dev local] listening on http://localhost:4321', subject.output.chunks.join(''));
 
         subject.signals.emit('SIGINT');
 
-        assertEqual(0, await pending);
+        // The bound port, not the one asked for.
+        const result = await pending;
+
+        assertEqual('{"port":4321,"environment":"local"}', JSON.stringify(result));
         assertEqual(1, subject.devServer.stopCount);
-        assertMatches('[kixx local] stopping', subject.output.chunks.join(''));
+        assertMatches('[kixx-dev local] stopping', subject.output.chunks.join(''));
         assertEqual(0, subject.signals.listenerCount('SIGINT'));
         assertEqual(0, subject.signals.listenerCount('SIGTERM'));
     });
@@ -85,7 +88,7 @@ function makeSubject() {
     };
 
     const args = (overrides) => ({
-        label: 'kixx local',
+        label: 'kixx-dev local',
         missingServerHint: 'Use the source app.',
         output,
         signals,

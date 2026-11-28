@@ -584,11 +584,15 @@ describe('runCli()', ({ describe }) => {
             assertEqual('{"ok":true,"command":"build","data":{}}\n', stdout);
         });
 
-        it('treats the kept commands\' 0 as success with empty data', async () => {
-            const { code, stdout } = await run([ 'build', '--json' ], { build: makeCommand(() => 0) });
+        // A command never picks an exit code: an integer is not data.
+        it('exits 1 when a command resolves 0', async () => {
+            const { code, stdout, stderr } = await run([ 'build', '--json' ], { build: makeCommand(() => 0) });
+            const envelope = parseEnvelope(stdout);
 
-            assertEqual(0, code);
-            assertEqual('{"ok":true,"command":"build","data":{}}\n', stdout);
+            assertEqual(1, code);
+            assertEqual(false, envelope.ok);
+            assertEqual('UnexpectedError', envelope.error.code);
+            assertMatches('resolves a plain object or undefined', stderr);
         });
 
         it('accepts --json before the command words', async () => {

@@ -46,6 +46,6 @@ export default class LocalDestroyCommand {
 
         createLocalLog(this.#output)(`Destroyed local instance "${ name }"`);
 
-        return 0;
+        return { name };
     }
 }

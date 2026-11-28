@@ -1,14 +1,14 @@
 import process from 'node:process';
 import path from 'node:path';
-import runDevServer from '../../lib/devserver/run-dev-server.js';
-import UsageError from '../../lib/usage-error.js';
+import runDevServer from '../lib/devserver/run-dev-server.js';
+import UsageError from '../lib/usage-error.js';
 
 
 const DEFAULT_PORT = 2026;
 const DEFAULT_ENVIRONMENT = 'development';
 
 
-export default class DevStartCommand {
+export default class DevCommand {
 
     static description = `
         Run the project's node-server.js behind a local proxy. The app server
@@ -71,13 +71,14 @@ export default class DevStartCommand {
         // resolve against the wrong directory there.
         const dotenv = options?.dotenv ? path.resolve(options.dotenv) : undefined;
 
+        // Resolves when a signal stops the server, with what it listened on.
         return await runDevServer({
             projectDirectory: this.#projectDirectory,
             port,
             environment,
             dotenv,
-            label: 'kixx dev',
-            missingServerHint: 'Pass a Kixx application directory, or run kixx dev start inside one.',
+            label: 'kixx-dev dev',
+            missingServerHint: 'kixx-dev dev runs the project through this file.',
             output: this.#output,
             stdout: this.#stdout,
             stderr: this.#stderr,

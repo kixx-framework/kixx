@@ -45,7 +45,7 @@ describe('local start', ({ before, after, it }) => {
             canConnect: async () => false,
             runDevServer: async (args) => {
                 runs.push(args);
-                return 0;
+                return { port: args.port, environment: args.environment };
             },
             ...overrides,
         });
@@ -56,33 +56,29 @@ describe('local start', ({ before, after, it }) => {
     it('runs the devserver on the instance port with its dotenv', async () => {
         const { command, output, runs } = makeCommand();
 
-        const code = await command.run({ target }, { name: 'alpha' });
+        const data = await command.run({ target }, { name: 'alpha' });
 
-        assertEqual(0, code);
+        assertEqual('{"port":4321,"environment":"local"}', JSON.stringify(data));
         assertEqual(1, runs.length);
         assertEqual(source, runs[0].projectDirectory);
         assertEqual(4321, runs[0].port);
         assertEqual('local', runs[0].environment);
         assertEqual(path.join(directory, '.env'), runs[0].dotenv);
         assert(path.isAbsolute(runs[0].dotenv), 'absolute dotenv');
-        assertEqual('kixx local', runs[0].label);
-        assertMatches('application directory the instance was created from', runs[0].missingServerHint);
+        assertEqual('kixx-dev local', runs[0].label);
+        assertMatches('the project the instance was created from', runs[0].missingServerHint);
 
-        const text = output.chunks.join('').replace(/\s+/g, ' ');
-        assertMatches('is not seeded; run kixx local seed alpha', text);
+        // An unseeded instance starts without a hint: the command that seeds
+        // one is not available in this version.
+        assertEqual('', output.chunks.join(''));
     });
 
-    it('omits the unseeded hint once seeded', async () => {
-        const credentials = path.join(directory, 'credentials.json');
-        await fsp.writeFile(credentials, '{}');
+    it('names kixx-dev local create when the instance does not exist', async () => {
+        const { command } = makeCommand();
 
-        try {
-            const { command, output } = makeCommand();
-            await command.run({ target }, { name: 'alpha' });
-            assert(!output.chunks.join('').includes('not seeded'), 'unseeded hint printed');
-        } finally {
-            await fsp.rm(credentials);
-        }
+        const error = await catchAsyncError(() => command.run({ target }, { name: 'beta' }));
+
+        assertMatches('run "kixx-dev local create beta" first', error.message.replace(/\s+/g, ' '));
     });
 
     it('refuses a running instance without starting', async () => {

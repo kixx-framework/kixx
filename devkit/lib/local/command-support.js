@@ -1,5 +1,5 @@
 /**
- * Pieces shared by the `kixx local` sub-commands.
+ * Pieces shared by the `kixx-dev local` commands.
  * @module local/command-support
  */
 
@@ -11,7 +11,7 @@ import { wrapText } from '../text-wrap.js';
 export const TARGET_OPTION = Object.freeze({
     type: 'string',
     short: 't',
-    description: 'Directory holding instances/; default <app>/.kixx',
+    description: 'Directory holding instances/; default <project>/.kixx',
 });
 
 export const NAME_POSITIONAL = Object.freeze({
@@ -22,11 +22,11 @@ export const NAME_POSITIONAL = Object.freeze({
 
 /**
  * @param {Object} output - Writable stream
- * @returns {function(string): void} Writes one wrapped `[kixx local] ` line
+ * @returns {function(string): void} Writes one wrapped `[kixx-dev local] ` line
  */
 export function createLocalLog(output) {
     return (message) => {
-        output.write(`${ wrapText(`[kixx local] ${ message }`) }\n`);
+        output.write(`${ wrapText(`[kixx-dev local] ${ message }`) }\n`);
     };
 }
 
@@ -34,16 +34,16 @@ export function createLocalLog(output) {
  * Builds a follow-up command that targets the same instance from the
  * current working directory.
  * @param {Object} args
- * @param {string} args.command - Such as "seed alpha"
- * @param {string} args.projectDirectory - Application directory
+ * @param {string} args.command - Such as "start alpha"
+ * @param {string} args.projectDirectory - Project directory
  * @param {string} [args.target] - The --target value as given
  * @param {string} [args.cwd] - Defaults to `process.cwd()`
- * @returns {string} Such as "kixx local seed alpha lib --target tmp/x"
+ * @returns {string} Such as "kixx-dev local start alpha lib --target tmp/x"
  */
 export function formatLocalCommand(args) {
     const { command, projectDirectory, target, cwd = process.cwd() } = args ?? {};
 
-    let text = `kixx local ${ command }`;
+    let text = `kixx-dev local ${ command }`;
 
     const directory = path.relative(cwd, projectDirectory);
 

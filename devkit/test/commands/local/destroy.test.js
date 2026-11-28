@@ -45,8 +45,8 @@ describe('local destroy', ({ before, after, it }) => {
         const output = captureOutput();
         const stopped = new LocalDestroyCommand({ projectDirectory: root, output, canConnect: async () => false });
 
-        assertEqual(0, await stopped.run({ target }, { name: 'alpha' }));
-        assertMatches('[kixx local] Destroyed local instance "alpha"', output.chunks.join(''));
+        assertEqual('{"name":"alpha"}', JSON.stringify(await stopped.run({ target }, { name: 'alpha' })));
+        assertMatches('[kixx-dev local] Destroyed local instance "alpha"', output.chunks.join(''));
 
         let exists = true;
 

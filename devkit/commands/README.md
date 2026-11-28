@@ -23,21 +23,25 @@ The first word of a two-word name is a **group**. No name is both a command and 
 `commands/index.js` is the registry. Its default export is one flat map from command name to command class, in the order help lists the commands. Its `groups` export maps each group to a one-line description:
 
 ```js
-import DevStartCommand from './dev/start.js';
+import DevCommand from './dev.js';
 import GenerateCommand from './generate.js';
 import LocalCreateCommand from './local/create.js';
+import createPlaceholderCommand from '../lib/placeholder-command.js';
 
 export const groups = Object.freeze({
-    dev: 'Local development tools',
     local: 'Throwaway local instances of the app',
+    release: 'Release history and emergency rollback',
 });
 
 export default Object.freeze({
     'generate': GenerateCommand,
-    'dev start': DevStartCommand,
+    'dev': DevCommand,
     'local create': LocalCreateCommand,
+    'release list': createPlaceholderCommand('Show the release history'),
 });
 ```
+
+**The tree is the CLI-5 table** of REQUIREMENTS.md, plus `generate`: 32 names. Six work in this version (`generate`, `dev`, and `local create`, `start`, `list`, and `destroy`). The other 26 are placeholders (see "Placeholders"). `test/commands/tree.test.js` holds every name and whether it works, so adding or removing a command, or building a placeholder, means changing that test in the same change. The v6 names with no row (`dev start`, `app publish`, the `cloudflare` worker commands, and so on) are gone, with no alias.
 
 A one-word command lives at `commands/<name>.js`. A two-word command lives at `commands/<group>/<name>.js`.
 
@@ -200,13 +204,21 @@ async run(options, positionals) {}
 
 **Return data, not text.** `run()` resolves a plain, JSON-serializable object, which becomes the envelope's `data`, or `undefined`, which becomes `{}`. Never return a secret value. Anything else is a defect and exits 1.
 
-> Transitional: the commands kept from v6 still resolve `0`, which the runner treats as `undefined`. This allowance goes away when they return data.
+What the working commands return:
+
+| Command | `data` |
+|---|---|
+| `generate` | `{ projectDirectory, files }` |
+| `dev`, `local start` | `{ port, environment }`, when the server stops; `port` is the port it bound |
+| `local create` | `{ name, port, buildId, directory }`; never the secrets it generates |
+| `local list` | `{ instances: [ { name, port, seeded, running } ] }`; `port` and `running` are `null` for an instance directory with no readable metadata |
+| `local destroy` | `{ name }` |
 
 **Signal failure only by throwing.** A command never picks an exit code and never returns one. Throw `UsageError` (from `lib/usage-error.js`) for anything the user can fix by changing arguments, settings, or the outside world. Any other error is treated as a defect. See `docs/error-handling.md`.
 
 **Write human text to `output`.** Never write to `process.stdout` directly: under `--json` the runner hands the command `stderr` as its `output` and `stdout`, so stdout holds only the envelope. Pass human-readable text through `wrapText()` from `lib/text-wrap.js` so it wraps at 80 columns. The returned data is never printed without `--json`, so print what a person needs to see.
 
-A long-running command (`dev start`, `local start`) resolves once, when it stops. Until then stdout is silent under `--json`, and its log lines and the app's output go to stderr.
+A long-running command (`dev`, `local start`) resolves once, when it stops. Until then stdout is silent under `--json`, and its log lines and the app's output go to stderr.
 
 
 The `--json` Envelope
@@ -319,7 +331,9 @@ export default Object.freeze({
 - `kixx-dev deploy --help` exits 0 and says the same. Its `--help --json` has `"available": false`.
 - Running it exits 4 with `error.code` `CommandNotAvailable`, whatever arguments it is given. The runner does not parse a placeholder's arguments, because its real options don't exist yet, and loads no settings for it.
 
-The runner constructs a placeholder with `commandName` so its message can name the command. To build the command, replace the factory call with an import of the real module.
+The runner constructs a placeholder with `commandName` so its message can name the command. To build the command, replace the factory call with an import of the real module, and change its line in `test/commands/tree.test.js`.
+
+Text a command prints never names a placeholder as the next step.
 
 
 Adding a Command
@@ -327,7 +341,8 @@ Adding a Command
 
 1. Create `commands/<name>.js`, or `commands/<group>/<name>.js`, default-exporting the class. Declare `requiresProject` if it runs inside a project, or `requiresTooling` if it calls the project's Kixx code.
 2. Import the class in `commands/index.js` and add it to the map under its name. For a new group, add the group to `groups`.
-3. Write its test in `test/commands/`, at the mirrored path. Construct the class with a captured `output` and fakes; assert on what it returns, writes, and throws.
+3. Add its name to the tree in `test/commands/tree.test.js`, or change its line there when it replaces a placeholder.
+4. Write its test in `test/commands/`, at the mirrored path. Construct the class with a captured `output` and fakes; assert on what it returns, writes, and throws.
 
 Then verify, from the repository root:
 

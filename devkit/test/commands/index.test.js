@@ -60,8 +60,8 @@ describe('commands/index.js registry', ({ it }) => {
 
     // The runner gives a project directory and settings only to a command
     // that declares it runs inside a project.
-    it('runs generate and the commands kept from v6 inside a project', () => {
-        for (const name of [ 'generate', 'dev start', 'local create', 'local start', 'local list', 'local destroy' ]) {
+    it('runs every working command inside a project', () => {
+        for (const name of [ 'generate', 'dev', 'local create', 'local start', 'local list', 'local destroy' ]) {
             assertEqual(true, requiresProject(commands[name]), `"${ name }"`);
         }
 
@@ -71,6 +71,7 @@ describe('commands/index.js registry', ({ it }) => {
     it('has a module at its path for every command that is available', async () => {
         const modules = await listCommandModules();
 
+        // A placeholder has no module. The names are pinned in tree.test.js.
         const available = Object.entries(commands)
             .filter(([ , Command ]) => Command.available !== false)
             .map(([ name ]) => name);
@@ -78,13 +79,6 @@ describe('commands/index.js registry', ({ it }) => {
         assertEqual(
             available.toSorted().join(','),
             modules.map(({ name }) => name).toSorted().join(','),
-        );
-    });
-
-    it('holds generate and the five commands kept from v6', () => {
-        assertEqual(
-            'generate,dev start,local create,local start,local list,local destroy',
-            Object.keys(commands).join(','),
         );
     });
 });

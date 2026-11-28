@@ -38,9 +38,18 @@ describe('local list', ({ before, after, it }) => {
             canConnect: async (port) => port === 4001,
         });
 
-        const code = await command.run({ target: path.join(root, 'target') });
+        const data = await command.run({ target: path.join(root, 'target') });
 
-        assertEqual(0, code);
+        assertEqual(
+            JSON.stringify({
+                instances: [
+                    { name: 'alpha', port: 4001, seeded: true, running: true },
+                    { name: 'beta', port: 4002, seeded: false, running: false },
+                    { name: 'gamma', port: null, seeded: false, running: null },
+                ],
+            }),
+            JSON.stringify(data),
+        );
         assertEqual(
             [
                 'NAME   PORT  SEEDED  RUNNING',
@@ -57,8 +66,9 @@ describe('local list', ({ before, after, it }) => {
         const output = captureOutput();
         const command = new LocalListCommand({ projectDirectory: root, output, canConnect: async () => false });
 
-        await command.run({ target: path.join(root, 'empty') });
+        const data = await command.run({ target: path.join(root, 'empty') });
 
+        assertEqual('{"instances":[]}', JSON.stringify(data));
         assertMatches('No local instances in', output.chunks.join(''));
     });
 

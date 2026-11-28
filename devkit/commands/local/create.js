@@ -83,12 +83,19 @@ export default class LocalCreateCommand {
         }
 
         log(`Next: ${ formatLocalCommand({
-            command: `seed ${ name }`,
+            command: `start ${ name }`,
             projectDirectory: this.#projectDirectory,
             target: options?.target,
         }) }`);
 
-        return 0;
+        // The instance also holds generated secrets and the names of its
+        // dotenv variables. Neither belongs in a command's data.
+        return {
+            name,
+            port: instance.port,
+            buildId: instance.buildId,
+            directory: instance.directory,
+        };
     }
 }
 

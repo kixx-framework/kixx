@@ -108,6 +108,8 @@ Every command supports `--help` and `--json`, and exits with a code from one doc
 - `kixx-dev dev` - Run your app locally. It restarts when you change the code.
 - `kixx-dev local` - Run throwaway local instances with writable data.
 
+The rest of the command tree (`new`, `check`, `publish`, `deploy`, and the others `kixx-dev --help` lists) is registered but not built yet: each command has `--help` and exits `4` when run.
+
 `devkit/templates/project/` is the project skeleton: every hand-written file of a new project with no plugins. It ships inside the devkit, and holds no core and no generated file.
 
 See [devkit/README.md](devkit/README.md) to install it.

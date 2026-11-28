@@ -3,10 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { describe } from 'kixx-test';
-import { assert, assertEqual, assertMatches } from '../../../lib/vendor/kixx-assert/mod.js';
-import DevStartCommand from '../../../commands/dev/start.js';
-import UsageError from '../../../lib/usage-error.js';
-import captureOutput from '../../helpers/capture-output.js';
+import { assert, assertEqual, assertMatches } from '../../lib/vendor/kixx-assert/mod.js';
+import DevCommand from '../../commands/dev.js';
+import UsageError from '../../lib/usage-error.js';
+import captureOutput from '../helpers/capture-output.js';
 
 
 function makeFakeDevServer(options) {
@@ -51,7 +51,7 @@ function makeCommand(projectDirectory, options) {
     const signals = new EventEmitter();
     const created = [];
 
-    const command = new DevStartCommand({
+    const command = new DevCommand({
         projectDirectory,
         output,
         signals,
@@ -94,7 +94,7 @@ async function catchAsyncError(fn) {
 }
 
 
-describe('dev start', ({ it }) => {
+describe('dev', ({ it }) => {
 
     it('rejects invalid --port values', async () => {
         await withProject(async (directory) => {
@@ -115,9 +115,10 @@ describe('dev start', ({ it }) => {
         await withProject(async (directory) => {
             const subject = makeCommand(directory);
 
-            const code = await runAndInterrupt(subject, {});
+            const data = await runAndInterrupt(subject, {});
 
-            assertEqual(0, code);
+            // The fake devserver bound 4321.
+            assertEqual('{"port":4321,"environment":"development"}', JSON.stringify(data));
             assertEqual(2026, subject.created[0].port);
             assertEqual('development', subject.created[0].environment);
             assertEqual(undefined, subject.created[0].dotenv);
@@ -163,7 +164,7 @@ describe('dev start', ({ it }) => {
 
             assert(error instanceof UsageError, 'expected a UsageError');
             assertMatches(path.join(directory, 'node-server.js'), error.message);
-            assertMatches('Pass a Kixx application directory', error.message);
+            assertMatches('kixx-dev dev runs the project through this file.', error.message);
             assertEqual(0, created.length);
             assertEqual(0, signals.listenerCount('SIGINT'));
         }, { hasServer: false });
@@ -179,7 +180,7 @@ describe('dev start', ({ it }) => {
             assertEqual(1, subject.devServer.startCount);
             // The line wraps at 80 columns; compare it unwrapped.
             assertMatches(
-                `[kixx dev] listening on http://localhost:4321 (environment development, app ${ directory }); ` +
+                `[kixx-dev dev] listening on http://localhost:4321 (environment development, app ${ directory }); ` +
                 'press Ctrl-C to stop',
                 subject.output.chunks.join('').replace(/\s+/g, ' '),
             );
@@ -188,11 +189,11 @@ describe('dev start', ({ it }) => {
             subject.signals.emit('SIGINT');
             subject.signals.emit('SIGTERM');
 
-            assertEqual(0, await pending);
+            assertEqual(4321, (await pending).port);
             assertEqual(1, subject.devServer.stopCount);
             assertEqual(0, subject.signals.listenerCount('SIGINT'));
             assertEqual(0, subject.signals.listenerCount('SIGTERM'));
-            assertMatches('[kixx dev] stopping', subject.output.chunks.join(''));
+            assertMatches('[kixx-dev dev] stopping', subject.output.chunks.join(''));
         });
     });
 

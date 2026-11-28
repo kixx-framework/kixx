@@ -65,7 +65,7 @@ async function withDevServer(fn) {
     const stdout = captureOutput();
     const stderr = captureOutput();
 
-    // Built the same way as the dev start command builds it.
+    // Built the same way as the dev command builds it.
     const appProcess = new AppProcess({ projectDirectory: directory, environment: 'development', stdout, stderr, log });
     const devServer = new DevServer({ projectDirectory: directory, port: 0, appProcess, log });
 
