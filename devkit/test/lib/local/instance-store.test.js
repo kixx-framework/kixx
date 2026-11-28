@@ -95,6 +95,10 @@ describe('local instance-store', ({ before, after, it, describe }) => {
                 path.resolve('rel', 'instances'),
                 resolveInstancesDirectory({ sourceDirectory: '/app', target: 'rel' }),
             );
+            assertEqual(
+                path.resolve('/work', 'rel', 'instances'),
+                resolveInstancesDirectory({ sourceDirectory: '/app', target: 'rel', cwd: path.resolve('/work') }),
+            );
         });
 
         it('generates a Build ID from the name and time', () => {

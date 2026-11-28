@@ -47,7 +47,7 @@ describe('project-version', ({ describe }) => {
 
         it('passes the oldest supported version, with or without a prerelease tag', () => {
             assertEqual(false, check('7.0.0-alpha.0').isNewerThanCli);
-            assertEqual(false, check('7.0.0').isNewerThanCli);
+            assertEqual(false, check('7.0.0', '7.0.0').isNewerThanCli);
             assertEqual(false, check('7.0.0-rc.1', '7.0.0').isNewerThanCli);
         });
 
@@ -61,6 +61,19 @@ describe('project-version', ({ describe }) => {
             assertEqual(true, check('7.0.1').isNewerThanCli);
             assertEqual(true, check('7.3.0', '7.2.9').isNewerThanCli);
             assertEqual(true, check('7.10.0', '7.9.0').isNewerThanCli);
+        });
+
+        it('orders prerelease tags of the same version by semantic versioning precedence', () => {
+            assertEqual(true, check('7.0.0', '7.0.0-alpha.0').isNewerThanCli);
+            assertEqual(true, check('7.0.0-alpha.1', '7.0.0-alpha.0').isNewerThanCli);
+            assertEqual(true, check('7.0.0-alpha.10', '7.0.0-alpha.9').isNewerThanCli);
+            assertEqual(true, check('7.0.0-beta', '7.0.0-alpha.1').isNewerThanCli);
+            assertEqual(true, check('7.0.0-alpha.beta', '7.0.0-alpha.1').isNewerThanCli);
+            assertEqual(true, check('7.0.0-alpha.0', '7.0.0-alpha').isNewerThanCli);
+
+            assertEqual(false, check('7.0.0-alpha.0', '7.0.0').isNewerThanCli);
+            assertEqual(false, check('7.0.0-alpha.0', '7.0.0-alpha.0').isNewerThanCli);
+            assertEqual(false, check('7.0.0-rc.1', '7.0.1-alpha.0').isNewerThanCli);
         });
 
         it('refuses an older major version, naming both versions and the action', () => {

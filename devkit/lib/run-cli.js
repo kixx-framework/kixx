@@ -19,7 +19,7 @@ import { requireProject } from './project/find-project.js';
 import { checkProjectVersion, readProjectVersion } from './project/project-version.js';
 import { describeCommand, renderCommandHelp, renderCommandList } from './render-help.js';
 import { wrapText } from './text-wrap.js';
-import { isPlainObject, isUndefined } from './vendor/kixx-assert/mod.js';
+import { isNonEmptyString, isPlainObject, isUndefined } from './vendor/kixx-assert/mod.js';
 import manifest from '../deno.json' with { type: 'json' };
 
 
@@ -82,7 +82,8 @@ export default async function runCli(args) {
         version = manifest.version,
     } = args ?? {};
 
-    const { flags, rest } = extractGlobalFlags(argv);
+    const registry = new CommandRegistry(commands, groups);
+    const { flags, rest } = extractGlobalFlags(argv, findStringOptionTokens(registry, argv));
 
     // Shared with the catch block, so an error names the command it came from.
     const state = { commandName: null };
@@ -97,7 +98,7 @@ export default async function runCli(args) {
             stdout,
             stderr,
             loadProjectTooling,
-            registry: new CommandRegistry(commands, groups),
+            registry,
             version,
         });
 
@@ -235,11 +236,14 @@ async function runCommand(args) {
         commandArgv,
         stdout,
         stderr,
+        cwd,
     } = args;
 
     // Under --json, stdout holds only the envelope, so everything a command
-    // writes for a person goes to stderr.
+    // writes for a person goes to stderr. A command resolves a relative path
+    // from the command line against `cwd`, as the runner does.
     const streams = {
+        cwd,
         output: flags.json ? stderr : stdout,
         stdout: flags.json ? stderr : stdout,
         stderr,
@@ -359,8 +363,9 @@ function toData(name, result) {
 }
 
 // Removes the global flags from the command line, wherever they are, and
-// reports which were set. Tokens after "--" are positionals and stay.
-function extractGlobalFlags(argv) {
+// reports which were set. Tokens after "--" are positionals and stay, and so
+// does the value of a string option, as in `--target --json`.
+function extractGlobalFlags(argv, stringOptionTokens = new Set()) {
     const flags = { help: false, version: false, json: false };
     const rest = [];
 
@@ -372,7 +377,10 @@ function extractGlobalFlags(argv) {
             break;
         }
 
-        if (Object.hasOwn(GLOBAL_FLAGS, token)) {
+        if (stringOptionTokens.has(token) && i + 1 < argv.length) {
+            rest.push(token, argv[i + 1]);
+            i += 1;
+        } else if (Object.hasOwn(GLOBAL_FLAGS, token)) {
             flags[GLOBAL_FLAGS[token]] = true;
         } else {
             rest.push(token);
@@ -380,6 +388,30 @@ function extractGlobalFlags(argv) {
     }
 
     return { flags, rest };
+}
+
+// The tokens that take the next token as their value (`--target` and `-t`)
+// in the command the line names, so that value is never read as a global
+// flag. Resolved on a first pass that removes every global flag.
+function findStringOptionTokens(registry, argv) {
+    const resolved = registry.resolve(takeLeadingWords(extractGlobalFlags(argv).rest));
+    const tokens = new Set();
+
+    if (!resolved || resolved.Command.available === false) {
+        return tokens;
+    }
+
+    for (const [ name, option ] of Object.entries(resolved.Command.options ?? {})) {
+        if (option?.type === 'string') {
+            tokens.add(`--${ name }`);
+
+            if (isNonEmptyString(option.short)) {
+                tokens.add(`-${ option.short }`);
+            }
+        }
+    }
+
+    return tokens;
 }
 
 // The command words are the leading tokens before any flag.

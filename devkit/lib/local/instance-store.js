@@ -39,11 +39,12 @@ export function assertValidInstanceName(name) {
  * @param {Object} args
  * @param {string} args.sourceDirectory - Application directory
  * @param {string} [args.target] - Directory holding `instances/`; default `<source>/.kixx`
+ * @param {string} [args.cwd] - What a relative `target` resolves against; defaults to `process.cwd()`
  * @returns {string} Absolute instances directory
  */
 export function resolveInstancesDirectory(args) {
-    const { sourceDirectory, target } = args ?? {};
-    return path.resolve(target ?? path.join(sourceDirectory, '.kixx'), 'instances');
+    const { sourceDirectory, target, cwd = process.cwd() } = args ?? {};
+    return path.resolve(cwd, target ?? path.join(sourceDirectory, '.kixx'), 'instances');
 }
 
 /**

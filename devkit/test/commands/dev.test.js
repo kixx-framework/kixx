@@ -45,7 +45,7 @@ async function withProject(fn, options) {
 }
 
 function makeCommand(projectDirectory, options) {
-    const { devServer = makeFakeDevServer() } = options ?? {};
+    const { devServer = makeFakeDevServer(), cwd } = options ?? {};
 
     const output = captureOutput();
     const signals = new EventEmitter();
@@ -53,6 +53,7 @@ function makeCommand(projectDirectory, options) {
 
     const command = new DevCommand({
         projectDirectory,
+        cwd,
         output,
         signals,
         createDevServer: (devServerOptions) => {
@@ -135,6 +136,17 @@ describe('dev', ({ it }) => {
             assertEqual(0, subject.created[0].port);
             assertEqual('local', subject.created[0].environment);
             assertEqual(path.resolve('./x.env'), subject.created[0].dotenv);
+        });
+    });
+
+    it('resolves --dotenv against the working directory it is given', async () => {
+        await withProject(async (directory) => {
+            const cwd = path.resolve('/elsewhere');
+            const subject = makeCommand(directory, { cwd });
+
+            await runAndInterrupt(subject, { dotenv: 'x.env' });
+
+            assertEqual(path.join(cwd, 'x.env'), subject.created[0].dotenv);
         });
     });
 

@@ -35,7 +35,8 @@ it does anything else in the project.
   which `kixx-dev` to install, or to upgrade the project's Kixx.
 - **A project newer than your `kixx-dev`, in the same major version, still
   runs.** One line on stderr tells you so. Upgrade `kixx-dev` if something
-  fails.
+  fails. Here the prerelease tag counts: `7.0.0` is newer than
+  `7.0.0-alpha.0`.
 - A `kixx/plugin.json` that is not JSON, or has no version, also exits `3`.
 
 ## Your project's own Kixx does the work

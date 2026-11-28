@@ -61,7 +61,7 @@ How a Command Line Is Read
 4. With no match: `--help` alone prints every command, and `<group> --help` prints the group's commands. Anything else is a usage error (exit 2) that lists what exists on stderr.
 5. `--help` with a command prints that command's help and stops. Nothing is loaded for help, so it works outside a project and in a directory with broken settings.
 6. Otherwise the remaining tokens are parsed with the command's `options` and the positionals are split.
-7. A command that declares `requiresProject` or `requiresTooling` then gets its project (next section). Any other command is constructed with its streams alone.
+7. A command that declares `requiresProject` or `requiresTooling` then gets its project (next section). Any other command is constructed with its streams and `cwd` alone.
 8. The command is constructed and run.
 
 
@@ -169,7 +169,7 @@ Each check runs before construction. A missing value is a usage error naming the
 
 **`requiresTooling`**: `true` for a command that calls the project's own Kixx code (`generate` runs the generator; `local create` parses `example.env.secrets`). It implies `requiresProject`, and the runner also passes `tooling`.
 
-A command with neither runs anywhere. It is given its streams and nothing else.
+A command with neither runs anywhere. It is given its streams and `cwd`, and nothing else.
 
 **`available`**: `false` only on a placeholder (see below). Leave it out of a real command.
 
@@ -181,7 +181,7 @@ The runner constructs the class with a single object:
 
 ```js
 constructor(args) {
-    const { projectDirectory, config, secrets, tooling, output, stdout, stderr } = args ?? {};
+    const { projectDirectory, config, secrets, tooling, cwd, output, stdout, stderr } = args ?? {};
 }
 ```
 
@@ -189,10 +189,11 @@ constructor(args) {
 - `config`: the deeply frozen merge of `~/.kixx/config.json` and `<project>/.kixx/config.json`, project layer last. Only with `requiresProject`.
 - `secrets`: the same merge for `secrets.json`. Only with `requiresProject`.
 - `tooling`: the frozen `{ tooling, createProjectFileSystem, createFileSystemContentSource }` loaded from the project. Only with `requiresTooling`.
+- `cwd`: the working directory the runner was given. Resolve every relative path from the command line (`--dotenv`, `--target`) against it, never against `process.cwd()`.
 - `output`: the stream for the command's human-readable text.
 - `stdout` and `stderr`: streams for a child process's output, used by the commands that run the app.
 
-The runner passes nothing else. A command also accepts any collaborator it wants a test to replace (API client factories, `fileSystem`, `now`). Default `output`, `stdout`, and `stderr` to the process streams so a test can construct the command with only what it cares about; the runner always passes all three, so nothing it constructs falls back to those defaults. A command which needs none of this can omit the constructor.
+The runner passes nothing else. A command also accepts any collaborator it wants a test to replace (API client factories, `fileSystem`, `now`). Default `cwd` to `process.cwd()`, and `output`, `stdout`, and `stderr` to the process streams, so a test can construct the command with only what it cares about; the runner always passes all four, so nothing it constructs falls back to those defaults. A command which needs none of this can omit the constructor.
 
 ### run()
 

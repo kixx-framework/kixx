@@ -28,6 +28,7 @@ export default class LocalStartCommand {
     };
 
     #projectDirectory;
+    #cwd;
     #output;
     #stdout;
     #stderr;
@@ -41,6 +42,7 @@ export default class LocalStartCommand {
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             output = process.stdout,
             stdout = process.stdout,
             stderr = process.stderr,
@@ -53,6 +55,7 @@ export default class LocalStartCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#output = output;
         this.#stdout = stdout;
         this.#stderr = stderr;
@@ -70,7 +73,7 @@ export default class LocalStartCommand {
         const log = createLocalLog(this.#output);
 
         const instance = await readInstance({
-            instancesDirectory: resolveInstancesDirectory({ sourceDirectory: this.#projectDirectory, target }),
+            instancesDirectory: resolveInstancesDirectory({ sourceDirectory: this.#projectDirectory, target, cwd: this.#cwd }),
             name,
         });
 

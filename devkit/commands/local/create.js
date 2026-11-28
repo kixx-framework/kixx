@@ -33,6 +33,7 @@ export default class LocalCreateCommand {
     };
 
     #projectDirectory;
+    #cwd;
     #tooling;
     #output;
     #now;
@@ -42,6 +43,7 @@ export default class LocalCreateCommand {
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             tooling,
             output = process.stdout,
             now,
@@ -50,6 +52,7 @@ export default class LocalCreateCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#tooling = tooling;
         this.#output = output;
         this.#now = now;
@@ -65,6 +68,7 @@ export default class LocalCreateCommand {
             sourceDirectory: this.#projectDirectory,
             instancesDirectory: resolveInstancesDirectory({
                 sourceDirectory: this.#projectDirectory,
+                cwd: this.#cwd,
                 target: options?.target,
             }),
             name,
@@ -89,6 +93,7 @@ export default class LocalCreateCommand {
 
         log(`Next: ${ formatLocalCommand({
             command: `start ${ name }`,
+            cwd: this.#cwd,
             projectDirectory: this.#projectDirectory,
             target: options?.target,
         }) }`);

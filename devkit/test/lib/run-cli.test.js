@@ -139,6 +139,31 @@ describe('runCli()', ({ describe }) => {
             assertEqual('alpha', Build.calls[0].positionals.name);
         });
 
+        // A global flag in a string option's value place is the value, and
+        // node's parser refuses a value that starts with a dash.
+        it('never takes a string option\'s value for a global flag', async () => {
+            const Build = makeCommand(null, { options: { target: { type: 'string', short: 't' } } });
+
+            for (const flag of [ '-v', '--version', '--json', '--help', '-h' ]) {
+                for (const option of [ '--target', '-t' ]) {
+                    const { code, stdout, stderr } = await run([ 'build', option, flag ], { build: Build });
+
+                    assertEqual(2, code, `${ option } ${ flag }`);
+                    assertEqual('', stdout, `${ option } ${ flag }`);
+                    assertMatches('argument is ambiguous', stderr);
+                }
+            }
+
+            assertEqual(0, Build.calls.length);
+
+            // A global flag after the option's value is still global.
+            const { code, stdout } = await run([ 'build', '--target', 'out', '--json' ], { build: Build });
+
+            assertEqual(0, code);
+            assertEqual(true, parseEnvelope(stdout).ok);
+            assertEqual('out', Build.calls[0].options.target);
+        });
+
         it('takes the command words from before the first flag only', async () => {
             const Sharpen = makeCommand();
             const One = makeCommand(null, { ...PROJECT, options: { fast: { type: 'boolean' } } });
@@ -214,12 +239,13 @@ describe('runCli()', ({ describe }) => {
     });
 
     describe('a command that runs anywhere', ({ it }) => {
-        it('is given its streams and nothing else', async () => {
+        it('is given its streams and the working directory, and nothing else', async () => {
             const Build = makeCommand();
             const { code } = await run([ 'build' ], { build: Build });
 
             assertEqual(0, code);
-            assertEqual('output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
+            assertEqual('cwd,output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
+            assertEqual(EMPTY_DIRECTORY, Build.calls[0].args.cwd);
         });
 
         it('runs outside a project', async () => {
@@ -267,15 +293,16 @@ describe('runCli()', ({ describe }) => {
     });
 
     describe('a command that requires a project', ({ it }) => {
-        it('is given the project directory, both settings, and its streams', async () => {
+        it('is given the project directory, both settings, its streams, and the working directory', async () => {
             await withProject(async ({ project, run: runInProject }) => {
                 const Build = makeCommand(null, PROJECT);
                 const { code, stderr } = await runInProject([ 'build' ], { build: Build });
 
                 assertEqual(0, code);
                 assertEqual('', stderr);
-                assertEqual('projectDirectory,config,secrets,output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
+                assertEqual('projectDirectory,config,secrets,cwd,output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
                 assertEqual(project, Build.calls[0].args.projectDirectory);
+                assertEqual(project, Build.calls[0].args.cwd);
                 assertEqual(0, Object.keys(Build.calls[0].args.config).length);
                 assertEqual(0, Object.keys(Build.calls[0].args.secrets).length);
             });
@@ -393,7 +420,7 @@ describe('runCli()', ({ describe }) => {
                 // eslint-disable-next-line no-await-in-loop
                 await withProject(async ({ run: runInProject }) => {
                     const Build = makeCommand(null, PROJECT);
-                    const { code, stderr } = await runInProject([ 'build' ], { build: Build }, { version: '7.0.0-alpha.0' });
+                    const { code, stderr } = await runInProject([ 'build' ], { build: Build }, { version });
 
                     assertEqual(0, code, version);
                     assertEqual('', stderr, version);
@@ -513,7 +540,7 @@ describe('runCli()', ({ describe }) => {
                 assertEqual(tooling, Sync.calls[0].args.tooling);
                 assertEqual(project, Sync.calls[0].args.projectDirectory);
                 assertEqual(
-                    'projectDirectory,config,secrets,tooling,output,stdout,stderr',
+                    'projectDirectory,config,secrets,tooling,cwd,output,stdout,stderr',
                     Object.keys(Sync.calls[0].args).join(','),
                 );
             });

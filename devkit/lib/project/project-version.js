@@ -4,7 +4,9 @@
  *
  * The rule is the one core uses for a plugin's `core` field: the same major
  * version, and at least the oldest supported version, with a prerelease tag
- * ignored.
+ * ignored. Whether the project is newer than this CLI follows semantic
+ * versioning precedence, prerelease tag included: 7.0.0 is newer than
+ * 7.0.0-alpha.0.
  * @module project-version
  */
 
@@ -106,12 +108,52 @@ export function checkProjectVersion(args) {
         );
     }
 
-    return { isNewerThanCli: compareVersions(project, parseVersion(cliVersion)) > 0 };
+    const comparedToCli = compareVersions(project, parseVersion(cliVersion))
+        || comparePrereleases(prereleaseOf(projectVersion), prereleaseOf(cliVersion));
+
+    return { isNewerThanCli: comparedToCli > 0 };
 }
 
 // The prerelease tag is dropped: 7.0.0-alpha.0 counts as 7.0.0.
 function parseVersion(version) {
     return version.split('-')[0].split('.').map((part) => Number.parseInt(part, 10));
+}
+
+function prereleaseOf(version) {
+    const index = version.indexOf('-');
+    return index === -1 ? null : version.slice(index + 1).split('.');
+}
+
+// Semantic versioning precedence of two prerelease tags. No tag ranks above
+// any tag; numeric identifiers rank below alphanumeric ones.
+function comparePrereleases(a, b) {
+    if (a === null || b === null) {
+        return (a === null ? 1 : 0) - (b === null ? 1 : 0);
+    }
+
+    for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+        const x = a[index];
+        const y = b[index];
+
+        if (x === y) {
+            continue;
+        }
+
+        const xIsNumber = /^\d+$/.test(x);
+        const yIsNumber = /^\d+$/.test(y);
+
+        if (xIsNumber && yIsNumber) {
+            return Number.parseInt(x, 10) - Number.parseInt(y, 10);
+        }
+
+        if (xIsNumber !== yIsNumber) {
+            return xIsNumber ? -1 : 1;
+        }
+
+        return x < y ? -1 : 1;
+    }
+
+    return a.length - b.length;
 }
 
 function compareVersions(a, b) {

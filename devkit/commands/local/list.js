@@ -15,17 +15,20 @@ export default class LocalListCommand {
     };
 
     #projectDirectory;
+    #cwd;
     #output;
     #canConnect;
 
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             output = process.stdout,
             canConnect = defaultCanConnect,
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#output = output;
         this.#canConnect = canConnect;
     }
@@ -33,6 +36,7 @@ export default class LocalListCommand {
     async run(options) {
         const instancesDirectory = resolveInstancesDirectory({
             sourceDirectory: this.#projectDirectory,
+            cwd: this.#cwd,
             target: options?.target,
         });
 

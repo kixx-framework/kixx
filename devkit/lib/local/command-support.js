@@ -51,8 +51,9 @@ export function formatLocalCommand(args) {
         text += ` ${ directory }`;
     }
 
+    // A value that starts with a dash is only read as one in the `=` form.
     if (target !== undefined) {
-        text += ` --target ${ target }`;
+        text += target.startsWith('-') ? ` --target=${ target }` : ` --target ${ target }`;
     }
 
     return text;

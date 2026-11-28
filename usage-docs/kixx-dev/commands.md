@@ -106,6 +106,9 @@ kixx-dev dev ../my-site
 See [configuration.md](configuration.md#how-a-project-is-found) for how the
 project is found and which project versions are supported.
 
+An option value that starts with a dash needs the `=` form, as in
+`--target=-dir`. Otherwise `kixx-dev` reads it as a flag and exits `2`.
+
 ## `--help`
 
 `kixx-dev --help` lists every command. `kixx-dev local --help` lists the

@@ -37,6 +37,7 @@ export default class DevCommand {
 
     #projectDirectory;
     #output;
+    #cwd;
     #stdout;
     #stderr;
     #signals;
@@ -46,6 +47,7 @@ export default class DevCommand {
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             output = process.stdout,
             stdout = process.stdout,
             stderr = process.stderr,
@@ -55,6 +57,7 @@ export default class DevCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#output = output;
         this.#stdout = stdout;
         this.#stderr = stderr;
@@ -69,7 +72,7 @@ export default class DevCommand {
 
         // The child runs in the project directory, so a relative path would
         // resolve against the wrong directory there.
-        const dotenv = options?.dotenv ? path.resolve(options.dotenv) : undefined;
+        const dotenv = options?.dotenv ? path.resolve(this.#cwd, options.dotenv) : undefined;
 
         // Resolves when a signal stops the server, with what it listened on.
         return await runDevServer({
