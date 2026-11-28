@@ -1,6 +1,11 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from '../../lib/vendor/kixx-assert/mod.js';
-import { findPositionalsProblem, splitPositionals } from '../../lib/command-positionals.js';
+import {
+    DIRECTORY_POSITIONAL,
+    acceptsDirectory,
+    findPositionalsProblem,
+    splitPositionals,
+} from '../../lib/command-positionals.js';
 
 
 const NAME = { name: 'name', description: 'Instance name' };
@@ -75,6 +80,23 @@ describe('command-positionals', ({ describe }) => {
             assertEqual('UsageError', error.name);
             assertMatches('Unexpected argument "extra"', error.message);
             assertMatches('<name>', error.message);
+        });
+    });
+
+    describe('acceptsDirectory()', ({ it }) => {
+        it('is true for a command that runs and false for a placeholder', () => {
+            assertEqual(true, acceptsDirectory(class {}));
+            assertEqual(true, acceptsDirectory(class {
+                static available = true;
+            }));
+            assertEqual(false, acceptsDirectory(class {
+                static available = false;
+            }));
+        });
+
+        it('names the positional a command may not declare', () => {
+            assertEqual('directory', DIRECTORY_POSITIONAL.name);
+            assert(typeof findPositionalsProblem([ DIRECTORY_POSITIONAL ]) === 'string', 'reserved');
         });
     });
 

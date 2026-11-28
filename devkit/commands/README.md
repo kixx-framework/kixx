@@ -1,128 +1,117 @@
 Kixx Devkit Commands
 ====================
 
-How the CLI in `devkit/kixx-dev.js` discovers, configures, and runs commands, and what you
-need to write to add a new one.
+How the `kixx-dev` CLI finds and runs a command, what a command reports, and what you need to write to add one. Paths are relative to `devkit/`.
+
+Every command follows one contract: it is found in one registry, run by one runner (`lib/run-cli.js`), reports through one `--json` envelope, and exits with a code from one table.
+
+**The `--json` output and the exit codes are a stable interface.** Scripts and agents parse them. Change them by addition only: never rename or remove a field, change a field's type, or change what a number means.
 
 
-Command Structure
------------------
+Command Names and the Registry
+------------------------------
 
-Every invocation names two things:
-
-```
-kixx <command> <subcommand> [options] <...args>
-```
-
-The first argument is a **command**: a directory under `commands/`. The second
-is a **sub-command**: a `.js` module inside that directory. A command exists
-only once it is imported: each sub-command module is imported by its command's
-`index.js`, and each `index.js` is imported by `commands/index.js`.
+A command name is one word or two:
 
 ```
-commands/
-    index.js                  <- command name -> command index module
-    admin/
-        index.js              <- command description and sub-command map
-        gen-secure-token.js   <- sub-command implementation
-    cloudflare/
-        index.js
-        create-worker.js
+kixx-dev <command> [options] [...args]            # dev, generate
+kixx-dev <group> <command> [options] [...args]    # release list, local create
 ```
 
-`kixx-dev.js` passes the map from `commands/index.js` to
-`lib/command-registry.js`, which lists and resolves commands from it. The CLI
-never reads the `commands/` directory. Static imports keep every command in the
-module graph, which is what lets the CLI run when installed from JSR, where
-there is no local directory to read.
+The first word of a two-word name is a **group**. No name is both a command and a group.
 
-
-The Command Index Module
-------------------------
-
-`index.js` exports `description` (used when listing top level commands) and
-`subcommands`, a map from sub-command name to sub-command class. The key must
-equal the module's file basename:
+`commands/index.js` is the registry. Its default export is one flat map from command name to command class, in the order help lists the commands. Its `groups` export maps each group to a one-line description:
 
 ```js
-import GenSecretTokenCommand from './gen-secure-token.js';
+import DevStartCommand from './dev/start.js';
+import LocalCreateCommand from './local/create.js';
 
-export const description = 'Application administration tools';
+export const groups = Object.freeze({
+    dev: 'Local development tools',
+    local: 'Throwaway local instances of the app',
+});
 
-export const subcommands = {
-    'gen-secure-token': GenSecretTokenCommand,
-};
+export default Object.freeze({
+    'dev start': DevStartCommand,
+    'local create': LocalCreateCommand,
+});
 ```
 
-Sub-commands list in help in the map's declaration order. Top level commands
-list alphabetically.
+A one-word command lives at `commands/<name>.js`. A two-word command lives at `commands/<group>/<name>.js`.
 
-A sub-command module must not import its command's `index.js`: `index.js`
-imports the module, so the cycle would leave the class's statics evaluating
-against an uninitialized binding.
+The CLI never reads the `commands/` directory. Static imports keep every command in the module graph, which is what lets the CLI run when installed from JSR, where there is no local directory to read.
 
-`devkit/test/commands/index.test.js` fails when a `.js` file in a command
-directory is missing from its map, a command directory is missing from
-`commands/index.js`, or a sub-command declares a reserved flag (`--help`,
-`--version`, `-h`, `-v`).
+`test/commands/index.test.js` fails when a module under `commands/` is not registered under the name its path stands for, when a name is malformed or is both a command and a group, when a group has no description or no command, or when a command breaks the static contract below.
 
 
-The Sub-command Module
-----------------------
+How a Command Line Is Read
+--------------------------
 
-A sub-command module default-exports a class. Static properties declare
-everything the runner needs to know *before* constructing it — help text,
-argument parsing rules, and required settings — so a command never runs
-partially configured.
+`kixx-dev.js` only passes `process.argv`, the working and home directories, the process streams, and the registry to `runCli()`, and sets `process.exitCode` to what it resolves. Everything else is in `lib/run-cli.js`, so tests run the whole contract in process with fake streams and a fake registry.
+
+1. The **global flags** are taken off the command line, wherever they are: `--help` (`-h`), `--version` (`-v`), and `--json`. They work with or without a command. No command may declare `help`, `version`, `json`, `-h`, or `-v`.
+2. `--version` prints the version and stops.
+3. The **command words** are the leading tokens before the first flag. The runner tries the first two words as a name, then the first word.
+4. With no match: `--help` alone prints every command, and `<group> --help` prints the group's commands. Anything else is a usage error (exit 2) that lists what exists on stderr.
+5. `--help` with a command prints that command's help and stops. Nothing is loaded for help, so it works in a directory with broken settings.
+6. Otherwise the remaining tokens are parsed with the command's `options`, the positionals are split, the settings are loaded and checked, and the command is constructed and run.
+
+
+The Command Module
+------------------
+
+A command module default-exports a class. Static properties declare everything the runner needs to know *before* constructing it (help text, argument parsing rules, and required settings), so a command never runs partially configured.
 
 ```js
 import process from 'node:process';
-import { generateSecretToken } from '../../lib/crypto.js';
+import { listInstances, resolveInstancesDirectory } from '../../lib/local/instance-store.js';
 
-export default class GenSecretTokenCommand {
+export default class LocalListCommand {
 
-    static description = `
-        Generate a 256-bit secure token encoded as lowercase hexadecimal
-        text, suitable for things like the ADMIN_BOOTSTRAP_TOKEN
-    `;
+    static description = 'List the local instances in the target';
 
     static options = {
-        prefix: {
+        target: {
             type: 'string',
-            short: 'p',
-            description: 'Optional literal prefix prepended to the random token body',
+            short: 't',
+            description: 'Directory holding instances/; default <app>/.kixx',
         },
     };
 
+    #projectDirectory;
     #output;
 
     constructor(args) {
-        const { output = process.stdout } = args ?? {};
+        const { projectDirectory, output = process.stdout } = args ?? {};
+
+        this.#projectDirectory = projectDirectory;
         this.#output = output;
     }
 
-    run(options) {
-        const token = generateSecretToken(options.prefix);
-        this.#output.write(`${ token }\n`);
-        return 0;
+    async run(options) {
+        const instancesDirectory = resolveInstancesDirectory({
+            sourceDirectory: this.#projectDirectory,
+            target: options.target,
+        });
+
+        const instances = await listInstances({ instancesDirectory });
+
+        for (const { name, port } of instances) {
+            this.#output.write(`${ name }  ${ port }\n`);
+        }
+
+        return { instances: instances.map(({ name, port }) => ({ name, port })) };
     }
 }
 ```
 
 ### Static properties
 
-**`description`** — Sentence or paragraph shown by `--help` and in the parent
-command's sub-command list. Required. Descriptions are re-wrapped to the help
-line width, so the indentation of a template literal is irrelevant.
+**`description`**: a sentence or paragraph shown by `--help` and in command lists. Required. Descriptions are put on one line and re-wrapped to the help line width, so the indentation of a template literal is irrelevant.
 
-**`options`** — Passed straight to `node:util` `parseArgs` as its `options`
-config, so `type` (`'string'` or `'boolean'`), `short`, `multiple`, and
-`default` all behave as documented there. The extra `description` key is used
-only for help rendering. `--help` is added automatically; do not declare it.
-Negated boolean flags (`--no-foo`) are enabled for command options.
+**`options`**: passed straight to `node:util` `parseArgs` as its `options` config, so `type` (`'string'` or `'boolean'`), `short`, `multiple`, and `default` all behave as documented there. The extra `description` key is used only for help. Negated boolean flags (`--no-foo`) are enabled. Never declare a global flag.
 
-**`positionals`** — Optional array of required leading arguments, each
-`{ name, description }`:
+**`positionals`**: an optional array of required leading arguments, each `{ name, description }`:
 
 ```js
 static positionals = [
@@ -130,26 +119,17 @@ static positionals = [
 ];
 ```
 
-Every declared positional is required and comes before the optional app
-directory, which the runner owns and uses to find the project. Usage reads
-`kixx <command> <subcommand> [options] <name> [directory]`, and help lists the
-declared positionals before `directory`. Names match `^[a-z][a-z0-9-]*$`, are
-unique, and are never `directory`. A missing value or an extra argument is a
-`UsageError`. Take anything optional as an option, never as a positional.
-`devkit/test/commands/index.test.js` checks the declaration's shape.
+Every declared positional is required and comes before the optional application directory, which the runner owns and uses to find the project. Usage reads `kixx-dev local create [options] <name> [directory]`, and help lists the declared positionals before `directory`. Names match `^[a-z][a-z0-9-]*$`, are unique, and are never `directory`. A missing value or an extra argument is a usage error. Take anything optional as an option, never as a positional.
 
-**`requiredConfig`** — Dotted key paths which must be present in the merged
-`.kixx/config.json` layers.
+**`requiredConfig`**: dotted key paths which must be present in the merged `.kixx/config.json` layers.
 
-**`requiredSecrets`** — Dotted key paths which must be present in the merged
-`.kixx/secrets.json` layers.
+**`requiredSecrets`**: dotted key paths which must be present in the merged `.kixx/secrets.json` layers.
 
-There is no `requiredCloudflareConfig`. Commands validate the parts of
-`cloudflare-config.jsonc` they use, because most settings live under
-`environments.<env>` and the environment is only known at run time.
+Each check runs before construction. A missing value is a usage error naming the command, the missing key paths, and the files they belong in.
 
-Each check runs before construction. A missing value aborts with a message
-naming the command, the missing key paths, and the files they belong in.
+**`available`**: `false` only on a placeholder (see below). Leave it out of a real command.
+
+`lib/command-registry.js` exports `findCommandProblems()`, which checks these declarations; the registry test runs it on every command.
 
 ### Constructor
 
@@ -157,25 +137,17 @@ The runner constructs the class with a single object:
 
 ```js
 constructor(args) {
-    const { projectDirectory, cloudflareConfig, config, secrets } = args ?? {};
+    const { projectDirectory, config, secrets, output, stdout, stderr } = args ?? {};
 }
 ```
 
-- `projectDirectory` — Directory owning the `.kixx` directory, discovered by
-  walking up from the directory argument (default: the working directory).
-  Falls back to that starting directory when no project is found.
-- `config` — Deeply frozen merge of `~/.kixx/config.json` and
-  `<project>/.kixx/config.json`, project layer last.
-- `secrets` — Same merge for `secrets.json`.
-- `cloudflareConfig` — The parsed `cloudflare-config.jsonc` from the project
-  directory, or `undefined` for any command other than `cloudflare`. The
-  runner guarantees a plain object with an `environments` object; anything
-  else is reported before the command is constructed.
+- `projectDirectory`: the directory owning the `.kixx` directory, found by walking up from the directory argument (default: the working directory). It falls back to that starting directory when no project is found.
+- `config`: the deeply frozen merge of `~/.kixx/config.json` and `<project>/.kixx/config.json`, project layer last.
+- `secrets`: the same merge for `secrets.json`.
+- `output`: the stream for the command's human-readable text.
+- `stdout` and `stderr`: streams for a child process's output, used by the commands that run the app.
 
-The runner passes nothing else. A command which writes results also accepts an
-`output` stream, defaulting to `process.stdout`, and any collaborator it wants
-a test to be able to replace (API client factories, `fileSystem`, `now`). A command which needs none of this can
-omit the constructor entirely.
+The runner passes nothing else. A command also accepts any collaborator it wants a test to replace (API client factories, `fileSystem`, `now`). Default `output`, `stdout`, and `stderr` to the process streams so a test can construct the command with only what it cares about; the runner always passes all three, so nothing it constructs falls back to those defaults. A command which needs none of this can omit the constructor.
 
 ### run()
 
@@ -183,60 +155,151 @@ omit the constructor entirely.
 async run(options, positionals) {}
 ```
 
-`options` is the parsed flag values. `positionals` is an object keyed by
-declared positional name (`{}` when the command declares none). Return an integer to set the process exit
-code — `0` for success. A non-integer return leaves the exit code alone, which
-also means success.
+`options` is the parsed flag values. `positionals` is an object keyed by declared positional name (`{}` when the command declares none).
 
-Write results to the injected `output` stream rather than to `process.stdout`
-directly, so a test can read what was written without replacing a global.
-Default it in the constructor:
+**Return data, not text.** `run()` resolves a plain, JSON-serializable object, which becomes the envelope's `data`, or `undefined`, which becomes `{}`. Never return a secret value. Anything else is a defect and exits 1.
+
+> Transitional: the commands kept from v6 still resolve `0`, which the runner treats as `undefined`. This allowance goes away when they return data.
+
+**Signal failure only by throwing.** A command never picks an exit code and never returns one. Throw `UsageError` (from `lib/usage-error.js`) for anything the user can fix by changing arguments, settings, or the outside world. Any other error is treated as a defect. See `docs/error-handling.md`.
+
+**Write human text to `output`.** Never write to `process.stdout` directly: under `--json` the runner hands the command `stderr` as its `output` and `stdout`, so stdout holds only the envelope. Pass human-readable text through `wrapText()` from `lib/text-wrap.js` so it wraps at 80 columns. The returned data is never printed without `--json`, so print what a person needs to see.
+
+A long-running command (`dev start`, `local start`) resolves once, when it stops. Until then stdout is silent under `--json`, and its log lines and the app's output go to stderr.
+
+
+The `--json` Envelope
+---------------------
+
+With `--json`, stdout holds exactly one line: one JSON object and a newline.
+
+Success:
+
+```json
+{"ok":true,"command":"local list","data":{"instances":[]}}
+```
+
+Failure:
+
+```json
+{"ok":false,"command":"local create","error":{"code":"UsageError","exitCode":2,"message":"Missing required argument <name>. Run \"kixx-dev local create --help\" for usage."}}
+```
+
+| Field | Value |
+|---|---|
+| `ok` | `true` or `false`. |
+| `command` | The registered command name, or `null` when none resolved: top-level help, a group's help, `--version`, or an unknown command. |
+| `data` | Present when `ok` is `true`. What the command returned, or `{}`. |
+| `error.code` | Present when `ok` is `false`. A stable name: an exit-code table name, the `code` of a `UsageError` subclass (such as `UnsupportedServerError`), or `ValidationError` or `OperationalError` from the project's own Kixx code. |
+| `error.exitCode` | The process exit code. |
+| `error.message` | The message a person would read. |
+| `error.problems` | Only for `ValidationError`: `[ { "message", "source" } ]`, one entry per problem. An error code may add fields of its own like this one. |
+
+Under `--json`, everything a command writes for a person goes to stderr. A usage error prints nothing to stderr, because its message is in the envelope. An unexpected error (exit 1) also prints its stack to stderr.
+
+### Help and version as data
+
+`kixx-dev --version --json`:
+
+```json
+{"ok":true,"command":null,"data":{"version":"7.0.0-alpha.0"}}
+```
+
+`kixx-dev --help --json` returns `data` as `{ version, commands, exitCodes }`. Each entry of `commands` is `{ name, description, available }`, and `exitCodes` is the table below as `{ code, name, meaning }` rows.
+
+`kixx-dev <group> --help --json` returns `{ group, description, commands }`.
+
+`kixx-dev <command> --help --json` returns:
+
+```json
+{
+    "name": "local create",
+    "available": true,
+    "description": "Create a throwaway local instance of the app: ...",
+    "usage": "kixx-dev local create [options] <name> [directory]",
+    "positionals": [
+        { "name": "name", "description": "Instance name: ...", "required": true },
+        { "name": "directory", "description": "Application directory; ...", "required": false }
+    ],
+    "options": [
+        { "name": "target", "short": "t", "type": "string", "multiple": false, "default": null, "description": "..." }
+    ],
+    "requiredConfig": [],
+    "requiredSecrets": [],
+    "requiresProject": false
+}
+```
+
+`short` and `default` are `null` when the option declares none. The text help is rendered from this same data (`lib/render-help.js`).
+
+
+Exit Codes
+----------
+
+Each number means one thing for every command. The table lives in `lib/exit-codes.js`, and `test/lib/exit-codes.test.js` fails when this copy differs from it.
+
+| Code | Name | Meaning |
+|---|---|---|
+| 0 | `Success` | The command finished. |
+| 1 | `UnexpectedError` | An unexpected error: a defect, printed with its stack. |
+| 2 | `UsageError` | A mistake the user can fix. The message is printed with no stack. |
+| 3 | `ProjectNotFound` | The command needs a Kixx project and was not run inside one. |
+| 3 | `UnsupportedProjectVersion` | This kixx-dev does not support the project's Kixx version. |
+| 4 | `CommandNotAvailable` | The command is not available in this version of kixx-dev. |
+
+Codes 10 and up are for named refusals, which later commands add as rows of this table. Every code stays below 126, where shells' own codes start.
+
+An unknown command, a group with no command name, a bad flag, a missing positional, a directory that does not exist, and a missing required setting all exit 2.
+
+The runner maps a thrown error to a row in this order (`describeError()` in `lib/exit-codes.js`):
+
+1. An error whose `code` is a name in the table gets that row. `CommandNotAvailableError` is a `UsageError` subclass that declares `static code = 'CommandNotAvailable'`.
+2. Any other `UsageError`, subclasses included, exits 2. `error.code` is the error's own `code`, which is its class name.
+3. An error named `ValidationError` or `OperationalError` exits 2 with its message alone. These come from the project's own Kixx code and describe a problem the developer can fix. They are matched by `name`, never with `instanceof`, because the class comes from the project's copy of Kixx.
+4. Everything else exits 1 as `UnexpectedError`.
+
+To add a code: add a row to `EXIT_CODES` and to the table above, and give the error class a `static code` equal to the row's name.
+
+
+Placeholders
+------------
+
+A placeholder reserves the name of a command that is not built yet. `createPlaceholderCommand(description)` in `lib/placeholder-command.js` returns a class with `available = false`. Register it in `commands/index.js` straight from the factory; it has no module of its own:
 
 ```js
-const { output = process.stdout } = args ?? {};
+import createPlaceholderCommand from '../lib/placeholder-command.js';
+
+export default Object.freeze({
+    deploy: createPlaceholderCommand('Bundle, pre-stage, and deploy to Cloudflare'),
+});
 ```
 
-Pass human-readable text through
-`wrapText()` from `lib/text-wrap.js` so it wraps at 80 columns; write
-machine-readable output, such as JSON or a bare token, unwrapped. Throw
-`UsageError` (from `lib/usage-error.js`) for anything the user can fix by
-changing arguments or settings: the runner prints its message alone, wrapped,
-with no stack trace. Any other error prints `Failed to run command:` followed
-by the full error, which is what you want for a genuine defect. Both exit with
-code `1`.
+- Help lists it marked "Not available in this version of kixx-dev."
+- `kixx-dev deploy --help` exits 0 and says the same. Its `--help --json` has `"available": false`.
+- Running it exits 4 with `error.code` `CommandNotAvailable`, whatever arguments it is given. The runner does not parse a placeholder's arguments, because its real options don't exist yet, and loads no settings for it.
+
+The runner constructs a placeholder with `commandName` so its message can name the command. To build the command, replace the factory call with an import of the real module.
 
 
-Adding a New Command
---------------------
+Adding a Command
+----------------
 
-To add a sub-command to an existing command:
+1. Create `commands/<name>.js`, or `commands/<group>/<name>.js`, default-exporting the class.
+2. Import the class in `commands/index.js` and add it to the map under its name. For a new group, add the group to `groups`.
+3. Write its test in `test/commands/`, at the mirrored path. Construct the class with a captured `output` and fakes; assert on what it returns, writes, and throws.
 
-1. Create `commands/<command>/<subcommand>.js` default-exporting the class.
-2. Import the class in `commands/<command>/index.js` and add it to the
-   `subcommands` map under the file's basename.
-
-To add a new top level command, also create the directory and its `index.js`
-exporting `description` and `subcommands`, then import that `index.js` as a
-namespace in `commands/index.js` and add it to the default-exported map.
-
-Then verify:
+Then verify, from the repository root:
 
 ```
-node devkit/kixx-dev.js                                  # the command lists
-node devkit/kixx-dev.js <command> --help                 # the sub-command lists
-node devkit/kixx-dev.js <command> <subcommand> --help
-node devkit/kixx-dev.js <command> <subcommand>           # the real thing
+node devkit/kixx-dev.js --help                    # the command lists
+node devkit/kixx-dev.js <command> --help
+node devkit/kixx-dev.js <command> --help --json
+node devkit/kixx-dev.js <command>                 # the real thing
+node devkit/kixx-dev.js <command> --json; echo $?
 node devkit/run-tests.js devkit/test/commands
 node devkit/run-linter.js devkit
 ```
 
-Run these from the repository root.
+Shared logic belongs in `lib/`, not in a command module. A command should read as the wiring between parsed arguments, loaded settings, and a library call.
 
-Shared logic belongs in `devkit/lib/`, not in a command module. A command should read
-as the wiring between parsed arguments, loaded settings, and a library call —
-`commands/admin/gen-secure-token.js` is the smallest model: it makes one
-library call, prints the result, and returns.
-
-Modules under `devkit/` never import from outside `devkit/` (the package is
-published stand-alone). The one exception is `devkit/test/conformance/`,
-which may read the repository's `lib/` to prove wire compatibility.
+Modules under `devkit/` never import from outside `devkit/` (the package is published stand-alone). The one exception is `test/conformance/`, which may read the repository's core.

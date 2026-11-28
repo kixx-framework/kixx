@@ -59,8 +59,8 @@ kixx/
 ├── docs/                        # Maintainer guides; start with doc-index.md
 ├── devkit/                      # The `kixx-dev` CLI, published as kixx-dev; stand-alone
 │   ├── kixx-dev.js              # CLI entry point
-│   ├── commands/                # Thin command wrappers: admin, app, cloudflare, dev, local
-│   ├── lib/                     # Command logic; vendored code in lib/vendor/
+│   ├── commands/                # The command registry and thin command wrappers
+│   ├── lib/                     # The command runner and command logic; vendored code in lib/vendor/
 │   ├── templates/project/       # The project skeleton a new project is copied from
 │   ├── docs/                    # Developer guides; start with doc-index.md
 │   ├── test/                    # Unit tests (some still parked in test-v6/devkit/)
@@ -102,13 +102,10 @@ Kixx Devkit
 
 The Kixx Devkit lives in `devkit/`. It provides the `kixx-dev` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
 
-With it you can:
+Every command supports `--help` and `--json`, and exits with a code from one documented table (`devkit/commands/README.md`). In this version you can:
 
 - `kixx-dev dev` - Run your app locally. It restarts when you change the code.
-- `kixx-dev local` - Run throwaway local instances with writable data, to test publishing and admin signup.
-- `kixx-dev admin` - Create the first admin account and run data migrations.
-- `kixx-dev app` - Publish your site's content to a running app.
-- `kixx-dev cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
+- `kixx-dev local` - Run throwaway local instances with writable data.
 
 `devkit/templates/project/` is the project skeleton: every hand-written file of a new project with no plugins. It ships inside the devkit, and holds no core and no generated file.
 

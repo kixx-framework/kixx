@@ -31,6 +31,16 @@ export function wrapText(text, width = CONSOLE_LINE_WIDTH) {
 }
 
 /**
+ * Puts text on one line. Descriptions are often indented template literals,
+ * so their line breaks and indentation are source formatting, not layout.
+ * @param {string} text
+ * @returns {string} The text with every run of whitespace as one space
+ */
+export function collapseWhitespace(text) {
+    return text.trim().replace(/\s+/g, ' ');
+}
+
+/**
  * Breaks one line of text into lines no longer than the width. A word longer
  * than the width is placed on its own line, unsplit. Whitespace between words
  * which stay on the same line is kept, so aligned columns survive.

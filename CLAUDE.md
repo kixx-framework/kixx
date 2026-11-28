@@ -64,7 +64,7 @@ node devkit/run-tests.js                     # full suite on Node.js
 deno run -A devkit/run-tests.js              # full suite on Deno
 node devkit/run-tests.js devkit/test/lib     # a subtree (must be inside devkit/test/)
 node devkit/run-linter.js devkit             # lint
-node devkit/kixx-dev.js <command> <subcommand>   # run the CLI from source
+node devkit/kixx-dev.js <command>            # run the CLI from source
 ```
 
 Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js` runs them. The rest come back with their sections. CI lints the devkit and runs its suite on Node.js and Deno (`devkit-lint`, `devkit-test-node`, `devkit-test-deno`).
@@ -85,7 +85,7 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 - Its config files hold only what has no default.
 - `test/kixx/import-hygiene.test.js` enforces the import rules. List a new entry point there.
 
-**Keep commands thin.** A command in `commands/` wires options and settings to one call into `devkit/lib/`, where the logic lives. Add a command by following `devkit/commands/README.md`. Throw `UsageError` for anything the user can fix (see `devkit/docs/error-handling.md`).
+**Keep commands thin.** A command in `commands/` wires options and settings to one call into `devkit/lib/`, where the logic lives. Add a command by following `devkit/commands/README.md`. A command returns data and writes human text to its injected `output`; it never picks an exit code. Throw `UsageError` for anything the user can fix (see `devkit/docs/error-handling.md`). The `--json` envelope and the exit-code table are a stable interface: change them by addition only.
 
 **Update what depends on the devkit.**
 

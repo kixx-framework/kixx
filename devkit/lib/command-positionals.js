@@ -9,7 +9,7 @@ const RESERVED_POSITIONAL_NAME = 'directory';
 
 
 /**
- * Checks a sub-command's static `positionals` declaration.
+ * Checks a command's static `positionals` declaration.
  * @param {*} declared - The `positionals` static; `undefined` means none.
  * @returns {string|null} A description of the first problem, or null when valid.
  */
@@ -51,12 +51,31 @@ export function findPositionalsProblem(declared) {
 }
 
 /**
+ * The optional trailing positional the runner owns.
+ * @type {Readonly<{name: string, description: string}>}
+ */
+export const DIRECTORY_POSITIONAL = Object.freeze({
+    name: RESERVED_POSITIONAL_NAME,
+    description: 'Application directory; defaults to the current directory',
+});
+
+/**
+ * Says whether a command takes the trailing directory. Every command that
+ * runs does; a placeholder takes no arguments at all.
+ * @param {Function} Command - A command class
+ * @returns {boolean}
+ */
+export function acceptsDirectory(Command) {
+    return Command.available !== false;
+}
+
+/**
  * Splits command-line positionals into a command's required leading values
  * and the optional trailing application directory.
  * @param {Array<{name: string}>} declared - The command's declared positionals.
  * @param {string[]} positionals - Positionals after the command names.
  * @param {Object} [options]
- * @param {string} [options.commandLabel] - "<command> <subcommand>", for the help hint.
+ * @param {string} [options.commandLabel] - The command's name, for the help hint.
  * @returns {{values: Object<string, string>, directory: string|undefined}}
  * @throws {UsageError} When a required value is missing or extra values remain.
  */

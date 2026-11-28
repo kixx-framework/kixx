@@ -1,17 +1,27 @@
-import * as admin from './admin/index.js';
-import * as app from './app/index.js';
-import * as cloudflare from './cloudflare/index.js';
-import * as dev from './dev/index.js';
-import * as local from './local/index.js';
+import DevStartCommand from './dev/start.js';
+import LocalCreateCommand from './local/create.js';
+import LocalDestroyCommand from './local/destroy.js';
+import LocalListCommand from './local/list.js';
+import LocalStartCommand from './local/start.js';
 
 
-// Command name to command index module. Static imports, rather than reading
-// this directory, keep every command in the module graph when the CLI is
-// loaded from a registry URL or compiled into a single executable.
-export default {
-    admin,
-    app,
-    cloudflare,
-    dev,
-    local,
-};
+/**
+ * The first word of every two-word command name, with the one-line
+ * description that help prints for the group.
+ * @type {Object<string, string>}
+ */
+export const groups = Object.freeze({
+    dev: 'Local development tools',
+    local: 'Throwaway local instances of the app',
+});
+
+// Command name to command class, in the order help lists them. Static imports,
+// rather than reading this directory, keep every command in the module graph
+// when the CLI is loaded from a registry URL or compiled into one executable.
+export default Object.freeze({
+    'dev start': DevStartCommand,
+    'local create': LocalCreateCommand,
+    'local start': LocalStartCommand,
+    'local list': LocalListCommand,
+    'local destroy': LocalDestroyCommand,
+});

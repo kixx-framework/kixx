@@ -13,6 +13,10 @@ const ENTRY_POINT = fileURLToPath(new URL('../kixx-dev.js', import.meta.url));
 
 // The permission set an installed `kixx-dev` gets on Deno, so these tests also
 // fail if the entry point needs more than users grant it.
+//
+// This file covers only what a child process proves: the entry point wires
+// the real streams, registry, and exit code to the runner. The command
+// contract is tested in process in test/lib/run-cli.test.js.
 const DENO_RUN_ARGS = [ 'run', '-RWNE', '--allow-sys=homedir', '--allow-run', '--no-prompt' ];
 
 // Each case spawns a runtime, which can exceed the 1000ms default on a busy
@@ -23,103 +27,45 @@ const TIMEOUT = 10000;
 describe('kixx-dev.js entry point', ({ it }) => {
 
     it('prints the deno.json version for --version', async () => {
-        const { code, stdout } = await runEntryPoint([ '--version' ]);
+        const { code, stdout, stderr } = await runEntryPoint([ '--version' ]);
 
         assertEqual(0, code);
         assertEqual(`${ manifest.version }\n`, stdout);
+        assertEqual('', stderr);
     }, { timeout: TIMEOUT });
 
-    it('prints the version for -v, even after a sub-command name', async () => {
-        const { code, stdout } = await runEntryPoint([ 'admin', 'gen-secure-token', '-v' ]);
-
-        assertEqual(0, code);
-        assertEqual(`${ manifest.version }\n`, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('lists the command families in top level help', async () => {
+    it('lists the registered commands in top level help', async () => {
         const { code, stdout } = await runEntryPoint([ '--help' ]);
 
         assertEqual(0, code);
         assertMatches(/^Usage: kixx-dev <command>/, stdout);
-        assertMatches(/--version/, stdout);
-        assertMatches(/^ {2}admin {2}/m, stdout);
-        assertMatches(/^ {2}app {2}/m, stdout);
-        assertMatches(/^ {2}cloudflare {2}/m, stdout);
-        assertMatches(/^ {2}dev {2}/m, stdout);
-        assertMatches(/^ {2}local {2}/m, stdout);
+        assertMatches(/^ {2}dev start {2}/m, stdout);
+        assertMatches(/^ {2}local create {2}/m, stdout);
+        assertMatches(/^ {6}--json {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
-    it('lists the families and fails when no command is given', async () => {
-        const { code, stdout } = await runEntryPoint([]);
-
-        assertEqual(1, code);
-        assertMatches('A top level command name is required', stdout);
-        assertMatches(/^ {2}cloudflare {2}/m, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('lists admin sub-commands', async () => {
-        const { code, stdout } = await runEntryPoint([ 'admin', '--help' ]);
+    it('writes one JSON envelope to stdout for --help --json', async () => {
+        const { code, stdout, stderr } = await runEntryPoint([ '--help', '--json' ]);
+        const envelope = JSON.parse(stdout);
 
         assertEqual(0, code);
-        assertMatches(/^ {2}gen-secure-token {2}/m, stdout);
+        assertEqual('', stderr);
+        assertMatches(/^[^\n]+\n$/, stdout);
+        assertEqual(true, envelope.ok);
+        assertEqual(manifest.version, envelope.data.version);
     }, { timeout: TIMEOUT });
 
-    it('lists the five admin sub-commands in declaration order', async () => {
-        const { stdout } = await runEntryPoint([ 'admin', '--help' ]);
+    it('exits 2 for a usage error, with the message on stderr and no stack', async () => {
+        const { code, stdout, stderr } = await runEntryPoint([ 'local', 'create' ]);
 
-        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
-
-        assertEqual(
-            'gen-secure-token,accept-invite,list-migrations,run-migration',
-            names.join(','),
-        );
+        assertEqual(2, code);
+        assertEqual('', stdout);
+        assertMatches('Missing required argument <name>', stderr);
+        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
+        assert(!/\n\s+at /.test(stderr), 'printed a stack');
     }, { timeout: TIMEOUT });
 
-    it('rejects run-migration --yes as an unknown option', async () => {
-        const { code, stderr } = await runEntryPoint([ 'admin', 'run-migration', '-m', 'x', '-e', 'production', '--force', '--yes' ]);
-
-        assertEqual(1, code);
-        assertMatches('--yes', stderr);
-        assertMatches('kixx-dev admin run-migration --help', stderr);
-    }, { timeout: TIMEOUT });
-
-    it('lists the cloudflare sub-commands in declaration order', async () => {
-        const { code, stdout } = await runEntryPoint([ 'cloudflare', '--help' ]);
-
-        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
-
-        assertEqual(0, code);
-        assertEqual('create-worker,update-worker,create-worker-version,deploy-version', names.join(','));
-    }, { timeout: TIMEOUT });
-
-    it('lists the app sub-commands in declaration order', async () => {
-        const { code, stdout } = await runEntryPoint([ 'app', '--help' ]);
-
-        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
-
-        assertEqual(0, code);
-        assertEqual('publish,assign-build', names.join(','));
-    }, { timeout: TIMEOUT });
-
-    it('lists the dev sub-commands', async () => {
-        const { code, stdout } = await runEntryPoint([ 'dev', '--help' ]);
-
-        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
-
-        assertEqual(0, code);
-        assertEqual('start', names.join(','));
-    }, { timeout: TIMEOUT });
-
-    it('lists the local sub-commands in declaration order', async () => {
-        const { code, stdout } = await runEntryPoint([ 'local', '--help' ]);
-
-        const names = [ ...stdout.matchAll(/^ {2}([a-z-]+) {2}/gm) ].map((match) => match[1]);
-
-        assertEqual(0, code);
-        assertEqual('create,seed,start,publish,list,destroy', names.join(','));
-    }, { timeout: TIMEOUT });
-
-    it('shows a declared positional in local create help', async () => {
+    it('shows a kept command\'s help', async () => {
         const { code, stdout } = await runEntryPoint([ 'local', 'create', '--help' ]);
 
         assertEqual(0, code);
@@ -129,178 +75,20 @@ describe('kixx-dev.js entry point', ({ it }) => {
         assertMatches(/^ {2}-t, --target <string> {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
-    it('fails local create without a name, naming the argument', async () => {
-        const { code, stderr } = await runEntryPoint([ 'local', 'create' ]);
-
-        assertEqual(1, code);
-        assertMatches('Missing required argument <name>', stderr);
-        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
-    }, { timeout: TIMEOUT });
-
-    it('shows the dev start flags', async () => {
-        const { code, stdout } = await runEntryPoint([ 'dev', 'start', '--help' ]);
-
-        assertEqual(0, code);
-        assertMatches(/^ {2}-p, --port <string> {2}/m, stdout);
-        assertMatches(/^ {2}-e, --environment <string> {2}/m, stdout);
-        assertMatches(/^ {6}--dotenv <string> {2}/m, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('rejects deploy-version --force as an unknown option', async () => {
-        const { code, stderr } = await runEntryPoint([ 'cloudflare', 'deploy-version', '-e', 'production', '--force' ]);
-
-        assertEqual(1, code);
-        assertMatches('--force', stderr);
-        assertMatches('kixx-dev cloudflare deploy-version --help', stderr);
-    }, { timeout: TIMEOUT });
-
-    it('names the admin credential variable when stdin is not a terminal', async () => {
+    it('runs a kept command against the directory argument', async () => {
         const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
 
         try {
-            await fsp.mkdir(path.join(directory, '.kixx'));
-            await fsp.writeFile(
-                path.join(directory, '.kixx', 'config.json'),
-                JSON.stringify({ app: { environments: { production: { origin: 'https://admin.example.test' } } } }),
-            );
+            const text = await runEntryPoint([ 'local', 'list', directory ], { cwd: os.tmpdir() });
+            const json = await runEntryPoint([ 'local', 'list', directory, '--json' ], { cwd: os.tmpdir() });
 
-            const env = { ...process.env };
-            delete env.KIXX_ADMIN_EMAIL;
-            delete env.KIXX_ADMIN_PASSWORD;
+            assertEqual(0, text.code);
+            assertMatches('No local instances in', text.stdout);
 
-            const { code, stderr } = await runEntryPoint(
-                [ 'admin', 'list-migrations', '-e', 'production' ],
-                { cwd: directory, env },
-            );
-
-            assertEqual(1, code);
-            assertMatches('KIXX_ADMIN_EMAIL', stderr);
-            assert(!stderr.includes('Failed to run command'), 'printed as a crash');
-        } finally {
-            await fsp.rm(directory, { recursive: true, force: true });
-        }
-    }, { timeout: TIMEOUT });
-
-    it('shows the directory argument in command help', async () => {
-        const { code, stdout } = await runEntryPoint([ 'dev', 'start', '--help' ]);
-
-        assertEqual(0, code);
-        assertMatches('Usage: kixx-dev dev start [options] [directory]', stdout);
-        assertMatches(/^ {2}directory {2}Application directory/m, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('loads project config from the directory argument', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
-
-        try {
-            await fsp.mkdir(path.join(directory, '.kixx'));
-            await fsp.writeFile(
-                path.join(directory, '.kixx', 'config.json'),
-                JSON.stringify({ app: { environments: { production: { origin: 'https://admin.example.test' } } } }),
-            );
-
-            const env = { ...process.env };
-            delete env.KIXX_ADMIN_EMAIL;
-            delete env.KIXX_ADMIN_PASSWORD;
-
-            // Reaching the credential prompt proves the origin came from the
-            // directory argument, since the cwd has no project config.
-            const { code, stderr } = await runEntryPoint(
-                [ 'admin', 'list-migrations', '-e', 'production', directory ],
-                { cwd: os.tmpdir(), env },
-            );
-
-            assertEqual(1, code);
-            assertMatches('KIXX_ADMIN_EMAIL', stderr);
-        } finally {
-            await fsp.rm(directory, { recursive: true, force: true });
-        }
-    }, { timeout: TIMEOUT });
-
-    it('rejects a directory argument which does not exist', async () => {
-        const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', 'no-such-directory-here' ]);
-
-        assertEqual(1, code);
-        assertMatches('no-such-directory-here', stderr);
-        assertMatches('does not exist', stderr);
-        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
-    }, { timeout: TIMEOUT });
-
-    it('rejects more than one positional argument', async () => {
-        const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', '.', 'extra' ]);
-
-        assertEqual(1, code);
-        assertMatches('Unexpected argument "extra"', stderr);
-    }, { timeout: TIMEOUT });
-
-    it('runs admin gen-secure-token with a prefix', async () => {
-        const { code, stdout } = await runEntryPoint([ 'admin', 'gen-secure-token', '--prefix', 'x_' ]);
-
-        assertEqual(0, code);
-        assertMatches(/^x_[0-9a-f]{64}\n$/, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('shows short flags in command help for -h', async () => {
-        const { code, stdout } = await runEntryPoint([ 'cloudflare', 'create-worker-version', '-h' ]);
-
-        assertEqual(0, code);
-        assertMatches(/^ {2}-h, --help {2}/m, stdout);
-        assertMatches(/^ {2}-v, --version {2}/m, stdout);
-        assertMatches(/^ {2}-e, --environment <string> {2}/m, stdout);
-        assertMatches(/^ {6}--force {2}/m, stdout);
-    }, { timeout: TIMEOUT });
-
-    it('aligns option descriptions in one column', async () => {
-        const { stdout } = await runEntryPoint([ 'admin', 'run-migration', '--help' ]);
-
-        const optionsSection = stdout.slice(stdout.indexOf('Options:\n')).split('\n\n')[0];
-        const optionLines = optionsSection.split('\n').slice(1);
-        const descriptions = [
-            'Show this help',
-            'Print the kixx-dev version',
-            'Required application environment',
-            'Override the configured Admin API origin',
-        ];
-
-        const columns = descriptions.map((text) => {
-            const line = optionLines.find((optionLine) => optionLine.includes(text));
-            assert(line, `has option line for "${ text }"`);
-            return line.indexOf(text);
-        });
-
-        for (const column of columns) {
-            assertEqual(columns[0], column);
-        }
-
-        for (const line of optionLines) {
-            assert(line.length <= 80, `line fits in 80 columns: ${ line }`);
-        }
-    }, { timeout: TIMEOUT });
-
-    it('reports an unknown option as a usage message without a stack', async () => {
-        const { code, stderr } = await runEntryPoint([ 'admin', 'gen-secure-token', '--nope' ]);
-
-        assertEqual(1, code);
-        assertMatches('--nope', stderr);
-        assertMatches('kixx-dev admin gen-secure-token --help', stderr);
-        assert(!stderr.includes('Failed to run command'), 'printed as a crash');
-    }, { timeout: TIMEOUT });
-
-    it('shows cloudflare help in a project with a malformed config file', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
-
-        try {
-            await fsp.mkdir(path.join(directory, '.kixx'));
-            await fsp.writeFile(path.join(directory, '.kixx', 'config.json'), '{ broken');
-            await fsp.writeFile(path.join(directory, 'cloudflare-config.jsonc'), '{ broken');
-
-            const help = await runEntryPoint([ 'cloudflare', '--help' ], { cwd: directory });
-            const unknown = await runEntryPoint([ 'cloudflare', 'missing' ], { cwd: directory });
-
-            assertEqual(0, help.code);
-            assertMatches('Usage: kixx-dev cloudflare <subcommand>', help.stdout);
-            assertEqual(1, unknown.code);
-            assertMatches('"cloudflare missing" sub command does not exist', unknown.stdout);
+            // The command's text moves to stderr, so stdout parses as JSON.
+            assertEqual(0, json.code);
+            assertMatches('No local instances in', json.stderr);
+            assertEqual('local list', JSON.parse(json.stdout).command);
         } finally {
             await fsp.rm(directory, { recursive: true, force: true });
         }

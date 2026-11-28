@@ -2,10 +2,8 @@ Kixx Devkit
 ===========
 
 The `kixx-dev` command: local development, build, and deployment tools for Kixx
-applications. It runs the app locally with restarts after code changes,
-manages throwaway local instances, creates the first admin account, runs
-data migrations, publishes application content, and builds and deploys
-Cloudflare Worker versions.
+applications. In this version it runs the app locally with restarts after code
+changes and manages throwaway local instances.
 
 Install
 -------
@@ -45,7 +43,19 @@ npm install -g kixx-dev@latest
 deno install -g -f -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
 ```
 
-Check the install with `kixx-dev --version`. Every command has `--help`.
+Check the install with `kixx-dev --version`. Every command has `--help`, and
+`kixx-dev --help` lists them all.
+
+Every command also takes `--json`: stdout then holds exactly one JSON object,
+`{ "ok": true, "command": "...", "data": {...} }` or
+`{ "ok": false, "command": "...", "error": { "code", "exitCode", "message" } }`,
+and everything written for a person goes to stderr.
+
+Exit codes mean the same thing for every command: `0` success, `1` an
+unexpected error, `2` a mistake you can fix (bad arguments or settings), `3`
+not inside a Kixx project or an unsupported project version, and `4` a command
+that is not available in this version. `kixx-dev --help --json` returns the
+table.
 
 Every command takes the app directory as an optional last argument, defaulting
 to the current directory: `kixx-dev dev start ../my-app`.
@@ -53,23 +63,14 @@ to the current directory: `kixx-dev dev start ../my-app`.
 Commands
 --------
 
-- `kixx-dev admin gen-secure-token` — generate a secure token.
-- `kixx-dev admin accept-invite` — redeem an invite and create an admin account.
-- `kixx-dev admin list-migrations` — list migrations and their status.
-- `kixx-dev admin run-migration` — run one batch of a migration.
-- `kixx-dev app publish` — publish content and assign it to a build. Doesn't work in this version: the content compiler moved into Kixx core.
-- `kixx-dev app assign-build` — assign an existing Release to a build.
-- `kixx-dev cloudflare create-worker` — create a Worker.
-- `kixx-dev cloudflare update-worker` — replace a Worker's settings.
-- `kixx-dev cloudflare create-worker-version` — bundle and upload a Worker version.
-- `kixx-dev cloudflare deploy-version` — route all traffic to a Worker version.
 - `kixx-dev dev start` — run the app locally, restarting after code changes.
 - `kixx-dev local create` — create a throwaway local instance.
-- `kixx-dev local seed` — create an instance's admin, token, and content.
 - `kixx-dev local start` — run an instance under the devserver.
-- `kixx-dev local publish` — republish content to a running instance. Doesn't work in this version, for the same reason.
 - `kixx-dev local list` — list instances.
 - `kixx-dev local destroy` — delete a stopped instance.
+
+The v6 `admin`, `app`, and `cloudflare` commands, and `local seed` and
+`local publish`, are removed in this version.
 
 Documentation:
 
@@ -108,7 +109,7 @@ node devkit/run-tests.js                     # full suite on Node.js
 deno run -A devkit/run-tests.js              # full suite on Deno
 node devkit/run-tests.js devkit/test/lib     # a subtree
 node devkit/run-linter.js devkit             # lint
-node devkit/kixx-dev.js <command> <subcommand>   # run the CLI from source
+node devkit/kixx-dev.js <command>            # run the CLI from source
 ```
 
 The runners accept paths relative to the current directory. `run-tests.js`

@@ -24,7 +24,7 @@ Pathnames resolve from your working directory and must be inside `devkit/test/`.
 ## File Conventions
 
 - Name test files `*.test.js`, for example `devkit/test/lib/config-loader.test.js`. The runner collects nothing else.
-- Mirror the source tree: `devkit/lib/config-loader.js` is tested by `devkit/test/lib/config-loader.test.js`, and `devkit/commands/admin/gen-secure-token.js` by `devkit/test/commands/admin/gen-secure-token.test.js`.
+- Mirror the source tree: `devkit/lib/config-loader.js` is tested by `devkit/test/lib/config-loader.test.js`, and `devkit/commands/local/create.js` by `devkit/test/commands/local/create.test.js`. Test the command contract (dispatch, `--json`, exit codes, help) in process by calling `runCli()` with fake streams and fake commands, as `devkit/test/lib/run-cli.test.js` does; only `devkit/test/kixx-dev.test.js` spawns the entry point.
 - Shared helpers go in `devkit/test/helpers/` and fixture files in `devkit/test/fixtures/` (not linted).
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
 

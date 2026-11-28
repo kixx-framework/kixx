@@ -1,7 +1,7 @@
 Error Handling
 ==============
 
-The devkit is a CLI run by a person at a terminal. Every error answers one question: **can the operator fix this by changing arguments, settings, or the outside world?**
+The devkit is a CLI run by a person at a terminal, by a script, or by an agent. Every error answers one question: **can the operator fix this by changing arguments, settings, or the outside world?** The answer picks the exit code. The exit-code table and the `--json` error envelope are in `commands/README.md`.
 
 Two Categories
 --------------
@@ -10,17 +10,25 @@ Two Categories
 
 Throw `UsageError` (`lib/usage-error.js`) for anything the operator can fix: a bad flag, a missing setting, invalid `cloudflare-config.jsonc`, a missing Cloudflare resource, an expired token.
 
-`kixx-dev.js` prints the message alone, wrapped at 80 columns, with no stack trace, and exits `1`. So the message is the whole user interface:
+The runner (`lib/run-cli.js`) prints the message alone on stderr, wrapped at 80 columns, with no stack trace, and exits `2`. Under `--json` the message goes into the envelope instead. So the message is the whole user interface:
 
 - Say what was wrong and how to fix it.
 - Name the file and dotted key path the value belongs in (`app.environments.<environment>.publishingToken in .kixx/secrets.json`).
 - Name the next command to run when there is one.
 
-Subclass `UsageError` when callers need to branch on the case. `UnsupportedServerError` does this: it is a protocol failure, but the fix is an operator action (upgrade the deployment or target another one).
+Subclass `UsageError` when callers need to branch on the case. `UnsupportedServerError` does this: it is a protocol failure, but the fix is an operator action (upgrade the deployment or target another one). A subclass's `code` is its class name, and it is what `--json` reports as `error.code`.
+
+A subclass that needs its own exit code declares `static code` equal to a name in the exit-code table (`lib/exit-codes.js`), as `CommandNotAvailableError` in `lib/placeholder-command.js` does. Define such a class beside the code that throws it.
+
+### Errors from the project's own Kixx code
+
+An error named `ValidationError` or `OperationalError` also exits `2` with its message alone. These are thrown by the Kixx code a project vendors, and describe a problem the developer can fix. The runner matches them by `name`: the class comes from the project's copy of Kixx, so `instanceof` against a devkit class is always false. A `ValidationError`'s `errors` array is reported under `--json` as `error.problems`.
 
 ### Defects: everything else
 
-Bugs, violated invariants, and unexpected remote responses propagate. `kixx-dev.js` prints `Failed to run command:` with the full error and stack, and exits `1`. Do not catch and swallow them, and do not turn them into `UsageError`; the stack trace is what the developer needs.
+Bugs, violated invariants, and unexpected remote responses propagate. The runner prints `Failed to run command:` with the full error and stack on stderr, and exits `1`. Under `--json` the envelope's `error.code` is `UnexpectedError`, and the stack still goes to stderr. Do not catch and swallow them, and do not turn them into `UsageError`; the stack trace is what the developer needs.
+
+A command never picks an exit code. It throws, and `describeError()` in `lib/exit-codes.js` maps the error to a row of the table.
 
 Assertions
 ----------
@@ -52,11 +60,11 @@ Each API client throws its own error class, carrying protocol details as propert
 
 `status` is `null` for a network failure. The Admin and Publishing modules export `create*ApiError()` factories that map a server JSON:API error `code` to a typed subclass (`ReleaseNotFoundError`, `MigrationConcurrencyError`, ...). Add a subclass and a map entry when a command needs to react to a new server code.
 
-All these classes set `name` and `code` to the class name. Branch with `error.name === 'CloudflareApiError'` or `error.code`; reserve `instanceof` for the `UsageError` check in `kixx-dev.js`, which must also match subclasses.
+All these classes set `name` and `code` to the class name. Branch with `error.name === 'CloudflareApiError'` or `error.code`; reserve `instanceof` for the `UsageError` check in `lib/exit-codes.js`, which must also match subclasses.
 
 ### Cloudflare authentication
 
-`kixx-dev.js` passes every command error through `toCloudflareAuthUsageError()` (`lib/cloudflare/cloudflare-auth-guidance.js`). A `CloudflareApiError` with a `tokenStatus` becomes a `UsageError` telling the operator whether the token is invalid or lacks a permission, and which secrets files to check. Commands do not handle auth failures themselves.
+`toCloudflareAuthUsageError()` (`lib/cloudflare/cloudflare-auth-guidance.js`) turns a `CloudflareApiError` with a `tokenStatus` into a `UsageError` telling the operator whether the token is invalid or lacks a permission, and which secrets files to check. The runner does not call it: no registered command talks to Cloudflare in this version. A command that does passes its errors through it.
 
 ### Retries
 
@@ -79,7 +87,7 @@ Any `503` also sets the client's sticky `serverOverloaded` flag, which `publishC
 
 ### Partial success
 
-When a multi-step operation fails after creating durable remote state, the error must say what already exists so the operator can finish by hand. `lib/publishing/publish-release.js` throws `ReleaseAssignmentError` with the created Release id when build assignment fails, so `kixx app assign-build` can complete it.
+When a multi-step operation fails after creating durable remote state, the error must say what already exists so the operator can finish by hand. `lib/publishing/publish-release.js` throws `ReleaseAssignmentError` with the created Release id when build assignment fails, so the operator can assign it.
 
 Wrapping
 --------
@@ -87,7 +95,7 @@ Wrapping
 Wrap with `cause` when a layer adds context the operator or developer needs:
 
 ```js
-throw new UsageError(`${ cause.message }\nRun "kixx ${ commandName } ${ subCommandName } --help" for usage.`, { cause });
+throw new UsageError(`${ cause.message }\nRun "kixx-dev ${ name } --help" for usage.`, { cause });
 ```
 
 - Always pass `cause`.
