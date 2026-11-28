@@ -23,6 +23,9 @@
  * code fingerprint, and the `git ls-tree -r -z` parser that feeds it come from
  * the code fingerprint module and are re-exported here.
  *
+ * So do the content contract version and the addressing format the compiler
+ * writes, which a publishing tool checks against the server before any write.
+ *
  * A running app needs no manifest read. It passes the `contentRoots` and
  * `templateHelpers` exports of its generated registry to `compileContent()`.
  * @module tooling
@@ -43,6 +46,8 @@ export { compileProjectContent } from './compile-project-content.js';
 export { parseJsonc } from '../config/parse-jsonc.js';
 export { parseSecretsManifest } from '../config/secrets-manifest.js';
 export { compileContent, serializeContentObject } from '../content-compiler/mod.js';
+export { CONTENT_CONTRACT_VERSION } from '../content-addressable-store/content-addressable-store.js';
+export { FORMAT as ADDRESSING_FORMAT } from '../content-addressable-store/addressing.js';
 export {
     PATH_CLASSES,
     classifyPath,

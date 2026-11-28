@@ -101,11 +101,11 @@ The content contract comes from the project too. `lib/publishing/` holds no addr
 |---|---|---|
 | The content objects, with each one's `hash` and `size`, the Release manifest, and the report | `compileProjectContent()`, through the caller's `compile` function | `publishRelease()` and `publishContent()` |
 | The bytes of an object's upload | `serializeContentObject()` | `publishContent()` |
-| The content contract version and the addressing format the compiler writes | The project's Kixx, passed as `expected: { contentContractVersion, addressingFormat }` | `negotiateCapabilities()`, and through it `publishContent()` and `assignRelease()` |
+| The content contract version and the addressing format the compiler writes | The project's Kixx (`CONTENT_CONTRACT_VERSION` and `ADDRESSING_FORMAT` from `kixx/tooling/mod.js`), passed as `expected: { contentContractVersion, addressingFormat }` | `negotiateCapabilities()`, and through it `publishContent()` and `assignRelease()` |
 
 - `publishContent()` sends `compilation.release.manifest` as it is. A compilation with problems has no Release: it throws a `UsageError` that lists every problem, before any request.
 - `lib/publishing/negotiate-capabilities.js` pins one version, `BUILD_ASSIGNMENT_PROTOCOL_VERSION`, because it describes the requests the devkit's own client sends. It refuses, before any write, a server whose protocol, content contract, or addressing format differs. Bump the pin with the client when the server's protocol changes.
-- No command calls the publishing code in this version. Core's tooling entry does not export the contract version or the addressing format yet; the command that publishes adds those exports with their first caller.
+- No command calls the publishing code in this version. Core's tooling entry already exports the contract version and the addressing format; the command that publishes adds them to `REQUIRED_TOOLING_EXPORTS` with its first call.
 - `test/conformance/publish-pipeline.test.js` compiles a real project's content with the project's compiler, runs `publishContent()` against a fake client, and checks that core's validator accepts the manifest sent and that every upload has the size the manifest gives it. It also checks the protocol pin against core's.
 
 The devkit keeps no port of a core module. Don't add one: take the function from the project's tooling as an argument, pass a stand-in in the unit test, and prove the real one in `test/conformance/`.

@@ -21,14 +21,6 @@ import {
 // 1000ms default on a busy machine.
 const TIMEOUT = { timeout: 20000 };
 
-// The devkit holds neither value. A caller takes them from the project's
-// Kixx; here they are core's own.
-const EXPECTED = Object.freeze({
-    contentContractVersion: CONTENT_CONTRACT_VERSION,
-    addressingFormat: FORMAT,
-});
-
-
 // The publishing pipeline against the real content compiler, loaded from a
 // real project as a command would load it. The devkit composes nothing: it
 // sends what the project's compiler made.
@@ -51,12 +43,22 @@ describe('publish pipeline conformance with core', ({ before, after, it }) => {
         await removeProject(projectDirectory);
     });
 
+    it('takes the content contract from the project\'s tooling', () => {
+        assertEqual(CONTENT_CONTRACT_VERSION, loaded.tooling.CONTENT_CONTRACT_VERSION);
+        assertEqual(FORMAT, loaded.tooling.ADDRESSING_FORMAT);
+    });
+
     function publish(client, options) {
         return publishContent({
             client,
             compilation,
             serializeContentObject: loaded.tooling.serializeContentObject,
-            expected: EXPECTED,
+            // The devkit holds neither value: it takes both from the
+            // project's Kixx, as a command does.
+            expected: {
+                contentContractVersion: loaded.tooling.CONTENT_CONTRACT_VERSION,
+                addressingFormat: loaded.tooling.ADDRESSING_FORMAT,
+            },
             ...options,
         });
     }
