@@ -199,6 +199,8 @@ describe('findCommandProblems()', ({ it }) => {
                 force: { type: 'boolean' },
             },
             positionals: [ { name: 'name', description: 'Name' } ],
+            requiresProject: true,
+            requiresTooling: true,
             requiredConfig: [ 'a.b' ],
             requiredSecrets: [],
         });
@@ -257,7 +259,31 @@ describe('findCommandProblems()', ({ it }) => {
 
     it('rejects malformed required settings and available', () => {
         assertEqual(1, findCommandProblems(makeCommand({ requiredConfig: 'a.b' })).length);
-        assertEqual(1, findCommandProblems(makeCommand({ requiredSecrets: [ '' ] })).length);
+        assertEqual(1, findCommandProblems(makeCommand({ requiresProject: true, requiredSecrets: [ '' ] })).length);
         assertEqual(1, findCommandProblems(makeCommand({ available: 'no' })).length);
+    });
+
+    it('rejects a requiresProject or requiresTooling that is not a boolean', () => {
+        assertEqual(
+            'requiresProject must be a boolean',
+            findCommandProblems(makeCommand({ requiresProject: 'yes' })).join('; '),
+        );
+        assertEqual(
+            'requiresTooling must be a boolean',
+            findCommandProblems(makeCommand({ requiresTooling: 1 })).join('; '),
+        );
+    });
+
+    it('rejects required settings on a command that runs outside a project', () => {
+        for (const key of [ 'requiredConfig', 'requiredSecrets' ]) {
+            const problems = findCommandProblems(makeCommand({ [key]: [ 'a.b' ] }));
+
+            assertEqual(1, problems.length);
+            assertMatches(`${ key } needs requiresProject`, problems[0]);
+
+            assertEqual(0, findCommandProblems(makeCommand({ [key]: [ 'a.b' ], requiresProject: true })).length);
+            assertEqual(0, findCommandProblems(makeCommand({ [key]: [ 'a.b' ], requiresTooling: true })).length);
+            assertEqual(0, findCommandProblems(makeCommand({ [key]: [] })).length);
+        }
     });
 });

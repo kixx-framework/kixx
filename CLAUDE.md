@@ -35,7 +35,7 @@ node run-linter.js test-app        # lint the integration suite
 - Unit tests never import a Durable Object shell, an entry point, or a `cloudflare:*` module.
 - `test/kixx/import-hygiene.test.js` enforces the import rules above.
 - The plugin guide is `plugins/README.md`: manifests, lifecycle modules, generated registries, entry points, and the ports-and-adapters rules.
-- Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A generated JavaScript file turns lint off for itself.
+- Files named `*.generated.js` and `example.env.secrets` are generated from the plugin manifests. Never edit one. Change a manifest, then regenerate: `node tools/generate-registries.js test/fixtures/project --core ../../../kixx`. A test fails on drift. A real project regenerates with `kixx-dev generate`; the fixture can't, because its core lives outside it. A generated JavaScript file turns lint off for itself.
 - `node tools/build-project.js <directory>` builds a project with no plugins from the skeleton (`devkit/templates/project/`) and core, and runs the generator. Build one under `tmp/` to try a change in a real project. It replaces a directory it built before and refuses any other directory that isn't empty.
 - `node tools/build-test-app.js` builds the integration suite's test app into `test-app/build/` (git-ignored): the skeleton, core, and the test-only plugin in `test-app/integration-probe/`. Building it runs nothing. Never edit, lint, or commit the build.
 - Every change must work on Node.js, Deno, and Cloudflare.
@@ -72,6 +72,9 @@ Some devkit tests are back from `test-v6/devkit/`, so `node devkit/run-tests.js`
 **Keep it stand-alone.** The devkit ships to npm and JSR on its own.
 
 - Never import from outside `devkit/`. Only `devkit/test/conformance/` may read core (`kixx/`).
+- At run time the devkit takes framework logic from the project it runs in, never from a copy of its own. `devkit/lib/project/load-project-tooling.js` imports the project's `kixx/tooling/mod.js` and two adapter modules, and is the only module with a dynamic `import()`. A command declares `requiresTooling` and takes the result as its `tooling` argument. Never use `instanceof` on something project code made or threw: match `error.name`.
+- `devkit/test/import-hygiene.test.js` enforces both rules.
+- This repository's root holds `kixx/plugin.json`, so from inside it `kixx-dev` finds the repository root as the project. Never run `kixx-dev generate` here outside a built project (`tmp/core-only`, for example): it would write five generated files at the repository root. Always pass the project directory.
 - No runtime dependencies. Use `node:` built-ins, or vendor the code into `devkit/lib/vendor/` by following `docs/vendored-code.md` (and never edit vendored code in place).
 - It must run on Node.js and Deno.
 - Keep `package.json` and `deno.json` in sync, including the version, which equals `kixx/plugin.json`'s. See `devkit/docs/packaging-and-runtimes.md`.

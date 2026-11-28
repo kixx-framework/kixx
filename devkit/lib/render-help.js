@@ -5,7 +5,7 @@
  * @module render-help
  */
 
-import { DIRECTORY_POSITIONAL, acceptsDirectory } from './command-positionals.js';
+import { DIRECTORY_POSITIONAL, acceptsDirectory, requiresProject } from './command-positionals.js';
 import { CONSOLE_LINE_WIDTH, collapseWhitespace, wrapWords } from './text-wrap.js';
 
 
@@ -47,7 +47,7 @@ const GLOBAL_OPTIONS = Object.freeze({
  * @property {Array<{name: string, short: string|null, type: string, multiple: boolean, default: *, description: string}>} options
  * @property {string[]} requiredConfig - Dotted key paths in `.kixx/config.json`
  * @property {string[]} requiredSecrets - Dotted key paths in `.kixx/secrets.json`
- * @property {boolean} requiresProject
+ * @property {boolean} requiresProject - True when the command runs inside a project, and so takes `[directory]`
  */
 
 /**
@@ -88,7 +88,7 @@ export function describeCommand(name, Command) {
         options,
         requiredConfig: [ ...(Command.requiredConfig ?? []) ],
         requiredSecrets: [ ...(Command.requiredSecrets ?? []) ],
-        requiresProject: Command.requiresProject === true,
+        requiresProject: requiresProject(Command),
     };
 }
 

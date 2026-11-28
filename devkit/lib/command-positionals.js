@@ -35,7 +35,7 @@ export function findPositionalsProblem(declared) {
             return `positional name "${ name }" must match ${ POSITIONAL_NAME_PATTERN }`;
         }
         if (name === RESERVED_POSITIONAL_NAME) {
-            return `positional name "${ name }" is reserved for the application directory`;
+            return `positional name "${ name }" is reserved for the project directory`;
         }
         if (seen.has(name)) {
             return `positional name "${ name }" is declared twice`;
@@ -56,31 +56,43 @@ export function findPositionalsProblem(declared) {
  */
 export const DIRECTORY_POSITIONAL = Object.freeze({
     name: RESERVED_POSITIONAL_NAME,
-    description: 'Application directory; defaults to the current directory',
+    description: 'A directory in the project; defaults to the current directory',
 });
 
 /**
- * Says whether a command takes the trailing directory. Every command that
- * runs does; a placeholder takes no arguments at all.
+ * Says whether a command runs inside a project. `requiresTooling` implies
+ * `requiresProject`.
+ * @param {Function} Command - A command class
+ * @returns {boolean}
+ */
+export function requiresProject(Command) {
+    return Command.requiresProject === true || Command.requiresTooling === true;
+}
+
+/**
+ * Says whether a command takes the trailing directory. Only a command that
+ * runs inside a project does: the directory is where the runner starts
+ * looking for the project. A placeholder takes no arguments at all.
  * @param {Function} Command - A command class
  * @returns {boolean}
  */
 export function acceptsDirectory(Command) {
-    return Command.available !== false;
+    return Command.available !== false && requiresProject(Command);
 }
 
 /**
  * Splits command-line positionals into a command's required leading values
- * and the optional trailing application directory.
+ * and the optional trailing project directory.
  * @param {Array<{name: string}>} declared - The command's declared positionals.
  * @param {string[]} positionals - Positionals after the command names.
  * @param {Object} [options]
  * @param {string} [options.commandLabel] - The command's name, for the help hint.
+ * @param {boolean} [options.acceptsDirectory=true] - False for a command that runs outside a project.
  * @returns {{values: Object<string, string>, directory: string|undefined}}
  * @throws {UsageError} When a required value is missing or extra values remain.
  */
 export function splitPositionals(declared, positionals, options) {
-    const { commandLabel } = options ?? {};
+    const { commandLabel, acceptsDirectory: takesDirectory = true } = options ?? {};
     const required = declared ?? [];
     const values = {};
 
@@ -95,7 +107,21 @@ export function splitPositionals(declared, positionals, options) {
         values[name] = positionals[i];
     }
 
-    const [ directory, ...extraArguments ] = positionals.slice(required.length);
+    const remaining = positionals.slice(required.length);
+
+    if (!takesDirectory) {
+        if (remaining.length > 0) {
+            const expected = required.length === 0
+                ? 'This command takes no positional arguments.'
+                : `Expected only ${ required.map(({ name }) => `<${ name }>`).join(' ') }.`;
+
+            throw new UsageError(`Unexpected argument "${ remaining[0] }". ${ expected }`);
+        }
+
+        return { values, directory: undefined };
+    }
+
+    const [ directory, ...extraArguments ] = remaining;
 
     if (extraArguments.length > 0) {
         const expected = required.length === 0

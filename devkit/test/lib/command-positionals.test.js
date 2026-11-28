@@ -4,6 +4,7 @@ import {
     DIRECTORY_POSITIONAL,
     acceptsDirectory,
     findPositionalsProblem,
+    requiresProject,
     splitPositionals,
 } from '../../lib/command-positionals.js';
 
@@ -83,14 +84,73 @@ describe('command-positionals', ({ describe }) => {
         });
     });
 
+    describe('splitPositionals() for a command that takes no directory', ({ it }) => {
+        const options = { acceptsDirectory: false };
+
+        it('returns the declared values and no directory', () => {
+            const result = splitPositionals([ NAME ], [ 'alpha' ], options);
+
+            assertEqual('alpha', result.values.name);
+            assertEqual(undefined, result.directory);
+        });
+
+        it('rejects a positional when none is declared', () => {
+            const error = catchError(() => splitPositionals([], [ '../app' ], options));
+
+            assert(error, 'expected an error');
+            assertEqual('UsageError', error.name);
+            assertEqual('Unexpected argument "../app". This command takes no positional arguments.', error.message);
+        });
+
+        it('rejects a positional after the declared ones', () => {
+            const error = catchError(() => splitPositionals([ NAME ], [ 'alpha', '../app' ], options));
+
+            assert(error, 'expected an error');
+            assertEqual('UsageError', error.name);
+            assertEqual('Unexpected argument "../app". Expected only <name>.', error.message);
+        });
+
+        it('still rejects a missing value', () => {
+            const error = catchError(() => splitPositionals([ NAME ], [], options));
+
+            assertMatches('Missing required argument <name>', error.message);
+        });
+    });
+
+    describe('requiresProject()', ({ it }) => {
+        it('is true when the command declares requiresProject or requiresTooling', () => {
+            assertEqual(false, requiresProject(class {}));
+            assertEqual(true, requiresProject(class {
+                static requiresProject = true;
+            }));
+            assertEqual(true, requiresProject(class {
+                static requiresTooling = true;
+            }));
+            assertEqual(false, requiresProject(class {
+                static requiresProject = false;
+            }));
+        });
+    });
+
     describe('acceptsDirectory()', ({ it }) => {
-        it('is true for a command that runs and false for a placeholder', () => {
-            assertEqual(true, acceptsDirectory(class {}));
+        it('is true only for a command that runs inside a project', () => {
+            assertEqual(false, acceptsDirectory(class {}));
             assertEqual(true, acceptsDirectory(class {
-                static available = true;
+                static requiresProject = true;
+            }));
+            assertEqual(true, acceptsDirectory(class {
+                static requiresTooling = true;
+            }));
+        });
+
+        it('is false for a placeholder, which takes no arguments at all', () => {
+            assertEqual(false, acceptsDirectory(class {
+                static available = false;
             }));
             assertEqual(false, acceptsDirectory(class {
                 static available = false;
+
+                static requiresProject = true;
             }));
         });
 

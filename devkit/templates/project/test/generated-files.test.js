@@ -31,10 +31,10 @@ describe('generated files', ({ before, it }) => {
         for (const [ fileName, text ] of rendered) {
             const filepath = path.join(PROJECT_DIRECTORY, fileName);
 
-            assert(fs.existsSync(filepath), `${ fileName } is missing. Regenerate the project's generated files.`);
+            assert(fs.existsSync(filepath), `${ fileName } is missing. Run \`kixx-dev generate\`.`);
             assert(
                 fs.readFileSync(filepath, 'utf8') === text,
-                `${ fileName } is out of date. Regenerate the project's generated files.`,
+                `${ fileName } is out of date. Run \`kixx-dev generate\`.`,
             );
         }
     });

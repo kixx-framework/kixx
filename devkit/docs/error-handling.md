@@ -18,11 +18,19 @@ The runner (`lib/run-cli.js`) prints the message alone on stderr, wrapped at 80 
 
 Subclass `UsageError` when callers need to branch on the case. `UnsupportedServerError` does this: it is a protocol failure, but the fix is an operator action (upgrade the deployment or target another one). A subclass's `code` is its class name, and it is what `--json` reports as `error.code`.
 
-A subclass that needs its own exit code declares `static code` equal to a name in the exit-code table (`lib/exit-codes.js`), as `CommandNotAvailableError` in `lib/placeholder-command.js` does. Define such a class beside the code that throws it.
+A subclass that needs its own exit code declares `static code` equal to a name in the exit-code table (`lib/exit-codes.js`). Define such a class beside the code that throws it:
+
+| Class | Module | `code` | Exit |
+|---|---|---|---|
+| `ProjectNotFoundError` | `lib/project/find-project.js` | `ProjectNotFound` | 3 |
+| `UnsupportedProjectVersionError` | `lib/project/project-version.js` | `UnsupportedProjectVersion` | 3 |
+| `CommandNotAvailableError` | `lib/placeholder-command.js` | `CommandNotAvailable` | 4 |
+
+`UnsupportedProjectVersionError` covers every case where this `kixx-dev` can't work with the project's copy of Kixx: an unsupported version, a `kixx/plugin.json` that can't be read, and a tooling module or export that is missing.
 
 ### Errors from the project's own Kixx code
 
-An error named `ValidationError` or `OperationalError` also exits `2` with its message alone. These are thrown by the Kixx code a project vendors, and describe a problem the developer can fix. The runner matches them by `name`: the class comes from the project's copy of Kixx, so `instanceof` against a devkit class is always false. A `ValidationError`'s `errors` array is reported under `--json` as `error.problems`.
+An error named `ValidationError` or `OperationalError` also exits `2` with its message alone. These are thrown by the Kixx code a project vendors, which a `requiresTooling` command runs (see `docs/architecture.md`), and describe a problem the developer can fix: an invalid manifest under `kixx-dev generate`, for example. A manifest `ValidationError` lists every problem in its message, so the message alone is enough in text mode. The runner matches them by `name`: the class comes from the project's copy of Kixx, so `instanceof` against a devkit class is always false. A `ValidationError`'s `errors` array is reported under `--json` as `error.problems`.
 
 ### Defects: everything else
 

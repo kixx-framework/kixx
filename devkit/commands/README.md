@@ -24,6 +24,7 @@ The first word of a two-word name is a **group**. No name is both a command and 
 
 ```js
 import DevStartCommand from './dev/start.js';
+import GenerateCommand from './generate.js';
 import LocalCreateCommand from './local/create.js';
 
 export const groups = Object.freeze({
@@ -32,6 +33,7 @@ export const groups = Object.freeze({
 });
 
 export default Object.freeze({
+    'generate': GenerateCommand,
     'dev start': DevStartCommand,
     'local create': LocalCreateCommand,
 });
@@ -47,14 +49,46 @@ The CLI never reads the `commands/` directory. Static imports keep every command
 How a Command Line Is Read
 --------------------------
 
-`kixx-dev.js` only passes `process.argv`, the working and home directories, the process streams, and the registry to `runCli()`, and sets `process.exitCode` to what it resolves. Everything else is in `lib/run-cli.js`, so tests run the whole contract in process with fake streams and a fake registry.
+`kixx-dev.js` only passes `process.argv`, the working and home directories, the process streams, the registry, and the project tooling loader to `runCli()`, and sets `process.exitCode` to what it resolves. Everything else is in `lib/run-cli.js`, so tests run the whole contract in process with fake streams and a fake registry.
 
 1. The **global flags** are taken off the command line, wherever they are: `--help` (`-h`), `--version` (`-v`), and `--json`. They work with or without a command. No command may declare `help`, `version`, `json`, `-h`, or `-v`.
 2. `--version` prints the version and stops.
 3. The **command words** are the leading tokens before the first flag. The runner tries the first two words as a name, then the first word.
 4. With no match: `--help` alone prints every command, and `<group> --help` prints the group's commands. Anything else is a usage error (exit 2) that lists what exists on stderr.
-5. `--help` with a command prints that command's help and stops. Nothing is loaded for help, so it works in a directory with broken settings.
-6. Otherwise the remaining tokens are parsed with the command's `options`, the positionals are split, the settings are loaded and checked, and the command is constructed and run.
+5. `--help` with a command prints that command's help and stops. Nothing is loaded for help, so it works outside a project and in a directory with broken settings.
+6. Otherwise the remaining tokens are parsed with the command's `options` and the positionals are split.
+7. A command that declares `requiresProject` or `requiresTooling` then gets its project (next section). Any other command is constructed with its streams alone.
+8. The command is constructed and run.
+
+
+Finding the Project
+-------------------
+
+A command that sets `static requiresProject = true` runs inside a Kixx project. For it, and only for it, the runner does this, in order:
+
+1. **Start directory.** The optional trailing `[directory]` argument, resolved against the working directory, or the working directory itself. A directory that does not exist exits 2.
+2. **Discovery** (`lib/project/find-project.js`). The project is the nearest directory, at or above the start directory, that holds `kixx/plugin.json`. So a command works from any subdirectory of a project. With none found, `ProjectNotFoundError` exits 3. The `.kixx/` settings directory does not mark a project: a fresh clone has none.
+3. **The version gate** (`lib/project/project-version.js`). The runner reads `version` from `kixx/plugin.json` as data, before any project code is loaded. A project is supported when its major version equals that of `OLDEST_SUPPORTED_PROJECT_VERSION` (`7.0.0`) and its version is at least that, with a prerelease tag ignored: `7.0.0-alpha.0` passes. Anything else, a manifest that is not JSON, or one with no valid `version`, is `UnsupportedProjectVersionError`, exit 3, with a message that names both versions and what to do. A supported project that is newer than this `kixx-dev` runs, after one line on stderr saying so.
+4. **Settings** (`lib/config-loader.js`). `~/.kixx/` merged under `<project>/.kixx/`. A project needs no `.kixx/` directory. When the project is the home directory, the one `.kixx/` is loaded once. Then `requiredConfig` and `requiredSecrets` are checked.
+5. **Tooling**, only for `static requiresTooling = true` (`lib/project/load-project-tooling.js`). The runner imports three modules from the project's own `kixx/` and passes them to the command as `tooling`:
+
+   ```js
+   const { tooling, createProjectFileSystem, createFileSystemContentSource } = this.#tooling;
+   ```
+
+   - `tooling` is the project's `kixx/tooling/mod.js`: the generator, the manifest readers, and the content compiler.
+   - `createProjectFileSystem(projectDirectory)` is from `kixx/adapters/node/tooling/lib/project-file-system.js`.
+   - `createFileSystemContentSource(projectDirectory)` is from `kixx/adapters/node/content-compiler/lib/file-system-content-source.js`.
+
+   A missing module, or a tooling module without an export the devkit calls (`REQUIRED_TOOLING_EXPORTS`), exits 3 and names it. When you call a tooling export for the first time, add its name to that list and to `test/conformance/project-tooling.test.js`.
+
+This is how one `kixx-dev` works across project versions: framework logic comes from the project, never from a copy in the devkit. Three rules follow.
+
+- **The loader is the only module with a dynamic `import()`**, and it imports only those three modules: never the project's `app/`, `plugins/`, or an entry point. `test/import-hygiene.test.js` enforces both, and that nothing else in the devkit imports from outside it.
+- **Never use `instanceof` on something project code made or threw.** Its classes come from the project's copy of Kixx, so they are never a devkit class. Match an error by `error.name`, and check a value by its shape.
+- **A command takes `tooling` as a constructor argument and never imports core.** Its unit test passes a fake.
+
+`--help`, `--version`, a placeholder, and a command without `requiresProject` never read `kixx/plugin.json`, load settings, or call the loader.
 
 
 The Command Module
@@ -119,13 +153,19 @@ static positionals = [
 ];
 ```
 
-Every declared positional is required and comes before the optional application directory, which the runner owns and uses to find the project. Usage reads `kixx-dev local create [options] <name> [directory]`, and help lists the declared positionals before `directory`. Names match `^[a-z][a-z0-9-]*$`, are unique, and are never `directory`. A missing value or an extra argument is a usage error. Take anything optional as an option, never as a positional.
+Every declared positional is required. A `requiresProject` command also takes the optional trailing `directory`, which the runner owns and uses to find the project: usage reads `kixx-dev local create [options] <name> [directory]`, and help lists the declared positionals before `directory`. A command that runs outside a project takes no `directory`, and one given to it is a usage error. Names match `^[a-z][a-z0-9-]*$`, are unique, and are never `directory`. A missing value or an extra argument is a usage error. Take anything optional as an option, never as a positional.
 
 **`requiredConfig`**: dotted key paths which must be present in the merged `.kixx/config.json` layers.
 
 **`requiredSecrets`**: dotted key paths which must be present in the merged `.kixx/secrets.json` layers.
 
-Each check runs before construction. A missing value is a usage error naming the command, the missing key paths, and the files they belong in.
+Each check runs before construction. A missing value is a usage error naming the command, the missing key paths, and the files they belong in. Settings are loaded only inside a project, so a command that declares either one must also declare `requiresProject`.
+
+**`requiresProject`**: `true` for a command that runs inside a project. The runner finds the project, checks its version, loads the settings, accepts the trailing `[directory]`, and passes `projectDirectory`, `config`, and `secrets`. See "Finding the Project".
+
+**`requiresTooling`**: `true` for a command that calls the project's own Kixx code. It implies `requiresProject`, and the runner also passes `tooling`.
+
+A command with neither runs anywhere. It is given its streams and nothing else.
 
 **`available`**: `false` only on a placeholder (see below). Leave it out of a real command.
 
@@ -137,13 +177,14 @@ The runner constructs the class with a single object:
 
 ```js
 constructor(args) {
-    const { projectDirectory, config, secrets, output, stdout, stderr } = args ?? {};
+    const { projectDirectory, config, secrets, tooling, output, stdout, stderr } = args ?? {};
 }
 ```
 
-- `projectDirectory`: the directory owning the `.kixx` directory, found by walking up from the directory argument (default: the working directory). It falls back to that starting directory when no project is found.
-- `config`: the deeply frozen merge of `~/.kixx/config.json` and `<project>/.kixx/config.json`, project layer last.
-- `secrets`: the same merge for `secrets.json`.
+- `projectDirectory`: the project root, an absolute path. Only with `requiresProject`.
+- `config`: the deeply frozen merge of `~/.kixx/config.json` and `<project>/.kixx/config.json`, project layer last. Only with `requiresProject`.
+- `secrets`: the same merge for `secrets.json`. Only with `requiresProject`.
+- `tooling`: the frozen `{ tooling, createProjectFileSystem, createFileSystemContentSource }` loaded from the project. Only with `requiresTooling`.
 - `output`: the stream for the command's human-readable text.
 - `stdout` and `stderr`: streams for a child process's output, used by the commands that run the app.
 
@@ -219,18 +260,18 @@ Under `--json`, everything a command writes for a person goes to stderr. A usage
     "usage": "kixx-dev local create [options] <name> [directory]",
     "positionals": [
         { "name": "name", "description": "Instance name: ...", "required": true },
-        { "name": "directory", "description": "Application directory; ...", "required": false }
+        { "name": "directory", "description": "A directory in the project; ...", "required": false }
     ],
     "options": [
         { "name": "target", "short": "t", "type": "string", "multiple": false, "default": null, "description": "..." }
     ],
     "requiredConfig": [],
     "requiredSecrets": [],
-    "requiresProject": false
+    "requiresProject": true
 }
 ```
 
-`short` and `default` are `null` when the option declares none. The text help is rendered from this same data (`lib/render-help.js`).
+`requiresProject` is `true` for a command that declares `requiresProject` or `requiresTooling`, and only then is `directory` in `positionals`. `short` and `default` are `null` when the option declares none. The text help is rendered from this same data (`lib/render-help.js`).
 
 
 Exit Codes
@@ -253,9 +294,9 @@ An unknown command, a group with no command name, a bad flag, a missing position
 
 The runner maps a thrown error to a row in this order (`describeError()` in `lib/exit-codes.js`):
 
-1. An error whose `code` is a name in the table gets that row. `CommandNotAvailableError` is a `UsageError` subclass that declares `static code = 'CommandNotAvailable'`.
+1. An error whose `code` is a name in the table gets that row. `CommandNotAvailableError`, `ProjectNotFoundError`, and `UnsupportedProjectVersionError` are `UsageError` subclasses that each declare a `static code` equal to their row's name.
 2. Any other `UsageError`, subclasses included, exits 2. `error.code` is the error's own `code`, which is its class name.
-3. An error named `ValidationError` or `OperationalError` exits 2 with its message alone. These come from the project's own Kixx code and describe a problem the developer can fix. They are matched by `name`, never with `instanceof`, because the class comes from the project's copy of Kixx.
+3. An error named `ValidationError` or `OperationalError` exits 2 with its message alone. These come from the project's own Kixx code and describe a problem the developer can fix: `kixx-dev generate` with an invalid manifest ends here. They are matched by `name`, never with `instanceof`, because the class comes from the project's copy of Kixx. The message of a manifest `ValidationError` already lists every problem, so text mode prints nothing more; `--json` also carries them as `error.problems`.
 4. Everything else exits 1 as `UnexpectedError`.
 
 To add a code: add a row to `EXIT_CODES` and to the table above, and give the error class a `static code` equal to the row's name.
@@ -284,7 +325,7 @@ The runner constructs a placeholder with `commandName` so its message can name t
 Adding a Command
 ----------------
 
-1. Create `commands/<name>.js`, or `commands/<group>/<name>.js`, default-exporting the class.
+1. Create `commands/<name>.js`, or `commands/<group>/<name>.js`, default-exporting the class. Declare `requiresProject` if it runs inside a project, or `requiresTooling` if it calls the project's Kixx code.
 2. Import the class in `commands/index.js` and add it to the map under its name. For a new group, add the group to `groups`.
 3. Write its test in `test/commands/`, at the mirrored path. Construct the class with a captured `output` and fakes; assert on what it returns, writes, and throws.
 
@@ -302,4 +343,6 @@ node devkit/run-linter.js devkit
 
 Shared logic belongs in `lib/`, not in a command module. A command should read as the wiring between parsed arguments, loaded settings, and a library call.
 
-Modules under `devkit/` never import from outside `devkit/` (the package is published stand-alone). The one exception is `test/conformance/`, which may read the repository's core.
+Modules under `devkit/` never import from outside `devkit/` (the package is published stand-alone). At run time the only way out is the tooling loader. The one exception in tests is `test/conformance/`, which may read the repository's core.
+
+When you try a command by hand, pass a project directory, such as one built with `node tools/build-project.js tmp/core-only`. This repository's root holds `kixx/plugin.json`, so from inside the repository, outside a built project, `kixx-dev` finds the repository root as the project. Never run `kixx-dev generate` there: it would write five generated files at the repository root.

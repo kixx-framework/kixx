@@ -8,6 +8,8 @@ export default class LocalListCommand {
 
     static description = 'List the local instances in the target with their port, seeded state, and running state';
 
+    static requiresProject = true;
+
     static options = {
         target: TARGET_OPTION,
     };

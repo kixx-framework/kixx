@@ -100,7 +100,10 @@ Use `before` when a group intentionally exercises one setup/action/result across
 
 Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/content-contract.test.js` passes a devkit-composed Release manifest to core's validator).
 
+`conformance/project-tooling.test.js` runs the devkit against core as a project has it: it builds a real project in a temporary directory (the skeleton, with this repository's core as its `kixx/`), runs `kixx-dev generate` in process with the real tooling loader, and compares what was written with what the project's own generator renders. `conformance/built-project.js` builds that project. It is not a test, and it lives there because it reads core; `test/kixx-dev.test.js` imports it to run `generate` in a child process.
+
 - Never write into `kixx/`. Use an overlay or in-memory `fileSystem` when a test needs a generated file.
+- Never run `generate` with the working directory inside this repository: its root holds `kixx/plugin.json`, so the CLI would find the repository itself. Pass a temporary project directory.
 - Compare devkit's result with core's result rather than restating core's rules in the test.
 - `test/` is excluded from both published packages, so these imports never ship.
 
@@ -271,6 +274,10 @@ files, so a helper module is never collected as a suite.
 
 - `capture-output.js`: an `output` stream that records writes.
 - `memory-file-system.js`: an in-memory text file system.
+- `temporary-project.js`: `withTemporaryDirectory(fn)` makes and removes a
+  temporary directory, and `writeProjectMarker(directory, { version })` writes
+  the `kixx/plugin.json` that makes a directory a project to the CLI. Use them
+  for a `requiresProject` command; pass a fake loader when it needs tooling.
 - `fake-cloudflare-client.js`: a recording Cloudflare client for
   `create-worker-version`; any endpoint outside its allowed set throws, and
   `forbiddenCalls()` reports it.

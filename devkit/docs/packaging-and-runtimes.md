@@ -11,7 +11,8 @@ Both install the `kixx-dev` executable from `kixx-dev.js`.
 Stand-alone Package
 -------------------
 
-- **No imports outside `devkit/`.** The published package contains only `devkit/`. `test/conformance/` is the one exception, and tests are never published.
+- **No imports outside `devkit/`.** The published package contains only `devkit/`. `test/conformance/` is the one exception, and tests are never published. `test/import-hygiene.test.js` checks every static import of `kixx-dev.js`, `commands/`, and `lib/`: a relative one stays inside `devkit/`, and a bare one is a `node:` built-in.
+- **Framework logic is loaded from the project at run time.** `lib/project/load-project-tooling.js` imports three modules of the project's own `kixx/` by file URL. It is the only module with a dynamic `import()`. See "Framework Logic Comes From the Project" in `docs/architecture.md`.
 - **No runtime dependencies.** Only `node:` built-ins and vendored code. `kixx-test` and `kixx-linting` are dev dependencies.
 - **Vendored code** lives in `lib/vendor/` (`acorn`, `kixx-assert`), unmodified, with its license. The version and digest of each copy are recorded in the repository's `vendored-code.json`, and upgrades follow `docs/vendored-code.md` at the repository root. The Kixx-written acorn wrapper is `lib/parse-javascript.js`. The linter skips `lib/vendor/`.
 - **The project skeleton** lives in `templates/project/` and ships as data: nothing in the devkit imports it. Its files import core as `./kixx/...`, which only a built project has. The linter skips `templates/`. Its `.gitignore` is stored as `gitignore`, because npm leaves `.gitignore` files out of a package and a real one would act on this repository. See "The project skeleton" in `README.md`.
@@ -55,7 +56,14 @@ The JSR install grants `-RWNE --allow-sys=homedir --allow-run`. The README expla
 
 `test/kixx-dev.test.js` runs the entry point on Deno with exactly these permissions, so it fails if the CLI needs more.
 
-Only `kixx-dev dev start`, `kixx-dev local seed`, and `kixx-dev local start` run project code (the app's `node-server.js`, in a child process). Every other command reads project files (such as `cloudflare-config.jsonc`) as data. Keep it that way.
+The CLI runs project code in two ways, and no other:
+
+- `kixx-dev dev start` and `kixx-dev local start` run the app's `node-server.js` in a child process.
+- A command that declares `requiresTooling` (today `kixx-dev generate`) imports the project's own Kixx tooling into the CLI's process: `kixx/tooling/mod.js` and two adapter modules under `kixx/adapters/node/`. It never imports the project's `app/`, `plugins/`, or entry points.
+
+Everything else in a project is read as data: `kixx/plugin.json` for discovery and the version gate, the `.kixx/` settings, and files such as `cloudflare-config.jsonc`. Keep it that way.
+
+The dynamic import of a local file needs only `-R`, which the install already grants. `test/kixx-dev.test.js` proves it: under Deno it runs `generate` against a real project in a child process with exactly the installed permissions.
 
 `--allow-run` covers two things: the local `git` binary, which no code runs yet, and that app child process. `node:child_process` is imported only by `lib/devserver/app-process.js`, and `test/import-hygiene.test.js` pins the list. A new module that starts a process must be added there on purpose.
 

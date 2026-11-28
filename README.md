@@ -102,8 +102,9 @@ Kixx Devkit
 
 The Kixx Devkit lives in `devkit/`. It provides the `kixx-dev` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
 
-Every command supports `--help` and `--json`, and exits with a code from one documented table (`devkit/commands/README.md`). In this version you can:
+Every command supports `--help` and `--json`, and exits with a code from one documented table (`devkit/commands/README.md`). It finds your project by its `kixx/plugin.json`, and loads the framework's own logic from your project's `kixx/`, so one `kixx-dev` works across project versions. In this version you can:
 
+- `kixx-dev generate` - Rewrite your project's generated files after you change a manifest.
 - `kixx-dev dev` - Run your app locally. It restarts when you change the code.
 - `kixx-dev local` - Run throwaway local instances with writable data.
 

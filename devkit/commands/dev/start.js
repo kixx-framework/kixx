@@ -16,6 +16,8 @@ export default class DevStartCommand {
         error page shows when it fails to start.
     `;
 
+    static requiresProject = true;
+
     static options = {
         port: {
             type: 'string',

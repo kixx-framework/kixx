@@ -8,6 +8,8 @@ export default class LocalDestroyCommand {
 
     static description = 'Delete a stopped local instance and all of its data';
 
+    static requiresProject = true;
+
     static positionals = [ NAME_POSITIONAL ];
 
     static options = {

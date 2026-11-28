@@ -10,7 +10,7 @@ Module paths here are from core's directory, which is `kixx/` in a project.
 
 ## Compiling a Project
 
-A tool on Node.js or Deno loads three modules from the project's own `kixx/`:
+A tool on Node.js or Deno loads three modules from the project's own `kixx/`. The `kixx-dev` CLI loads exactly these, at run time, and a project regenerates its generated files with `kixx-dev generate`, which calls `writeProjectFiles()` from the same `tooling/mod.js`:
 
 | Module | What it gives |
 |---|---|

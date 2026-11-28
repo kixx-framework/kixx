@@ -39,12 +39,10 @@ describe('ConfigLoader', ({ it }) => {
         assertEqual('scalar.child', missing[2]);
     });
 
-    it('merges home and project layers without reading the filesystem', async () => {
+    it('merges the home layer under the project layer', async () => {
         await withMockTracker(async (tracker) => {
             const homeDirectory = path.resolve('/home/tester');
             const projectDirectory = path.resolve('/work/project');
-            const startDirectory = path.join(projectDirectory, 'src');
-            const projectConfigDirectory = path.join(projectDirectory, '.kixx');
             const fileContents = new Map([
                 [ path.join(homeDirectory, '.kixx', 'config.json'), JSON.stringify({
                     list: [ 'home' ],
@@ -73,16 +71,12 @@ describe('ConfigLoader', ({ it }) => {
                 }) ],
             ]);
 
-            tracker.method(fsp, 'stat', async (filepath) => {
-                return makeStats(filepath === projectConfigDirectory);
-            });
             tracker.method(fsp, 'readFile', async (filepath) => {
                 return fileContents.get(filepath);
             });
 
-            const result = await loadConfiguration({ startDirectory, homeDirectory });
+            const result = await loadConfiguration({ projectDirectory, homeDirectory });
 
-            assertEqual(projectDirectory, result.projectDirectory);
             assertEqual('home.example', result.config.service.host);
             assertEqual(443, result.config.service.port);
             assertEqual(false, result.config.enabled);
@@ -90,15 +84,39 @@ describe('ConfigLoader', ({ it }) => {
             assertEqual('project', result.config.list[0]);
             assertEqual('project-account', result.secrets.cloudflare.accountId);
             assertEqual('home-token', result.secrets.cloudflare.apiToken);
+
+            assertEqual(2, result.configFilepaths.length);
+            assertEqual(path.join(homeDirectory, '.kixx', 'config.json'), result.configFilepaths[0]);
+            assertEqual(path.join(projectDirectory, '.kixx', 'config.json'), result.configFilepaths[1]);
+            assertEqual(path.join(projectDirectory, '.kixx', 'secrets.json'), result.secretsFilepaths[1]);
+        });
+    });
+
+    it('never searches for the project', async () => {
+        await withMockTracker(async (tracker) => {
+            const stat = tracker.method(fsp, 'stat', async () => makeStats(true));
+            const readdir = tracker.method(fsp, 'readdir', async () => []);
+
+            tracker.method(fsp, 'readFile', async () => '{}');
+
+            const result = await loadConfiguration({
+                projectDirectory: path.resolve('/work/project/src'),
+                homeDirectory: path.resolve('/home/tester'),
+            });
+
+            // The directory it was given is the project layer, as it is.
+            assertEqual(path.resolve('/work/project/src/.kixx/config.json'), result.configFilepaths[1]);
+            assertEqual(0, stat.mock.callCount());
+            assertEqual(0, readdir.mock.callCount());
+            assert(!Object.hasOwn(result, 'projectDirectory'), 'returns no projectDirectory');
         });
     });
 
     it('deeply freezes merged configuration', async () => {
         await withMockTracker(async (tracker) => {
             const homeDirectory = path.resolve('/home/tester');
-            const startDirectory = path.resolve('/work/project');
+            const projectDirectory = path.resolve('/work/project');
 
-            tracker.method(fsp, 'stat', async () => makeStats(false));
             tracker.method(fsp, 'readFile', async (filepath) => {
                 if (filepath.endsWith('config.json')) {
                     return JSON.stringify({ nested: { values: [ 'one' ] } });
@@ -106,7 +124,7 @@ describe('ConfigLoader', ({ it }) => {
                 return JSON.stringify({ nested: { token: 'secret' } });
             });
 
-            const result = await loadConfiguration({ startDirectory, homeDirectory });
+            const result = await loadConfiguration({ projectDirectory, homeDirectory });
 
             assert(Object.isFrozen(result.config));
             assert(Object.isFrozen(result.config.nested));
@@ -119,20 +137,19 @@ describe('ConfigLoader', ({ it }) => {
     it('treats missing configuration files as empty layers', async () => {
         await withMockTracker(async (tracker) => {
             const homeDirectory = path.resolve('/home/tester');
-            const startDirectory = path.resolve('/work/project');
+            const projectDirectory = path.resolve('/work/project');
 
-            tracker.method(fsp, 'stat', async () => makeStats(false));
+            // A project with no .kixx directory, and a home with none either.
             tracker.method(fsp, 'readFile', async () => {
                 throw makeFileSystemError('ENOENT', 'file does not exist');
             });
 
-            const result = await loadConfiguration({ startDirectory, homeDirectory });
+            const result = await loadConfiguration({ projectDirectory, homeDirectory });
 
-            assertEqual(startDirectory, result.projectDirectory);
             assertEqual(0, Object.keys(result.config).length);
             assertEqual(0, Object.keys(result.secrets).length);
-            assertEqual(1, result.configFilepaths.length);
-            assertEqual(1, result.secretsFilepaths.length);
+            assertEqual(2, result.configFilepaths.length);
+            assertEqual(2, result.secretsFilepaths.length);
         });
     });
 
@@ -140,12 +157,11 @@ describe('ConfigLoader', ({ it }) => {
         await withMockTracker(async (tracker) => {
             const homeDirectory = path.resolve('/home/tester');
 
-            tracker.method(fsp, 'stat', async () => makeStats(false));
             tracker.method(fsp, 'readFile', async () => '{ invalid json');
 
             const caught = await catchAsyncError(() => {
                 return loadConfiguration({
-                    startDirectory: path.resolve('/work/project'),
+                    projectDirectory: path.resolve('/work/project'),
                     homeDirectory,
                 });
             });
@@ -162,9 +178,6 @@ describe('ConfigLoader', ({ it }) => {
             const homeDirectory = path.resolve('/home/tester');
             const projectDirectory = path.resolve('/work/project');
 
-            tracker.method(fsp, 'stat', async (filepath) => {
-                return makeStats(filepath === path.join(projectDirectory, '.kixx'));
-            });
             tracker.method(fsp, 'readFile', async (filepath) => {
                 if (filepath === path.join(projectDirectory, '.kixx', 'secrets.json')) {
                     return '[ "not", "an", "object" ]';
@@ -173,7 +186,7 @@ describe('ConfigLoader', ({ it }) => {
             });
 
             const caught = await catchAsyncError(() => {
-                return loadConfiguration({ startDirectory: projectDirectory, homeDirectory });
+                return loadConfiguration({ projectDirectory, homeDirectory });
             });
 
             assert(caught, 'expected an error to be thrown');
@@ -183,28 +196,33 @@ describe('ConfigLoader', ({ it }) => {
         });
     });
 
-    it('stops the project search at the home directory', async () => {
+    it('loads the one layer once for a project at the home directory', async () => {
         await withMockTracker(async (tracker) => {
             const homeDirectory = path.resolve('/home/tester');
-            const startDirectory = path.join(homeDirectory, 'code');
-            const statCalls = [];
+            const read = [];
 
-            tracker.method(fsp, 'stat', async (filepath) => {
-                statCalls.push(filepath);
-                return makeStats(true);
+            tracker.method(fsp, 'readFile', async (filepath) => {
+                read.push(filepath);
+                return '{"color":"red"}';
             });
-            tracker.method(fsp, 'readFile', async () => '{}');
 
-            const result = await loadConfiguration({ startDirectory, homeDirectory });
+            const result = await loadConfiguration({ projectDirectory: homeDirectory, homeDirectory });
 
-            assertEqual(startDirectory, result.projectDirectory);
-
-            const homeOnly = await loadConfiguration({ startDirectory: homeDirectory, homeDirectory });
-
-            assertEqual(homeDirectory, homeOnly.projectDirectory);
-            assertEqual(1, homeOnly.configFilepaths.length);
-            assert(!statCalls.includes(path.join(homeDirectory, '.kixx')), 'home .kixx used as a project layer');
+            assertEqual('red', result.config.color);
+            assertEqual(1, result.configFilepaths.length);
+            assertEqual(1, result.secretsFilepaths.length);
+            assertEqual(2, read.length);
         });
+    });
+
+    it('requires both directories', async () => {
+        const homeDirectory = path.resolve('/home/tester');
+
+        const withoutProject = await catchAsyncError(() => loadConfiguration({ homeDirectory }));
+        const withoutHome = await catchAsyncError(() => loadConfiguration({ projectDirectory: homeDirectory }));
+
+        assertEqual('AssertionError', withoutProject.name);
+        assertEqual('AssertionError', withoutHome.name);
     });
 });
 

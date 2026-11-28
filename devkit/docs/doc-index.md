@@ -4,13 +4,13 @@ Paths are relative to `devkit/`.
 
 docs/architecture.md
 
-How `kixx-dev.js`, the runner (`lib/run-cli.js`) and its modules, `commands/`, and `lib/` divide the work; a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
+How `kixx-dev.js`, the runner (`lib/run-cli.js`) and its modules, `commands/`, and `lib/` divide the work; how framework logic is loaded from the project's own `kixx/` (discovery, the version gate, the tooling loader); a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver, project); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
 
 ### Commands
 
 commands/README.md
 
-The command contract: one-word and two-word names, the flat registry and `groups`, how a command line is read, the static `description`, `options`, `positionals`, `requiredConfig`, `requiredSecrets`, and `available`, constructor arguments, what `run()` returns, the `--json` envelope schema, help as data, the exit-code table and error mapping, placeholders, and the checklist for adding a command.
+The command contract: one-word and two-word names, the flat registry and `groups`, how a command line is read, finding the project (`kixx/plugin.json`, the version gate, settings, and the project's tooling), the static `description`, `options`, `positionals`, `requiredConfig`, `requiredSecrets`, `requiresProject`, `requiresTooling`, and `available`, constructor arguments, what `run()` returns, the `--json` envelope schema, help as data, the exit-code table and error mapping, placeholders, and the checklist for adding a command.
 
 ### Code Style Guide
 
@@ -28,13 +28,13 @@ JSDoc conventions: supported tags, documenting the public contract, no JSDoc on 
 
 docs/error-handling.md
 
-Operator errors (`UsageError`, printed without a stack, exit 2) versus defects (printed in full, exit 1); subclasses with their own exit code; errors from the project's own Kixx code; assertions and turning them into config errors at the boundary; the Admin, Publishing, Cloudflare, and bundle error classes and their typed subclasses; Cloudflare auth guidance; retry rules for reads and writes; reporting partial success; and wrapping with `cause`.
+Operator errors (`UsageError`, printed without a stack, exit 2) versus defects (printed in full, exit 1); subclasses with their own exit code (`ProjectNotFoundError`, `UnsupportedProjectVersionError`, `CommandNotAvailableError`); errors from the project's own Kixx code; assertions and turning them into config errors at the boundary; the Admin, Publishing, Cloudflare, and bundle error classes and their typed subclasses; Cloudflare auth guidance; retry rules for reads and writes; reporting partial success; and wrapping with `cause`.
 
 ### Packaging and Runtimes
 
 docs/packaging-and-runtimes.md
 
-Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules, vendored code, keeping `package.json` and `deno.json` in sync, Node.js and Deno differences, Deno install permissions, and the injectable test seams (`output`, `fileSystem`, `fetch`, `now`).
+Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules, loading framework logic from the project at run time, what project code the CLI runs, vendored code, keeping `package.json` and `deno.json` in sync, Node.js and Deno differences, Deno install permissions, and the injectable test seams (`output`, `fileSystem`, `fetch`, `now`).
 
 ### Unit Testing Guide
 

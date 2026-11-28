@@ -1,4 +1,5 @@
 import DevStartCommand from './dev/start.js';
+import GenerateCommand from './generate.js';
 import LocalCreateCommand from './local/create.js';
 import LocalDestroyCommand from './local/destroy.js';
 import LocalListCommand from './local/list.js';
@@ -19,6 +20,7 @@ export const groups = Object.freeze({
 // rather than reading this directory, keep every command in the module graph
 // when the CLI is loaded from a registry URL or compiled into one executable.
 export default Object.freeze({
+    'generate': GenerateCommand,
     'dev start': DevStartCommand,
     'local create': LocalCreateCommand,
     'local start': LocalStartCommand,

@@ -21,6 +21,8 @@ export default class LocalStartCommand {
         publish.
     `;
 
+    static requiresProject = true;
+
     static positionals = [ NAME_POSITIONAL ];
 
     static options = {

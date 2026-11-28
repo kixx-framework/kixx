@@ -3,6 +3,7 @@
 import os from 'node:os';
 import process from 'node:process';
 import commands, { groups } from './commands/index.js';
+import loadProjectTooling from './lib/project/load-project-tooling.js';
 import runCli from './lib/run-cli.js';
 
 
@@ -16,6 +17,7 @@ runCli({
     stderr: process.stderr,
     commands,
     groups,
+    loadProjectTooling,
 }).then((exitCode) => {
     // Setting the code, rather than exiting, lets pending output flush.
     process.exitCode = exitCode;

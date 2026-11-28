@@ -15,6 +15,8 @@ class PaintCommand {
         in one color
     `;
 
+    static requiresProject = true;
+
     static positionals = [
         { name: 'wall', description: 'Which wall' },
     ];
@@ -63,7 +65,7 @@ describe('render-help', ({ describe }) => {
             assertEqual(true, help.available);
             assertEqual('Paint the named wall in one color', help.description);
             assertEqual('kixx-dev walls paint [options] <wall> [directory]', help.usage);
-            assertEqual(false, help.requiresProject);
+            assertEqual(true, help.requiresProject);
         });
 
         it('lists declared positionals as required, then the optional directory', () => {
@@ -119,21 +121,40 @@ describe('render-help', ({ describe }) => {
         it('uses empty lists for a command that declares nothing', () => {
             const help = describeCommand('bare', BareCommand);
 
-            assertEqual('kixx-dev bare [options] [directory]', help.usage);
-            assertEqual(1, help.positionals.length);
+            assertEqual('kixx-dev bare [options]', help.usage);
+            assertEqual(0, help.positionals.length);
+            assertEqual(false, help.requiresProject);
             assertEqual(0, help.options.length);
             assertEqual(0, help.requiredConfig.length);
             assertEqual(0, help.requiredSecrets.length);
         });
 
-        it('reports requiresProject when the command declares it', () => {
+        it('reports requiresProject, and the directory, for a command that needs tooling', () => {
             const Command = class {
                 static description = 'x';
 
-                static requiresProject = true;
+                static requiresTooling = true;
             };
 
-            assertEqual(true, describeCommand('x', Command).requiresProject);
+            const help = describeCommand('x', Command);
+
+            assertEqual(true, help.requiresProject);
+            assertEqual('kixx-dev x [options] [directory]', help.usage);
+            assertEqual('directory', help.positionals[0].name);
+        });
+
+        it('lists no directory for a command that runs outside a project', () => {
+            const Command = class {
+                static description = 'x';
+
+                static positionals = [ { name: 'name', description: 'Name' } ];
+            };
+
+            const help = describeCommand('x', Command);
+
+            assertEqual(false, help.requiresProject);
+            assertEqual('kixx-dev x [options] <name>', help.usage);
+            assertEqual('name', help.positionals.map(({ name }) => name).join(','));
         });
 
         it('promises a placeholder no arguments', () => {
@@ -163,7 +184,7 @@ describe('render-help', ({ describe }) => {
                 '',
                 'Arguments:',
                 '  wall       Which wall',
-                '  directory  Application directory; defaults to the current directory',
+                '  directory  A directory in the project; defaults to the current directory',
                 '',
                 'Options:',
                 '  -h, --help              Show this help',

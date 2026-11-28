@@ -6,11 +6,15 @@ import { assert, assertEqual, assertMatches } from '../../lib/vendor/kixx-assert
 import runCli from '../../lib/run-cli.js';
 import UsageError from '../../lib/usage-error.js';
 import createPlaceholderCommand from '../../lib/placeholder-command.js';
+import loadProjectTooling from '../../lib/project/load-project-tooling.js';
 import captureOutput from '../helpers/capture-output.js';
+import { withTemporaryDirectory, writeProjectMarker } from '../helpers/temporary-project.js';
 
 
-// No file exists here, so both settings layers load empty.
+// Nothing exists here: no project above it, and no settings in it.
 const EMPTY_DIRECTORY = path.join(os.tmpdir(), 'kixx-dev-run-cli-no-such-directory');
+
+const PROJECT = { requiresProject: true };
 
 
 // A command class that records how it was constructed and called. Its run()
@@ -50,6 +54,7 @@ async function run(argv, commands, options) {
         commands,
         groups: { tools: 'Tools for things' },
         version: '1.2.3',
+        loadProjectTooling: failToLoadTooling,
         ...options,
     });
 
@@ -62,14 +67,27 @@ function parseEnvelope(stdout) {
     return JSON.parse(stdout);
 }
 
-async function withTemporaryDirectory(fn) {
-    const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-run-cli-'));
+// The default loader of these tests: a test that expects tooling passes its
+// own, and every other test proves the loader was never called.
+function failToLoadTooling() {
+    throw new Error('the tooling loader was called');
+}
 
-    try {
-        return await fn(directory);
-    } finally {
-        await fsp.rm(directory, { recursive: true, force: true });
-    }
+// Runs a command line inside a temporary project. `home` is an empty
+// directory beside it unless the function writes to it.
+async function withProject(fn, options) {
+    return await withTemporaryDirectory(async (directory) => {
+        const project = await writeProjectMarker(path.join(directory, 'project'), options);
+        const home = path.join(directory, 'home');
+
+        await fsp.mkdir(home);
+
+        const runInProject = (argv, commands, runOptions) => {
+            return run(argv, commands, { cwd: project, homeDirectory: home, version: '7.0.0', ...runOptions });
+        };
+
+        return await fn({ project, home, run: runInProject });
+    });
 }
 
 
@@ -117,7 +135,7 @@ describe('runCli()', ({ describe }) => {
 
         it('takes the command words from before the first flag only', async () => {
             const Sharpen = makeCommand();
-            const One = makeCommand(null, { options: { fast: { type: 'boolean' } } });
+            const One = makeCommand(null, { ...PROJECT, options: { fast: { type: 'boolean' } } });
 
             // "sharpen" comes after a flag, so it is an argument of "tools".
             const { code, stderr } = await run(
@@ -181,34 +199,366 @@ describe('runCli()', ({ describe }) => {
             assertEqual('a.js', envelope.data.files[0]);
         });
 
-        it('passes the working directory as the project directory', async () => {
-            const Build = makeCommand();
-            await run([ 'build' ], { build: Build });
-
-            assertEqual(EMPTY_DIRECTORY, Build.calls[0].args.projectDirectory);
-            assertEqual(0, Object.keys(Build.calls[0].args.config).length);
-            assertEqual(0, Object.keys(Build.calls[0].args.secrets).length);
-        });
-
-        it('resolves the directory argument against the working directory', async () => {
-            await withTemporaryDirectory(async (directory) => {
-                await fsp.mkdir(path.join(directory, 'app', '.kixx'), { recursive: true });
-                await fsp.writeFile(path.join(directory, 'app', '.kixx', 'config.json'), '{"color":"red"}');
-
-                const Build = makeCommand();
-                const { code } = await run([ 'build', 'app' ], { build: Build }, { cwd: directory });
-
-                assertEqual(0, code);
-                assertEqual(path.join(directory, 'app'), Build.calls[0].args.projectDirectory);
-                assertEqual('red', Build.calls[0].args.config.color);
-            });
-        });
-
         it('passes no Cloudflare config', async () => {
             const Build = makeCommand();
             await run([ 'build' ], { build: Build });
 
             assert(!Object.hasOwn(Build.calls[0].args, 'cloudflareConfig'), 'no cloudflareConfig key');
+        });
+    });
+
+    describe('a command that runs anywhere', ({ it }) => {
+        it('is given its streams and nothing else', async () => {
+            const Build = makeCommand();
+            const { code } = await run([ 'build' ], { build: Build });
+
+            assertEqual(0, code);
+            assertEqual('output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
+        });
+
+        it('runs outside a project', async () => {
+            await withTemporaryDirectory(async (directory) => {
+                const Build = makeCommand();
+                const { code } = await run([ 'build' ], { build: Build }, { cwd: directory, homeDirectory: directory });
+
+                assertEqual(0, code);
+                assertEqual(1, Build.calls.length);
+            });
+        });
+
+        it('takes no directory argument', async () => {
+            const Build = makeCommand();
+            const { code, stderr } = await run([ 'build', '.' ], { build: Build });
+
+            assertEqual(2, code);
+            assertMatches('Unexpected argument ".". This command takes no positional arguments.', stderr);
+            assertEqual(0, Build.calls.length);
+        });
+
+        it('reads no project manifest and no settings, and loads no tooling', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                // All three would fail if the runner touched them.
+                await writeProjectMarker(project, { manifestText: '{ broken' });
+                await fsp.mkdir(path.join(project, '.kixx'));
+                await fsp.writeFile(path.join(project, '.kixx', 'config.json'), '{ broken');
+
+                const commands = { build: makeCommand(), sync: makeCommand(null, { requiresTooling: true }) };
+
+                const ran = await runInProject([ 'build' ], commands);
+                const help = await runInProject([ 'sync', '--help' ], commands);
+                const version = await runInProject([ 'sync', '--version' ], commands);
+                const topLevel = await runInProject([ '--help' ], commands);
+
+                assertEqual(0, ran.code);
+                assertEqual('', ran.stderr);
+                assertEqual(0, help.code);
+                assertMatches(/^Usage: kixx-dev sync \[options\] \[directory\]\n/, help.stdout);
+                assertEqual(0, version.code);
+                assertEqual(0, topLevel.code);
+                assertEqual(0, commands.sync.calls.length);
+            });
+        });
+    });
+
+    describe('a command that requires a project', ({ it }) => {
+        it('is given the project directory, both settings, and its streams', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                const Build = makeCommand(null, PROJECT);
+                const { code, stderr } = await runInProject([ 'build' ], { build: Build });
+
+                assertEqual(0, code);
+                assertEqual('', stderr);
+                assertEqual('projectDirectory,config,secrets,output,stdout,stderr', Object.keys(Build.calls[0].args).join(','));
+                assertEqual(project, Build.calls[0].args.projectDirectory);
+                assertEqual(0, Object.keys(Build.calls[0].args.config).length);
+                assertEqual(0, Object.keys(Build.calls[0].args.secrets).length);
+            });
+        });
+
+        it('finds the project root from a subdirectory of it', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                const deep = path.join(project, 'app', 'pages');
+
+                await fsp.mkdir(deep, { recursive: true });
+
+                const Build = makeCommand(null, PROJECT);
+                const { code } = await runInProject([ 'build' ], { build: Build }, { cwd: deep });
+
+                assertEqual(0, code);
+                assertEqual(project, Build.calls[0].args.projectDirectory);
+            });
+        });
+
+        it('starts the search at the directory argument, resolved against the working directory', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                await fsp.mkdir(path.join(project, 'app'));
+
+                const Build = makeCommand(null, PROJECT);
+                const cwd = path.dirname(project);
+
+                const root = await runInProject([ 'build', 'project' ], { build: Build }, { cwd });
+                const inside = await runInProject([ 'build', 'project/app' ], { build: Build }, { cwd });
+                const absolute = await runInProject([ 'build', project ], { build: Build }, { cwd: EMPTY_DIRECTORY });
+
+                assertEqual('0,0,0', [ root.code, inside.code, absolute.code ].join(','));
+
+                for (const call of Build.calls) {
+                    assertEqual(project, call.args.projectDirectory);
+                }
+            });
+        });
+
+        it('exits 3 as ProjectNotFound outside a project, naming the start directory', async () => {
+            await withTemporaryDirectory(async (directory) => {
+                const Build = makeCommand(null, PROJECT);
+                const options = { cwd: directory, homeDirectory: directory };
+
+                const text = await run([ 'build' ], { build: Build }, options);
+                const json = await run([ 'build', '--json' ], { build: Build }, options);
+                const envelope = parseEnvelope(json.stdout);
+
+                assertEqual(3, text.code);
+                assertEqual('', text.stdout);
+                assertMatches(directory, text.stderr);
+                assertMatches('inside a Kixx project', text.stderr);
+                assert(!/\n\s+at /.test(text.stderr), 'printed a stack');
+
+                assertEqual(3, json.code);
+                assertEqual(false, envelope.ok);
+                assertEqual('build', envelope.command);
+                assertEqual('ProjectNotFound', envelope.error.code);
+                assertEqual(3, envelope.error.exitCode);
+                assertEqual('', json.stderr);
+                assertEqual(0, Build.calls.length);
+            });
+        });
+
+        it('does not take a .kixx directory for a project', async () => {
+            await withTemporaryDirectory(async (directory) => {
+                await fsp.mkdir(path.join(directory, '.kixx'));
+                await fsp.writeFile(path.join(directory, '.kixx', 'config.json'), '{"color":"red"}');
+
+                const { code } = await run(
+                    [ 'build' ],
+                    { build: makeCommand(null, PROJECT) },
+                    { cwd: directory, homeDirectory: EMPTY_DIRECTORY },
+                );
+
+                assertEqual(3, code);
+            });
+        });
+
+        it('merges the home settings under the project settings', async () => {
+            await withProject(async ({ project, home, run: runInProject }) => {
+                await fsp.mkdir(path.join(home, '.kixx'));
+                await fsp.mkdir(path.join(project, '.kixx'));
+                await fsp.writeFile(path.join(home, '.kixx', 'config.json'), '{"color":"red","size":1}');
+                await fsp.writeFile(path.join(project, '.kixx', 'config.json'), '{"color":"blue"}');
+                await fsp.writeFile(path.join(home, '.kixx', 'secrets.json'), '{"token":"home-token"}');
+
+                const Build = makeCommand(null, PROJECT);
+                const { code } = await runInProject([ 'build' ], { build: Build });
+
+                assertEqual(0, code);
+                assertEqual('blue', Build.calls[0].args.config.color);
+                assertEqual(1, Build.calls[0].args.config.size);
+                assertEqual('home-token', Build.calls[0].args.secrets.token);
+            });
+        });
+
+        it('loads the settings once for a project at the home directory', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                await fsp.mkdir(path.join(project, '.kixx'));
+                await fsp.writeFile(path.join(project, '.kixx', 'config.json'), '{"color":"red"}');
+
+                const Build = makeCommand(null, { ...PROJECT, requiredConfig: [ 'size' ] });
+                const { code, stderr } = await runInProject([ 'build' ], { build: Build }, { homeDirectory: project });
+
+                // The missing key lists the one file, once.
+                assertEqual(2, code);
+                assertEqual(1, stderr.split(path.join(project, '.kixx', 'config.json')).length - 1);
+            });
+        });
+    });
+
+    describe('the project version gate', ({ it }) => {
+        it('runs a project at the oldest supported version, with or without a prerelease tag', async () => {
+            for (const version of [ '7.0.0-alpha.0', '7.0.0' ]) {
+                // eslint-disable-next-line no-await-in-loop
+                await withProject(async ({ run: runInProject }) => {
+                    const Build = makeCommand(null, PROJECT);
+                    const { code, stderr } = await runInProject([ 'build' ], { build: Build }, { version: '7.0.0-alpha.0' });
+
+                    assertEqual(0, code, version);
+                    assertEqual('', stderr, version);
+                    assertEqual(1, Build.calls.length, version);
+                }, { version });
+            }
+        });
+
+        it('exits 3 for another major version, naming both versions and the action', async () => {
+            const cases = [
+                [ '6.9.0', 'Install kixx-dev version 6' ],
+                [ '8.0.0', 'Upgrade kixx-dev to version 8' ],
+            ];
+
+            for (const [ version, action ] of cases) {
+                // eslint-disable-next-line no-await-in-loop
+                await withProject(async ({ run: runInProject }) => {
+                    const Build = makeCommand(null, PROJECT);
+                    const options = { version: '7.0.0-alpha.0' };
+
+                    const text = await runInProject([ 'build' ], { build: Build }, options);
+                    const json = await runInProject([ 'build', '--json' ], { build: Build }, options);
+                    const envelope = parseEnvelope(json.stdout);
+
+                    assertEqual(3, text.code, version);
+                    assertEqual('', text.stdout);
+                    assert(!/\n\s+at /.test(text.stderr), 'printed a stack');
+
+                    assertEqual(3, json.code, version);
+                    assertEqual('UnsupportedProjectVersion', envelope.error.code);
+                    assertEqual(3, envelope.error.exitCode);
+                    assertMatches(`Kixx ${ version }`, envelope.error.message);
+                    assertMatches('kixx-dev 7.0.0-alpha.0', envelope.error.message);
+                    assertMatches(action, envelope.error.message);
+                    assertEqual(0, Build.calls.length);
+                }, { version });
+            }
+        });
+
+        it('exits 3 for a manifest that is not JSON or has no version', async () => {
+            for (const manifestText of [ '{ broken', '{"name":"kixx"}', '{"version":"seven"}' ]) {
+                // eslint-disable-next-line no-await-in-loop
+                await withProject(async ({ project, run: runInProject }) => {
+                    const Build = makeCommand(null, PROJECT);
+                    const { code, stdout } = await runInProject([ 'build', '--json' ], { build: Build });
+                    const envelope = parseEnvelope(stdout);
+
+                    assertEqual(3, code, manifestText);
+                    assertEqual('UnsupportedProjectVersion', envelope.error.code);
+                    assertMatches(path.join(project, 'kixx', 'plugin.json'), envelope.error.message);
+                    assertEqual(0, Build.calls.length);
+                }, { manifestText });
+            }
+        });
+
+        it('runs a same-major project newer than the CLI, with one line on stderr', async () => {
+            await withProject(async ({ run: runInProject }) => {
+                const Build = makeCommand(() => ({ built: true }), PROJECT);
+
+                const text = await runInProject([ 'build' ], { build: Build }, { version: '7.1.0' });
+                const json = await runInProject([ 'build', '--json' ], { build: Build }, { version: '7.1.0' });
+
+                const line = 'The project uses Kixx 7.2.0, which is newer than kixx-dev 7.1.0. '
+                    + 'Upgrade kixx-dev if something fails.\n';
+
+                assertEqual(0, text.code);
+                assertEqual('', text.stdout);
+                assertEqual(line, text.stderr);
+
+                assertEqual(0, json.code);
+                assertEqual(line, json.stderr);
+                assertEqual('{"ok":true,"command":"build","data":{"built":true}}\n', json.stdout);
+                assertEqual(2, Build.calls.length);
+            }, { version: '7.2.0' });
+        });
+
+        it('runs before the settings are read', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                await fsp.mkdir(path.join(project, '.kixx'));
+                await fsp.writeFile(path.join(project, '.kixx', 'config.json'), '{ broken');
+
+                const { code, stderr } = await runInProject([ 'build' ], { build: makeCommand(null, PROJECT) });
+
+                assertEqual(3, code);
+                assertMatches('Kixx 6.0.0', stderr);
+            }, { version: '6.0.0' });
+        });
+
+        it('runs for a command that needs tooling, before the tooling is loaded', async () => {
+            await withProject(async ({ run: runInProject }) => {
+                const Sync = makeCommand(null, { requiresTooling: true });
+                const { code } = await runInProject([ 'sync' ], { sync: Sync });
+
+                // The default loader of these tests throws, which would exit 1.
+                assertEqual(3, code);
+            }, { version: '8.0.0' });
+        });
+    });
+
+    describe('a command that requires tooling', ({ it }) => {
+        it('is given what the loader resolves for the project directory', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                const tooling = Object.freeze({ tooling: {} });
+                const loaded = [];
+
+                const Sync = makeCommand(null, { requiresTooling: true });
+
+                const { code } = await runInProject([ 'sync' ], { sync: Sync }, {
+                    loadProjectTooling: async (projectDirectory) => {
+                        loaded.push(projectDirectory);
+                        return tooling;
+                    },
+                });
+
+                assertEqual(0, code);
+                assertEqual(project, loaded.join(','));
+                assertEqual(tooling, Sync.calls[0].args.tooling);
+                assertEqual(project, Sync.calls[0].args.projectDirectory);
+                assertEqual(
+                    'projectDirectory,config,secrets,tooling,output,stdout,stderr',
+                    Object.keys(Sync.calls[0].args).join(','),
+                );
+            });
+        });
+
+        it('takes the directory argument', async () => {
+            await withProject(async ({ project, run: runInProject }) => {
+                const Sync = makeCommand(null, { requiresTooling: true });
+
+                const { code } = await runInProject([ 'sync', project ], { sync: Sync }, {
+                    cwd: EMPTY_DIRECTORY,
+                    loadProjectTooling: async () => ({}),
+                });
+
+                assertEqual(0, code);
+                assertEqual(project, Sync.calls[0].args.projectDirectory);
+            });
+        });
+
+        it('loads no tooling for a command that only requires the project', async () => {
+            await withProject(async ({ run: runInProject }) => {
+                const Build = makeCommand(null, PROJECT);
+                const { code } = await runInProject([ 'build' ], { build: Build });
+
+                assertEqual(0, code);
+                assert(!Object.hasOwn(Build.calls[0].args, 'tooling'), 'no tooling key');
+            });
+        });
+
+        it('exits 3, naming the file, when the project has no tooling module', async () => {
+            await withProject(async ({ run: runInProject }) => {
+                const Sync = makeCommand(null, { requiresTooling: true });
+
+                // The real loader, against a project that holds only its manifest.
+                const { code, stdout } = await runInProject([ 'sync', '--json' ], { sync: Sync }, { loadProjectTooling });
+                const envelope = parseEnvelope(stdout);
+
+                assertEqual(3, code);
+                assertEqual('UnsupportedProjectVersion', envelope.error.code);
+                assertMatches('kixx/tooling/mod.js', envelope.error.message);
+                assertEqual(0, Sync.calls.length);
+            });
+        });
+
+        it('exits 1 when the tooling fails to load for another reason', async () => {
+            await withProject(async ({ run: runInProject }) => {
+                const { code, stderr } = await runInProject([ 'sync' ], { sync: makeCommand(null, { requiresTooling: true }) });
+
+                assertEqual(1, code);
+                assertMatches('the tooling loader was called', stderr);
+            });
         });
     });
 
@@ -437,7 +787,7 @@ describe('runCli()', ({ describe }) => {
         });
 
         it('exits 2 for a directory argument that does not exist', async () => {
-            const { code, stderr } = await run([ 'build', 'no-such-directory' ], { build: makeCommand() });
+            const { code, stderr } = await run([ 'build', 'no-such-directory' ], { build: makeCommand(null, PROJECT) });
 
             assertEqual(2, code);
             assertMatches(path.join(EMPTY_DIRECTORY, 'no-such-directory'), stderr);
@@ -445,30 +795,30 @@ describe('runCli()', ({ describe }) => {
         });
 
         it('exits 2 for a missing required setting, naming the key and the files', async () => {
-            const Build = makeCommand(null, {
-                requiredConfig: [ 'paint.color' ],
-                requiredSecrets: [ 'paint.token' ],
+            await withProject(async ({ project, home, run: runInProject }) => {
+                const Build = makeCommand(null, {
+                    ...PROJECT,
+                    requiredConfig: [ 'paint.color' ],
+                    requiredSecrets: [ 'paint.token' ],
+                });
+
+                const { code, stderr } = await runInProject([ 'build' ], { build: Build });
+
+                assertEqual(2, code);
+                assertMatches('Missing required configuration settings for "build":', stderr);
+                assertMatches('  paint.color', stderr);
+                assertMatches(path.join(home, '.kixx', 'config.json'), stderr);
+                assertMatches(path.join(project, '.kixx', 'config.json'), stderr);
+                assertEqual(0, Build.calls.length);
             });
-
-            const { code, stderr } = await run([ 'build' ], { build: Build });
-
-            assertEqual(2, code);
-            assertMatches('Missing required configuration settings for "build":', stderr);
-            assertMatches('  paint.color', stderr);
-            assertMatches(path.join(EMPTY_DIRECTORY, '.kixx', 'config.json'), stderr);
-            assertEqual(0, Build.calls.length);
         });
 
         it('exits 2 for malformed settings', async () => {
-            await withTemporaryDirectory(async (directory) => {
-                await fsp.mkdir(path.join(directory, '.kixx'));
-                await fsp.writeFile(path.join(directory, '.kixx', 'config.json'), '{ broken');
+            await withProject(async ({ project, run: runInProject }) => {
+                await fsp.mkdir(path.join(project, '.kixx'));
+                await fsp.writeFile(path.join(project, '.kixx', 'config.json'), '{ broken');
 
-                const { code, stderr } = await run(
-                    [ 'build' ],
-                    { build: makeCommand() },
-                    { cwd: directory, homeDirectory: directory },
-                );
+                const { code, stderr } = await runInProject([ 'build' ], { build: makeCommand(null, PROJECT) });
 
                 assertEqual(2, code);
                 assertMatches('Unable to parse JSON', stderr);
@@ -525,6 +875,7 @@ describe('runCli()', ({ describe }) => {
     describe('--help', ({ it }) => {
         const commands = {
             'build': makeCommand(null, {
+                ...PROJECT,
                 description: 'Build the thing',
                 options: { target: { type: 'string', short: 't', description: 'Where to build' } },
                 positionals: [ { name: 'name', description: 'Name of the thing' } ],

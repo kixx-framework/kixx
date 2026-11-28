@@ -18,6 +18,8 @@ export default class LocalCreateCommand {
         and generated secrets in <target>/instances/<name>/
     `;
 
+    static requiresProject = true;
+
     static positionals = [ NAME_POSITIONAL ];
 
     static options = {

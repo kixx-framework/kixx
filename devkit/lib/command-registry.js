@@ -1,4 +1,4 @@
-import { findPositionalsProblem } from './command-positionals.js';
+import { findPositionalsProblem, requiresProject } from './command-positionals.js';
 import { collapseWhitespace } from './text-wrap.js';
 import {
     isBoolean,
@@ -179,6 +179,12 @@ export function findCommandProblems(Command) {
         problems.push('available must be a boolean');
     }
 
+    for (const key of [ 'requiresProject', 'requiresTooling' ]) {
+        if (!isUndefined(Command[key]) && !isBoolean(Command[key])) {
+            problems.push(`${ key } must be a boolean`);
+        }
+    }
+
     problems.push(...findOptionsProblems(Command.options));
 
     const positionalsProblem = findPositionalsProblem(Command.positionals);
@@ -196,6 +202,11 @@ export function findCommandProblems(Command) {
 
         if (!Array.isArray(keyPaths) || !keyPaths.every((keyPath) => isNonEmptyString(keyPath))) {
             problems.push(`${ key } must be an array of key path strings`);
+        }
+
+        // Settings are loaded only for a command that runs inside a project.
+        if (Array.isArray(keyPaths) && keyPaths.length > 0 && !requiresProject(Command)) {
+            problems.push(`${ key } needs requiresProject, because settings are loaded only inside a project`);
         }
     }
 

@@ -1,4 +1,3 @@
-import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
@@ -7,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from '../lib/vendor/kixx-assert/mod.js';
 import manifest from '../deno.json' with { type: 'json' };
+import { withTemporaryDirectory, writeProjectMarker } from './helpers/temporary-project.js';
+import { GENERATED_FILE_NAMES, buildProject, readGeneratedFiles, removeProject } from './conformance/built-project.js';
 
 
 const ENTRY_POINT = fileURLToPath(new URL('../kixx-dev.js', import.meta.url));
@@ -39,6 +40,7 @@ describe('kixx-dev.js entry point', ({ it }) => {
 
         assertEqual(0, code);
         assertMatches(/^Usage: kixx-dev <command>/, stdout);
+        assertMatches(/^ {2}generate {2}/m, stdout);
         assertMatches(/^ {2}dev start {2}/m, stdout);
         assertMatches(/^ {2}local create {2}/m, stdout);
         assertMatches(/^ {6}--json {2}/m, stdout);
@@ -71,14 +73,14 @@ describe('kixx-dev.js entry point', ({ it }) => {
         assertEqual(0, code);
         assertMatches('Usage: kixx-dev local create [options] <name> [directory]', stdout);
         assertMatches(/^Arguments:\n {2}name {7}Instance name/m, stdout);
-        assertMatches(/^ {2}directory {2}Application directory/m, stdout);
+        assertMatches(/^ {2}directory {2}A directory in the project/m, stdout);
         assertMatches(/^ {2}-t, --target <string> {2}/m, stdout);
     }, { timeout: TIMEOUT });
 
     it('runs a kept command against the directory argument', async () => {
-        const directory = await fsp.mkdtemp(path.join(os.tmpdir(), 'kixx-dev-entry-'));
+        await withTemporaryDirectory(async (directory) => {
+            await writeProjectMarker(directory, { version: manifest.version });
 
-        try {
             const text = await runEntryPoint([ 'local', 'list', directory ], { cwd: os.tmpdir() });
             const json = await runEntryPoint([ 'local', 'list', directory, '--json' ], { cwd: os.tmpdir() });
 
@@ -89,10 +91,46 @@ describe('kixx-dev.js entry point', ({ it }) => {
             assertEqual(0, json.code);
             assertMatches('No local instances in', json.stderr);
             assertEqual('local list', JSON.parse(json.stdout).command);
-        } finally {
-            await fsp.rm(directory, { recursive: true, force: true });
-        }
+        });
     }, { timeout: TIMEOUT });
+
+    it('exits 3 outside a project, with the message on stderr and no stack', async () => {
+        await withTemporaryDirectory(async (directory) => {
+            const { code, stdout, stderr } = await runEntryPoint([ 'generate' ], { cwd: directory });
+
+            assertEqual(3, code);
+            assertEqual('', stdout);
+            assertMatches('kixx/plugin.json', stderr);
+            assert(!/\n\s+at /.test(stderr), 'printed a stack');
+        });
+    }, { timeout: TIMEOUT });
+
+    // The whole path, with the real loader: the entry point finds a project
+    // built from the skeleton and this repository's core, imports that
+    // project's own tooling, and runs its generator. On Deno this is also the
+    // proof that the dynamic import needs no permission beyond the installed
+    // set.
+    it('generates a real project\'s files with the project\'s own tooling', async () => {
+        const projectDirectory = await buildProject();
+
+        try {
+            const { code, stdout, stderr } = await runEntryPoint([ 'generate', '--json' ], {
+                cwd: path.join(projectDirectory, 'app'),
+            });
+
+            assertEqual(0, code, stderr);
+
+            const envelope = JSON.parse(stdout);
+
+            assertEqual(true, envelope.ok);
+            assertEqual('generate', envelope.command);
+            assertEqual(projectDirectory, envelope.data.projectDirectory);
+            assertEqual(GENERATED_FILE_NAMES.join(','), envelope.data.files.join(','));
+            assertEqual(5, (await readGeneratedFiles(projectDirectory)).size);
+        } finally {
+            await removeProject(projectDirectory);
+        }
+    }, { timeout: 30000 });
 });
 
 

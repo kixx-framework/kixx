@@ -1,7 +1,8 @@
 /**
  * The command runner: one path from a command line to an exit code, for every
- * command. It owns dispatch, help, argument parsing, settings, the `--json`
- * envelope, and the mapping from a thrown error to an exit code. See
+ * command. It owns dispatch, help, argument parsing, finding the project and
+ * checking its version, settings, the `--json` envelope, and the mapping from
+ * a thrown error to an exit code. See
  * `commands/README.md` for the contract.
  * @module run-cli
  */
@@ -11,9 +12,11 @@ import path from 'node:path';
 import { inspect, parseArgs } from 'node:util';
 import CommandRegistry from './command-registry.js';
 import UsageError from './usage-error.js';
-import { splitPositionals } from './command-positionals.js';
+import { acceptsDirectory, requiresProject, splitPositionals } from './command-positionals.js';
 import { findMissingKeys, loadConfiguration } from './config-loader.js';
 import { EXIT_CODES, EXIT_CODE_BY_ERROR_CODE, describeError } from './exit-codes.js';
+import { requireProject } from './project/find-project.js';
+import { checkProjectVersion, readProjectVersion } from './project/project-version.js';
 import { describeCommand, renderCommandHelp, renderCommandList } from './render-help.js';
 import { wrapText } from './text-wrap.js';
 import { isPlainObject, isUndefined } from './vendor/kixx-assert/mod.js';
@@ -54,12 +57,15 @@ class UnknownCommandError extends UsageError {
  * stdout and errors go to stderr.
  * @param {Object} args
  * @param {string[]} args.argv - Arguments after the program name
- * @param {string} args.cwd - Working directory; a relative directory argument resolves against it
+ * @param {string} args.cwd - Working directory; where the search for a project starts, and what a relative directory argument resolves against
  * @param {string} args.homeDirectory - Directory holding the home settings layer
  * @param {{write: function(string): *}} args.stdout
  * @param {{write: function(string): *}} args.stderr
  * @param {Object<string, Function>} args.commands - Command name to command class
  * @param {Object<string, string>} [args.groups] - Group name to description
+ * @param {function(string): Promise<Object>} [args.loadProjectTooling] - Loads a project's own
+ *   tooling from its directory (`lib/project/load-project-tooling.js`). Called only for a command
+ *   that declares `requiresTooling`.
  * @param {string} [args.version] - Defaults to the version in `deno.json`
  * @returns {Promise<number>} The process exit code
  */
@@ -72,6 +78,7 @@ export default async function runCli(args) {
         stderr,
         commands,
         groups,
+        loadProjectTooling,
         version = manifest.version,
     } = args ?? {};
 
@@ -89,6 +96,7 @@ export default async function runCli(args) {
             homeDirectory,
             stdout,
             stderr,
+            loadProjectTooling,
             registry: new CommandRegistry(commands, groups),
             version,
         });
@@ -225,8 +233,6 @@ async function runCommand(args) {
         name,
         Command,
         commandArgv,
-        cwd,
-        homeDirectory,
         stdout,
         stderr,
     } = args;
@@ -263,14 +269,52 @@ async function runCommand(args) {
     const { values: positionals, directory } = splitPositionals(
         Command.positionals,
         parsed.positionals,
-        { commandLabel: name },
+        { commandLabel: name, acceptsDirectory: acceptsDirectory(Command) },
     );
 
-    const startDirectory = await resolveStartDirectory(cwd, directory);
+    // A command that runs anywhere gets no project, no settings, and nothing
+    // read from disk on its behalf.
+    if (!requiresProject(Command)) {
+        const command = new Command({ ...streams });
+        return toData(name, await command.run(parsed.values, positionals));
+    }
 
-    // Loaded here rather than at startup so help output and unresolved command
-    // names still work in a directory holding a malformed config file.
-    const configuration = await loadConfiguration({ startDirectory, homeDirectory });
+    const project = await loadProject({ ...args, directory });
+    const command = new Command({ ...project, ...streams });
+
+    return toData(name, await command.run(parsed.values, positionals));
+}
+
+// Everything a `requiresProject` command is given beside its streams. The
+// order matters: the version gate runs before any settings are read, and
+// before any project code is loaded.
+async function loadProject(args) {
+    const {
+        name,
+        Command,
+        directory,
+        cwd,
+        homeDirectory,
+        stderr,
+        version,
+        loadProjectTooling,
+    } = args;
+
+    const startDirectory = await resolveStartDirectory(cwd, directory);
+    const projectDirectory = await requireProject(startDirectory);
+    const projectVersion = await readProjectVersion(projectDirectory);
+    const { isNewerThanCli } = checkProjectVersion({ projectVersion, cliVersion: version });
+
+    if (isNewerThanCli) {
+        // One line, to stderr in both modes, and the command still runs: the
+        // project's own logic is what makes a newer project work.
+        stderr.write(
+            `The project uses Kixx ${ projectVersion }, which is newer than ${ PROGRAM_NAME } ${ version }. `
+            + `Upgrade ${ PROGRAM_NAME } if something fails.\n`,
+        );
+    }
+
+    const configuration = await loadConfiguration({ projectDirectory, homeDirectory });
 
     assertRequiredSettings({
         commandLabel: name,
@@ -288,14 +332,17 @@ async function runCommand(args) {
         filepaths: configuration.secretsFilepaths,
     });
 
-    const command = new Command({
-        projectDirectory: configuration.projectDirectory,
+    const project = {
+        projectDirectory,
         config: configuration.config,
         secrets: configuration.secrets,
-        ...streams,
-    });
+    };
 
-    return toData(name, await command.run(parsed.values, positionals));
+    if (Command.requiresTooling === true) {
+        project.tooling = await loadProjectTooling(projectDirectory);
+    }
+
+    return project;
 }
 
 // Turns what run() resolved into the envelope's `data`.
@@ -362,7 +409,7 @@ async function resolveStartDirectory(cwd, directory) {
     }
 
     if (!stats?.isDirectory()) {
-        throw new UsageError(`The application directory ${ startDirectory } does not exist or is not a directory.`);
+        throw new UsageError(`The directory ${ startDirectory } does not exist or is not a directory.`);
     }
 
     return startDirectory;

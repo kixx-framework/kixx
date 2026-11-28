@@ -2,8 +2,9 @@ Kixx Devkit
 ===========
 
 The `kixx-dev` command: local development, build, and deployment tools for Kixx
-applications. In this version it runs the app locally with restarts after code
-changes and manages throwaway local instances.
+applications. In this version it regenerates a project's generated files, runs
+the app locally with restarts after code changes, and manages throwaway local
+instances.
 
 Install
 -------
@@ -23,7 +24,8 @@ deno install -g -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
 The Deno permissions:
 
 - `-R` read and `-W` write: project files, `.kixx` settings, Cloudflare state
-  files, and the generated `cloudflare-config.generated.js`.
+  files, and the generated `cloudflare-config.generated.js`. Reading also
+  covers loading your project's own Kixx tooling from its `kixx/` directory.
 - `-N` net: the Cloudflare API and your application's Admin and Publishing
   APIs.
 - `-E` env: the `KIXX_ADMIN_*` prompt variables.
@@ -32,9 +34,10 @@ The Deno permissions:
   `kixx-dev local start` run your app's `node-server.js` in a child Deno
   process with `-A`, so this grants it full access.
 
-No FFI access is needed. Only `kixx-dev dev start`, `kixx-dev local seed`, and
-`kixx-dev local start` run project code; every other command reads project
-configuration as data.
+No FFI access is needed. `kixx-dev dev start` and `kixx-dev local start` run
+your app in a child process, and `kixx-dev generate` loads the Kixx tooling
+from your project's `kixx/` directory. Everything else in a project is read as
+data.
 
 Upgrade:
 
@@ -57,12 +60,23 @@ not inside a Kixx project or an unsupported project version, and `4` a command
 that is not available in this version. `kixx-dev --help --json` returns the
 table.
 
-Every command takes the app directory as an optional last argument, defaulting
-to the current directory: `kixx-dev dev start ../my-app`.
+Run a command anywhere inside your project. A Kixx project is the nearest
+directory, at or above where you are, that holds `kixx/plugin.json`. You can
+also pass a directory as the last argument: `kixx-dev dev start ../my-app`.
+Outside a project the command exits `3`.
+
+`kixx-dev` loads the framework's own logic from your project's `kixx/`
+directory, so one `kixx-dev` works with every Kixx 7 project. It refuses a
+project of another major version, and tells you which `kixx-dev` to install.
+If your project is newer than your `kixx-dev`, the command still runs and one
+line on stderr suggests upgrading.
 
 Commands
 --------
 
+- `kixx-dev generate` — rewrite the generated registries, routes, and
+  `example.env.secrets` after you change a manifest (`kixx/plugin.json`, a
+  plugin's `plugin.json`, or `app/app.json`). Commit what it writes.
 - `kixx-dev dev start` — run the app locally, restarting after code changes.
 - `kixx-dev local create` — create a throwaway local instance.
 - `kixx-dev local start` — run an instance under the devserver.

@@ -185,7 +185,15 @@ Rules:
 - **A test catches drift.** `test/fixtures/project.test.js` fails while the fixture's committed files differ from what the generator writes. A project has the same test, `test/generated-files.test.js`, from the skeleton: it renders with the project's own `kixx/tooling/mod.js` and fails, naming the file, when a generated file is missing or differs.
 - **Generated JavaScript is not linted.** Each file turns lint off for itself with `/* eslint-disable */`.
 
-In this repository, regenerate a project with:
+A project regenerates with the CLI, from anywhere inside it:
+
+```
+kixx-dev generate
+```
+
+It loads the generator from the project's own `kixx/`, so the files match the Kixx version the project runs. The drift test's failure message names this command.
+
+In this repository, the fixture's core lives outside it, so regenerate with the tool instead:
 
 ```
 node tools/generate-registries.js <project-directory> [--core <path>]

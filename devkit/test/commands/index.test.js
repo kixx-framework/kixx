@@ -5,6 +5,7 @@ import { describe } from 'kixx-test';
 import { assertEqual } from '../../lib/vendor/kixx-assert/mod.js';
 import commands, { groups } from '../../commands/index.js';
 import { findCommandProblems, findRegistryProblems } from '../../lib/command-registry.js';
+import { requiresProject } from '../../lib/command-positionals.js';
 
 
 const COMMANDS_DIRECTORY = fileURLToPath(new URL('../../commands/', import.meta.url));
@@ -57,6 +58,16 @@ describe('commands/index.js registry', ({ it }) => {
         }
     });
 
+    // The runner gives a project directory and settings only to a command
+    // that declares it runs inside a project.
+    it('runs generate and the commands kept from v6 inside a project', () => {
+        for (const name of [ 'generate', 'dev start', 'local create', 'local start', 'local list', 'local destroy' ]) {
+            assertEqual(true, requiresProject(commands[name]), `"${ name }"`);
+        }
+
+        assertEqual(true, commands.generate.requiresTooling);
+    });
+
     it('has a module at its path for every command that is available', async () => {
         const modules = await listCommandModules();
 
@@ -70,9 +81,9 @@ describe('commands/index.js registry', ({ it }) => {
         );
     });
 
-    it('holds the five commands kept from v6', () => {
+    it('holds generate and the five commands kept from v6', () => {
         assertEqual(
-            'dev start,local create,local start,local list,local destroy',
+            'generate,dev start,local create,local start,local list,local destroy',
             Object.keys(commands).join(','),
         );
     });
