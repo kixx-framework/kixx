@@ -15,7 +15,7 @@ import UsageError from '../usage-error.js';
  * @param {number} args.port - Devserver port
  * @param {string} args.environment - Application environment
  * @param {string} [args.dotenv] - Absolute dotenv path passed to node-server.js
- * @param {string} args.label - Log prefix label, such as "kixx dev"
+ * @param {string} args.label - Log prefix label, such as "kixx-dev dev"
  * @param {string} args.missingServerHint - Sentence following the missing node-server.js message
  * @param {Object} [args.output] - Stream for devserver log lines
  * @param {Object} [args.stdout] - Stream for app server stdout
@@ -23,7 +23,8 @@ import UsageError from '../usage-error.js';
  * @param {Object} [args.signals] - Signal emitter, defaults to `process`
  * @param {Object} [args.fileSystem] - File system adapter
  * @param {Function} [args.createDevServer] - Devserver factory
- * @returns {Promise<number>} Exit code; 0 after a signal-driven stop
+ * @returns {Promise<{port: number, environment: string}>} What the devserver listened on; resolves after a
+ *   signal-driven stop
  * @throws {UsageError} When node-server.js is missing
  */
 export default async function runDevServer(args) {
@@ -72,7 +73,11 @@ export default async function runDevServer(args) {
         `(environment ${ environment }, app ${ projectDirectory }); press Ctrl-C to stop`,
     );
 
-    return await waitForShutdown({ devServer, signals, log });
+    await waitForShutdown({ devServer, signals, log });
+
+    // The port the server bound, which differs from the one asked for when
+    // that was 0.
+    return { port: devServer.port, environment };
 }
 
 
@@ -98,7 +103,7 @@ function waitForShutdown({ devServer, signals, log }) {
 
             devServer.stop().then(() => {
                 removeListeners();
-                resolve(0);
+                resolve();
             }, (cause) => {
                 removeListeners();
                 reject(cause);

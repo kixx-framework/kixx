@@ -1,8 +1,8 @@
 Kixx Usage Docs
 ===============
 
-Documentation for developers and agents running a Kixx App and using the
-`kixx` command line tool from the Kixx Devkit.
+Documentation for developers and agents running a Kixx App and using
+`kixx-dev`, the command line tool from the Kixx Devkit.
 
 Kixx App
 --------
@@ -20,18 +20,25 @@ Kixx App
 - [Administrative Data API](kixx-app/admin-data-api.md) — version-checked
   direct access to registered application records.
 
-Kixx Devkit (`kixx` CLI)
-------------------------
+`kixx-dev` (the Kixx CLI)
+-------------------------
 
-Install with `npm install -g kixx-devkit` (Node.js 24+) or from JSR as
-`jsr:@kixx/devkit` (Deno 2.8+). Every command has `--help`.
+Install with `npm install -g kixx-dev` (Node.js 24+), or with Deno 2.8+:
 
-- [Configuration](kixx-devkit/configuration.md) — `.kixx` settings and
-  secrets, `--environment`, and the files Cloudflare commands read.
-- [`kixx dev`](kixx-devkit/dev.md) — run the app locally with automatic
+```
+deno install -g -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
+```
+
+Every command has `--help` and `--json`. See the
+[devkit README](../devkit/README.md) for what each Deno permission is for.
+
+- [Commands](kixx-dev/commands.md) — every command and whether it is
+  available in this version, `kixx-dev generate`, `--help`, `--json` and its
+  output, and the exit codes.
+- [Configuration](kixx-dev/configuration.md) — how a project is found, the
+  supported project versions, the `.kixx` settings layers, and the project
+  files the CLI reads.
+- [`kixx-dev dev`](kixx-dev/dev.md) — run the app locally with automatic
   restarts.
-- [`kixx admin`](kixx-devkit/admin.md) — create the first admin and run
-  migrations.
-- [`kixx app`](kixx-devkit/app.md) — publish content and assign it to a build.
-- [`kixx cloudflare`](kixx-devkit/cloudflare.md) — create, version, and
-  deploy Cloudflare Workers, with end-to-end workflows.
+- [`kixx-dev local`](kixx-dev/local.md) — throwaway local instances with
+  their own port, secrets, and data.

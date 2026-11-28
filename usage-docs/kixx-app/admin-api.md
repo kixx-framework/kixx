@@ -576,12 +576,12 @@ deliberately rerun an applied one.
 
 ### Bootstrap the first admin
 
-1. Configure a strong, secret `ADMIN_BOOTSTRAP_TOKEN` in the deployment
-   (`kixx admin gen-secure-token` generates one).
-2. Redeem it once through the invite endpoint, or with
-   `kixx admin accept-invite`.
+1. Configure a strong, secret `ADMIN_BOOTSTRAP_TOKEN` in the deployment: a
+   long random value.
+2. Redeem it once through the invite endpoint.
 3. Remove the environment value after the root admin is created. The consumed
    marker prevents reuse even before removal.
 
-The `kixx admin` commands wrap the migration and invite endpoints too; see
-[`kixx admin`](../kixx-devkit/admin.md).
+The `kixx-dev admin` commands will wrap the migration and invite endpoints.
+They are not available in this version; see the
+[command list](../kixx-dev/commands.md).

@@ -1,11 +1,10 @@
 Kixx Devkit
 ===========
 
-The `kixx` command: local development, build, and deployment tools for Kixx
-applications. It runs the app locally with restarts after code changes,
-manages throwaway local instances, creates the first admin account, runs
-data migrations, publishes application content, and builds and deploys
-Cloudflare Worker versions.
+The `kixx-dev` command: local development, build, and deployment tools for Kixx
+applications. In this version it regenerates a project's generated files, runs
+the app locally with restarts after code changes, and manages throwaway local
+instances.
 
 Install
 -------
@@ -13,102 +12,136 @@ Install
 With Node.js 24 or later:
 
 ```
-npm install -g kixx-devkit
+npm install -g kixx-dev
 ```
 
 Or with Deno 2.8 or later:
 
 ```
-deno install -g -RWNE --allow-sys=homedir --allow-run jsr:@kixx/devkit/kixx
+deno install -g -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
 ```
+
+You also need `git` installed. `kixx-dev` may run your local `git`; no
+command in this version does yet.
 
 The Deno permissions:
 
-- `-R` read and `-W` write: project files, `.kixx` settings, Cloudflare state
-  files, and the generated `cloudflare-config.generated.js`.
-- `-N` net: the Cloudflare API and your application's Admin and Publishing
-  APIs.
-- `-E` env: the `KIXX_ADMIN_*` prompt variables.
+- `-R` read and `-W` write: your project's files and the `.kixx` settings and
+  instance directories. Reading also covers loading your project's own Kixx
+  tooling from its `kixx/` directory.
+- `-N` net: the local devserver, and later your application's Admin and
+  Publishing APIs and the Cloudflare API.
+- `-E` env: checking your shell for names that collide with an instance's
+  dotenv files, and the environment your app's process inherits.
 - `--allow-sys=homedir`: find the `~/.kixx` settings layer.
-- `--allow-run`: `kixx dev start`, `kixx local seed`, and `kixx local start`
+- `--allow-run`: two things only. `kixx-dev dev` and `kixx-dev local start`
   run your app's `node-server.js` in a child Deno process with `-A`, so this
-  grants it full access.
+  grants it full access. And `kixx-dev` may run your local `git`.
 
-No FFI access is needed. Only `kixx dev start`, `kixx local seed`, and
-`kixx local start` run project code; every other command reads project
-configuration as data.
+No FFI access is needed.
+
+`kixx-dev` runs your project's code in two ways, and no other:
+
+- **In its own process:** `kixx-dev generate` and `kixx-dev local create`
+  load the Kixx tooling from your project's `kixx/` directory. Your `app/`
+  code, your plugins, and your entry points are never loaded this way.
+- **As a child process:** `kixx-dev dev` and `kixx-dev local start` run your
+  app's `node-server.js`.
+
+Everything else in a project is read as data.
 
 Upgrade:
 
 ```
-npm install -g kixx-devkit@latest
-deno install -g -f -RWNE --allow-sys=homedir --allow-run jsr:@kixx/devkit/kixx
+npm install -g kixx-dev@latest
+deno install -g -f -n kixx-dev -RWNE --allow-sys=homedir --allow-run jsr:@kixx/dev
 ```
 
-Check the install with `kixx --version`. Every command has `--help`.
+Check the install with `kixx-dev --version`. Every command has `--help`, and
+`kixx-dev --help` lists them all.
 
-Every command takes the app directory as an optional last argument, defaulting
-to the current directory: `kixx dev start ../my-app`.
+Every command also takes `--json`: stdout then holds exactly one JSON object,
+`{ "ok": true, "command": "...", "data": {...} }` or
+`{ "ok": false, "command": "...", "error": { "code", "exitCode", "message" } }`,
+and everything written for a person goes to stderr.
+
+Exit codes mean the same thing for every command: `0` success, `1` an
+unexpected error, `2` a mistake you can fix (bad arguments or settings), `3`
+not inside a Kixx project or an unsupported project version, and `4` a command
+that is not available in this version. `kixx-dev --help --json` returns the
+table, and [commands.md][commands-doc] documents it.
+
+Run a command anywhere inside your project. A Kixx project is the nearest
+directory, at or above where you are, that holds `kixx/plugin.json`. You can
+also pass a directory as the last argument: `kixx-dev dev ../my-app`.
+Outside a project the command exits `3`.
+
+`kixx-dev` loads the framework's own logic from your project's `kixx/`
+directory, so one `kixx-dev` works with every Kixx 7 project. It refuses a
+project of another major version, and tells you which `kixx-dev` to install.
+If your project is newer than your `kixx-dev`, the command still runs and one
+line on stderr suggests upgrading.
 
 Commands
 --------
 
-- `kixx admin gen-secure-token` — generate a secure token.
-- `kixx admin accept-invite` — redeem an invite and create an admin account.
-- `kixx admin list-migrations` — list migrations and their status.
-- `kixx admin run-migration` — run one batch of a migration.
-- `kixx app publish` — publish content and assign it to a build. Doesn't work in this version: the content compiler moved into Kixx core.
-- `kixx app assign-build` — assign an existing Release to a build.
-- `kixx cloudflare create-worker` — create a Worker.
-- `kixx cloudflare update-worker` — replace a Worker's settings.
-- `kixx cloudflare create-worker-version` — bundle and upload a Worker version.
-- `kixx cloudflare deploy-version` — route all traffic to a Worker version.
-- `kixx dev start` — run the app locally, restarting after code changes.
-- `kixx local create` — create a throwaway local instance.
-- `kixx local seed` — create an instance's admin, token, and content.
-- `kixx local start` — run an instance under the devserver.
-- `kixx local publish` — republish content to a running instance. Doesn't work in this version, for the same reason.
-- `kixx local list` — list instances.
-- `kixx local destroy` — delete a stopped instance.
+- `kixx-dev generate` — rewrite the generated registries, routes, and
+  `example.env.secrets` after you change a manifest (`kixx/plugin.json`, a
+  plugin's `plugin.json`, or `app/app.json`). Commit what it writes.
+- `kixx-dev dev` — run the app locally, restarting after code changes.
+- `kixx-dev local create` — create a throwaway local instance.
+- `kixx-dev local start` — run an instance under the devserver.
+- `kixx-dev local list` — list instances.
+- `kixx-dev local destroy` — delete a stopped instance.
+
+`kixx-dev --help` also lists the commands that are not available in this
+version, under their own heading. Each has `--help`, and running one exits
+`4`:
+
+- `new`, `add`, `remove`, `upgrade`
+- `agents sync`
+- `local seed`, `local publish`
+- `check`, `routes`, `render`
+- `publish`, `deploy`
+- `release list`, `release assign`
+- `media upload`
+- `env create`, `env list`
+- `cloudflare provision`
+- `secrets set`, `secrets rotate`
+- `deploy-key generate`, `deploy-key rotate`
+- `admin invite`, `admin reset`, `admin migrations`, `admin jobs`
+
+The Kixx 6 command names (`kixx dev start`, the `app` commands, the
+`cloudflare` worker commands, and the old `admin` commands) are gone, with no
+alias.
 
 Documentation:
 
-- [configuration.md][configuration-doc]: `.kixx` settings,
-  `cloudflare-config.jsonc`, `.env.<env>`, and `example.env.secrets`.
-- [admin.md][admin-doc]: admin accounts, tokens, and migrations.
-- [app.md][app-doc]: publishing content.
-- [cloudflare.md][cloudflare-doc]: Workers, versions, deployment, and
-  workflows.
+- [commands.md][commands-doc]: every command and whether it is available,
+  `generate`, `--help`, `--json` and its output, and the exit codes.
+- [configuration.md][configuration-doc]: how a project is found, supported
+  project versions, the `.kixx` settings, and the project files the CLI reads.
 - [dev.md][dev-doc]: the local devserver.
 - [local.md][local-doc]: throwaway local instances.
 
-`app` commands require an application serving content contract 2, addressing
-format 4, and build assignment protocol 4; see [app.md][app-doc-server-requirement].
-
-Not included: creating D1, KV, or R2 resources, and managing Worker secrets.
-Use the Cloudflare dashboard or Wrangler for those.
-
 <!-- Absolute links so they resolve on npmjs.com and jsr.io. -->
-[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/configuration.md
-[admin-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/admin.md
-[app-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md
-[app-doc-server-requirement]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/app.md#server-requirement
-[cloudflare-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/cloudflare.md
-[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/dev.md
-[local-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-devkit/local.md
+[commands-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/commands.md
+[configuration-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/configuration.md
+[dev-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/dev.md
+[local-doc]: https://github.com/kixx-framework/kixx/blob/main/usage-docs/kixx-dev/local.md
 
 Development
 -----------
 
-Install dev dependencies once with `npm install` in `devkit/`. From the repo
-root:
+Install dev dependencies once with `npm install` at the repo root; the devkit's
+runners use them. From the repo root:
 
 ```
 node devkit/run-tests.js                     # full suite on Node.js
 deno run -A devkit/run-tests.js              # full suite on Deno
 node devkit/run-tests.js devkit/test/lib     # a subtree
 node devkit/run-linter.js devkit             # lint
-node devkit/kixx.js <command> <subcommand>   # run the CLI from source
+node devkit/kixx-dev.js <command>            # run the CLI from source
 ```
 
 The runners accept paths relative to the current directory. `run-tests.js`

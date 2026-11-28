@@ -1,13 +1,13 @@
 {
-    "name": "kixx-devkit",
-    "version": "0.2.0",
+    "name": "kixx-dev",
+    "version": "7.0.0-alpha.0",
     "description": "Build and deployment tools for Kixx applications",
     "type": "module",
     "bin": {
-        "kixx": "./kixx.js"
+        "kixx-dev": "./kixx-dev.js"
     },
     "files": [
-        "kixx.js",
+        "kixx-dev.js",
         "commands/",
         "!commands/README.md",
         "lib/",

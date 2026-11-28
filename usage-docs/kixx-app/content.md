@@ -146,7 +146,7 @@ export function initialize(context) {
 
 A name holds letters, digits, and underscores, and doesn't start with a
 digit. After changing `app/app.json`, regenerate the project's generated
-files.
+files with `kixx-dev generate`.
 
 Kixx's own helpers (`each`, `if`, `unless`, `ifEqual`, `with`, `unescape`,
 `plusOne`, `formatDate`, `markup`, `truncate`, `assetUrl`) are already

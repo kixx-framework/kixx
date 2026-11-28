@@ -1,7 +1,8 @@
-# Lints the repository, runs the unit suite on Node.js and Deno, builds a
-# project from the skeleton to run its own tests and lint, and runs the
-# integration suite against a test app started on the runner, on Node.js and
-# on Deno, for every push to any branch and every pull request.
+# Lints the repository, runs the unit suite on Node.js and Deno, lints the
+# devkit and runs its unit suite on Node.js and Deno, builds a project from
+# the skeleton to run its own tests and lint, and runs the integration suite
+# against a test app started on the runner, on Node.js and on Deno, for every
+# push to any branch and every pull request.
 #
 # The integration suite's deployed targets are not run here: the operator
 # runs those.
@@ -97,6 +98,76 @@ jobs:
 
       - name: Test on Deno
         run: deno run -A run-tests.js
+
+  # The devkit (the kixx-dev CLI) has its own lint config and test runner,
+  # and the root lint and test jobs skip devkit/. It has no node_modules/ of
+  # its own: its runners resolve kixx-test and kixx-linting from the root's,
+  # so these jobs install only the root's dev dependencies.
+  devkit-lint:
+    name: Lint the devkit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Lint the devkit
+        run: node devkit/run-linter.js devkit
+
+  devkit-test-node:
+    name: Test the devkit on Node.js
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test the devkit on Node.js
+        run: node devkit/run-tests.js
+
+  devkit-test-deno:
+    name: Test the devkit on Deno
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.8.x
+
+      # Only to run npm install; the tests run on Deno.
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install dev dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Test the devkit on Deno
+        run: deno run -A devkit/run-tests.js
 
   # A project with no plugins, built from the skeleton and core, passes its
   # own tests and lint with no further setup (SCAF-7). Its package.json,

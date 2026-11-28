@@ -6,7 +6,6 @@ import {
     TARGET_OPTION,
     createLocalLog,
     formatCollisionWarning,
-    formatLocalCommand,
     listEnvNames,
 } from '../../lib/local/command-support.js';
 import { readInstance, resolveInstancesDirectory } from '../../lib/local/instance-store.js';
@@ -17,9 +16,10 @@ export default class LocalStartCommand {
 
     static description = `
         Run a local instance under the devserver on its own port. The app
-        server restarts after code changes; republish content with kixx local
-        publish.
+        server restarts after code changes.
     `;
+
+    static requiresProject = true;
 
     static positionals = [ NAME_POSITIONAL ];
 
@@ -28,6 +28,7 @@ export default class LocalStartCommand {
     };
 
     #projectDirectory;
+    #cwd;
     #output;
     #stdout;
     #stderr;
@@ -41,6 +42,7 @@ export default class LocalStartCommand {
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             output = process.stdout,
             stdout = process.stdout,
             stderr = process.stderr,
@@ -53,6 +55,7 @@ export default class LocalStartCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#output = output;
         this.#stdout = stdout;
         this.#stderr = stderr;
@@ -70,7 +73,7 @@ export default class LocalStartCommand {
         const log = createLocalLog(this.#output);
 
         const instance = await readInstance({
-            instancesDirectory: resolveInstancesDirectory({ sourceDirectory: this.#projectDirectory, target }),
+            instancesDirectory: resolveInstancesDirectory({ sourceDirectory: this.#projectDirectory, target, cwd: this.#cwd }),
             name,
         });
 
@@ -84,18 +87,14 @@ export default class LocalStartCommand {
             throw new UsageError(`Local instance "${ name }" is already running on port ${ instance.port }.`);
         }
 
-        if (!instance.isSeeded) {
-            const seedCommand = formatLocalCommand({ command: `seed ${ name }`, projectDirectory: this.#projectDirectory, target });
-            log(`Local instance "${ name }" is not seeded; run ${ seedCommand } for an admin login and published content.`);
-        }
-
+        // Resolves when a signal stops the server, with what it listened on.
         return await this.#runDevServer({
             projectDirectory: this.#projectDirectory,
             port: instance.port,
             environment: 'local',
             dotenv: instance.paths.dotenv,
-            label: 'kixx local',
-            missingServerHint: 'Pass the application directory the instance was created from.',
+            label: 'kixx-dev local',
+            missingServerHint: 'Pass a directory in the project the instance was created from.',
             output: this.#output,
             stdout: this.#stdout,
             stderr: this.#stderr,

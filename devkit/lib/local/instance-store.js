@@ -39,11 +39,12 @@ export function assertValidInstanceName(name) {
  * @param {Object} args
  * @param {string} args.sourceDirectory - Application directory
  * @param {string} [args.target] - Directory holding `instances/`; default `<source>/.kixx`
+ * @param {string} [args.cwd] - What a relative `target` resolves against; defaults to `process.cwd()`
  * @returns {string} Absolute instances directory
  */
 export function resolveInstancesDirectory(args) {
-    const { sourceDirectory, target } = args ?? {};
-    return path.resolve(target ?? path.join(sourceDirectory, '.kixx'), 'instances');
+    const { sourceDirectory, target, cwd = process.cwd() } = args ?? {};
+    return path.resolve(cwd, target ?? path.join(sourceDirectory, '.kixx'), 'instances');
 }
 
 /**
@@ -92,6 +93,7 @@ export async function createInstance(args) {
         instancesDirectory,
         name,
         port: requestedPort,
+        parseSecretsManifest,
         now = () => new Date(),
         getFreePort = defaultGetFreePort,
     } = args ?? {};
@@ -121,6 +123,7 @@ export async function createInstance(args) {
         sourceDirectory,
         buildId,
         dataDirectory: paths.directory,
+        parseSecretsManifest,
     });
 
     const plainText = formatEnvFile(plain);
@@ -164,7 +167,7 @@ export async function readInstance(args) {
 
     if (!await exists(paths.directory)) {
         throw new UsageError(
-            `No local instance "${ name }" at ${ paths.directory }; run "kixx local create ${ name }" first.`,
+            `No local instance "${ name }" at ${ paths.directory }; run "kixx-dev local create ${ name }" first.`,
         );
     }
 

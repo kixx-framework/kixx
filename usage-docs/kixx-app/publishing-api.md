@@ -112,9 +112,9 @@ fails without it. In `development` with no hash set, the API is open: every
 request is accepted, with or without a credential. Set a hash in
 `development` and it is enforced exactly as everywhere else.
 
-The `kixx app publish` command is meant to run the whole publish workflow
-below for you, but it doesn't work in this version; see
-[`kixx app`](../kixx-devkit/app.md).
+`kixx-dev publish` will run the whole publish workflow below for you. It is
+not available in this version; see the
+[command list](../kixx-dev/commands.md).
 
 The objects and the manifest a publish sends are built by the content
 compiler, which also checks the content first; see [Content](content.md).

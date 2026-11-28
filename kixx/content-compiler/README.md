@@ -10,11 +10,11 @@ Module paths here are from core's directory, which is `kixx/` in a project.
 
 ## Compiling a Project
 
-A tool on Node.js or Deno loads three modules from the project's own `kixx/`:
+A tool on Node.js or Deno loads three modules from the project's own `kixx/`. The `kixx-dev` CLI loads exactly these, at run time, and a project regenerates its generated files with `kixx-dev generate`, which calls `writeProjectFiles()` from the same `tooling/mod.js`:
 
 | Module | What it gives |
 |---|---|
-| `tooling/mod.js` | `compileProjectContent()`, `listPluginContentRoots()`, `compileContent()`, `serializeContentObject()` |
+| `tooling/mod.js` | `compileProjectContent()`, `listPluginContentRoots()`, `compileContent()`, `serializeContentObject()`, and the parsers of the config dialects a tool reads as data: `parseJsonc()` and `parseSecretsManifest()` |
 | `adapters/node/tooling/lib/project-file-system.js` | `createProjectFileSystem(projectDirectory)`, which reads the manifests |
 | `adapters/node/content-compiler/lib/file-system-content-source.js` | `createFileSystemContentSource(projectDirectory)`, which reads the content |
 

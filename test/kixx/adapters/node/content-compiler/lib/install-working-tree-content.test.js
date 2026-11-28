@@ -178,7 +178,7 @@ describe('node installWorkingTreeContent()', ({ before, after, it }) => {
             assert(error, 'expected a rejection');
             assertEqual('AssertionError', error.name);
             assertMatches(expected, error.message);
-            assertMatches('Regenerate', error.message);
+            assertMatches('Run `kixx-dev generate`.', error.message);
             assertEqual(0, requested.length);
         }
     });

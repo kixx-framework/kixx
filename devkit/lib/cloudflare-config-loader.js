@@ -1,7 +1,6 @@
 import path from 'node:path';
-import { isPlainObject } from './vendor/kixx-assert/mod.js';
+import { assertFunction, isPlainObject } from './vendor/kixx-assert/mod.js';
 import defaultFileSystem from './file-system.js';
-import { parseJsonc } from './parse-jsonc.js';
 import UsageError from './usage-error.js';
 
 
@@ -10,15 +9,21 @@ export const CLOUDFLARE_CONFIG_FILE_NAME = 'cloudflare-config.jsonc';
 
 /**
  * Reads and parses the project's `cloudflare-config.jsonc`. The file is data,
- * never executed, so the CLI needs no permission to run project code.
+ * never executed, so the CLI needs no permission to run project code. The
+ * JSONC parser is the project's own, from its tooling, so the CLI and the
+ * app read the file the same way.
  * @param {string} projectDirectory - Directory containing cloudflare-config.jsonc
- * @param {Object} [args]
+ * @param {Object} args
+ * @param {function(string): *} args.parseJsonc - `parseJsonc` from the project's tooling
  * @param {import('./file-system.js').FileSystem} [args.fileSystem] - File system seam for tests
  * @returns {Promise<Object>} The parsed configuration object
  * @throws {UsageError} When the file is absent or unreadable, is not valid JSONC, is not an object, or lacks an `environments` object
  */
 export async function loadCloudflareConfig(projectDirectory, args) {
-    const { fileSystem = defaultFileSystem } = args ?? {};
+    const { parseJsonc, fileSystem = defaultFileSystem } = args ?? {};
+
+    assertFunction(parseJsonc, 'loadCloudflareConfig() requires parseJsonc');
+
     const filepath = path.resolve(projectDirectory, CLOUDFLARE_CONFIG_FILE_NAME);
 
     let source;

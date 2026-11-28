@@ -3,7 +3,7 @@ import { readWorkingTreeSwitch } from '../../../../content-addressable-store/wor
 import { createWorkingTreeContent } from './working-tree-content.js';
 
 
-const REGENERATE_HINT = 'Regenerate the project\'s registries.';
+const REGENERATE_HINT = 'Run `kixx-dev generate`.';
 
 
 /**

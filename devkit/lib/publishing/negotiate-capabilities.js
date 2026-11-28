@@ -3,15 +3,8 @@
  * @module publishing/negotiate-capabilities
  */
 
+import { assert, isPlainObject } from '../vendor/kixx-assert/mod.js';
 import UsageError from '../usage-error.js';
-import { FORMAT } from './addressing.js';
-
-/**
- * Release manifest contract this client composes.
- * @type {number}
- * @readonly
- */
-export const CONTENT_CONTRACT_VERSION = 2;
 
 /**
  * Build pointer write protocol this client speaks.
@@ -40,30 +33,55 @@ export const BUILD_ASSIGNMENT_PROTOCOL_VERSION = 4;
 export class UnsupportedServerError extends UsageError {}
 
 /**
+ * @typedef {Object} ExpectedContract
+ * @property {number} contentContractVersion - The Release manifest contract the project's content compiler writes
+ * @property {number} addressingFormat - The addressing format the project's content compiler hashes with
+ */
+
+/**
  * Reads server capabilities and refuses an environment this client cannot write to.
+ *
+ * The content contract and the addressing format describe what the project's
+ * own content compiler writes, so the caller passes them in from the
+ * project's Kixx. The build assignment protocol describes the requests this
+ * client sends, so it is pinned here.
  *
  * Call this before the first write of any kind — object upload, Release
  * creation, or build pointer assignment. Discovery is memoized by the client,
  * so calling it on every write path costs one request per process.
  * @param {Object} client - Publishing API client
+ * @param {ExpectedContract} expected - What the project's Kixx composes
  * @returns {Promise<Object>} Discovery attributes, including enforced limits
  * @throws {UnsupportedServerError} When the server is incompatible with this client
  */
-export default async function negotiateCapabilities(client) {
+export default async function negotiateCapabilities(client, expected) {
+    assert(isPlainObject(expected), 'negotiateCapabilities() requires the expected contract versions');
+
+    const { contentContractVersion, addressingFormat } = expected;
+
+    assert(
+        Number.isInteger(contentContractVersion),
+        'negotiateCapabilities() expected.contentContractVersion must be an integer',
+    );
+    assert(
+        Number.isInteger(addressingFormat),
+        'negotiateCapabilities() expected.addressingFormat must be an integer',
+    );
+
     const capabilities = await client.discover();
     const failures = [];
 
-    if (capabilities.contentContractVersion !== CONTENT_CONTRACT_VERSION) {
+    if (capabilities.contentContractVersion !== contentContractVersion) {
         failures.push(
             `Content contract: server reports ${ describe(capabilities.contentContractVersion) }; ` +
-            `this client composes ${ CONTENT_CONTRACT_VERSION }.`,
+            `this client composes ${ contentContractVersion }.`,
         );
     }
 
-    if (capabilities.addressingFormat !== FORMAT) {
+    if (capabilities.addressingFormat !== addressingFormat) {
         failures.push(
             `Addressing format: server reports ${ describe(capabilities.addressingFormat) }; ` +
-            `this client computes ${ FORMAT }.`,
+            `this client computes ${ addressingFormat }.`,
         );
     }
 
@@ -82,9 +100,9 @@ export default async function negotiateCapabilities(client) {
     // one check, and learning them one command at a time wastes a cutover.
     if (failures.length > 0) {
         throw new UnsupportedServerError(
-            'The target application environment is incompatible with this version of the devkit. ' +
+            'The target application environment is incompatible with this version of kixx-dev. ' +
             'Upgrade the deployment to a Kixx release serving build assignment protocol ' +
-            `${ BUILD_ASSIGNMENT_PROTOCOL_VERSION } and addressing format ${ FORMAT }, ` +
+            `${ BUILD_ASSIGNMENT_PROTOCOL_VERSION } and addressing format ${ addressingFormat }, ` +
             'or target an environment that already serves them.\n' +
             failures.map((failure) => `  - ${ failure }`).join('\n'),
         );

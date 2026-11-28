@@ -106,8 +106,7 @@ configuration.
 - The Node.js server (`node-server.js`) uses `--environment` (`-e`), else
   `NODE_ENV`, defaulting to `development`.
 - The Cloudflare Worker reads its `ENVIRONMENT` binding, defaulting to
-  `development`. `kixx cloudflare create-worker-version` sets this binding
-  from its own `--environment` flag.
+  `development`. The CLI sets this binding when it builds a Worker version.
 
 ## Environment variables
 
@@ -185,7 +184,7 @@ node node-server.js -e production -p 8080
 Code declares the secrets it reads, and `example.env.secrets` is generated
 from those declarations. It lists the secret names a deployment must
 provide. It is committed. Never edit it: change a declaration and
-regenerate.
+regenerate it with `kixx-dev generate`.
 
 - **The app** declares its secrets in `app/app.json`.
 - **A plugin** declares its secrets in its manifest,
@@ -234,10 +233,11 @@ when the file is generated.
 
 Keep code and manifest in sync in this order:
 
-- **Adding a secret:** declare it and regenerate, set its value on each
-  deployment, then deploy the code that reads it.
+- **Adding a secret:** declare it and run `kixx-dev generate`, set its value
+  on each deployment, then deploy the code that reads it.
 - **Removing a secret:** deploy the code that stopped reading it, remove the
-  declaration and regenerate, then delete the value from each deployment.
+  declaration and run `kixx-dev generate`, then delete the value from each
+  deployment.
 
 On Cloudflare the manifest is also a build input; see
 [Worker secrets](#worker-secrets).
@@ -422,9 +422,11 @@ count for new admin password hashes. Shipped: 50000.
 
 ## Cloudflare specifics
 
-The Worker does not read dotenv files. The `kixx` CLI (from the
-`kixx-devkit` package) builds Worker versions from these inputs in the app
-directory:
+The Worker does not read dotenv files. The `kixx-dev` CLI builds Worker
+versions from these inputs in the app directory. Its Cloudflare commands are
+not available in this version (see the
+[command list](../kixx-dev/commands.md)); this section describes what they
+read:
 
 ```text
 cloudflare-config.jsonc
@@ -434,8 +436,7 @@ example.env.secrets
 .kixx/cloudflare-state.<environment>.json   (optional)
 ```
 
-This section summarizes what the app expects. The `kixx cloudflare` command
-reference covers every check and option.
+This section summarizes what the app expects.
 
 ### Plain bindings
 
@@ -482,8 +483,7 @@ the environment.
 `cloudflare-config.jsonc` also carries CLI-only blocks per environment:
 
 - `WORKER` — the Worker name plus Worker-level settings (observability,
-  logpush, subdomain). Applied by `kixx cloudflare create-worker` and
-  `update-worker`.
+  logpush, subdomain). Applied when the CLI creates or updates the Worker.
 - `WORKER_VERSION` — exactly `compatibility_date`, `compatibility_flags`,
   `limits`, `placement`, and `cache_options`. Any other key is rejected.
 - `DURABLE_OBJECT_MIGRATIONS` — optional rename, delete, and transfer
@@ -535,5 +535,5 @@ committed.
    set `ENVIRONMENT` or `BUILD_ID` for Cloudflare.
 4. Per-deploy, secret: declare it in `app/app.json` (with
    `"required": false` if a deployment may omit it), regenerate
-   `example.env.secrets`, then follow the order in
+   `example.env.secrets` with `kixx-dev generate`, then follow the order in
    [the secrets manifest](#the-secrets-manifest).

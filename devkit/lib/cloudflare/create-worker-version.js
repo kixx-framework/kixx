@@ -8,7 +8,7 @@ import CloudflareWorkerVersion from './cloudflare-worker-version.js';
 import { buildDurableObjectExports } from './durable-object-exports.js';
 import { writeGeneratedConfig } from './generated-config.js';
 import { resolveSecretSource } from './resolve-secret-source.js';
-import { readSecretsManifest } from './secrets-manifest.js';
+import { readSecretsManifest } from '../read-secrets-manifest.js';
 import { verifyResources } from './verify-resources.js';
 import { buildDurableObjectBindings, buildWorkerBindings } from './worker-bindings.js';
 import { packageWorkerModules } from './worker-modules.js';
@@ -55,6 +55,7 @@ export const TRIGGERED_BY = 'kixx cloudflare create-worker-version';
  * @param {string} args.environment - Value of `--environment`
  * @param {Object} args.cloudflareConfig - Parsed `cloudflare-config.jsonc`
  * @param {import('./cloudflare-api-client.js').default} args.apiClient - Cloudflare API client
+ * @param {function(string): Object} args.parseSecretsManifest - `parseSecretsManifest` from the project's tooling
  * @param {boolean} [args.force=false] - Upload even when nothing changed
  * @param {boolean} [args.deploy=false] - Deploy on upload; only allowed when a bound Durable Object class is unprovisioned
  * @param {import('../file-system.js').FileSystem} [args.fileSystem] - Filesystem adapter
@@ -71,6 +72,7 @@ export async function createWorkerVersion(args) {
         environment,
         cloudflareConfig,
         apiClient,
+        parseSecretsManifest,
         force = false,
         deploy = false,
         fileSystem = defaultFileSystem,
@@ -90,7 +92,15 @@ export async function createWorkerVersion(args) {
     const stateFilepath = getStateFilepath({ projectDirectory, environment });
 
     const state = await readWorkerVersionState({ projectDirectory, environment, fileSystem });
-    const manifest = await readSecretsManifest({ projectDirectory, fileSystem });
+    const declared = await readSecretsManifest({ projectDirectory, parseSecretsManifest, fileSystem });
+
+    // Every environment this pipeline deploys is treated as outside
+    // development, so those names are required. S19 replaces this line when
+    // it handles the development environment.
+    const manifest = {
+        required: [ ...declared.required, ...declared.requiredOutsideDevelopment ].sort(),
+        optional: declared.optional,
+    };
     const envars = await readEnvFile({ projectDirectory, environment, fileSystem });
 
     const { exports, liveClasses } = buildDurableObjectExports({ environmentConfig, environment });

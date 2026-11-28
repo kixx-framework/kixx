@@ -4,13 +4,13 @@ Paths are relative to `devkit/`.
 
 docs/architecture.md
 
-How `kixx.js`, `commands/`, and `lib/` divide the work; a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver); the settings inputs; the check-before-write rule for remote pipelines; and modules ported from the Kixx Library, with the conformance tests that keep them in sync.
+How `kixx-dev.js`, the runner (`lib/run-cli.js`) and its modules, `commands/`, and `lib/` divide the work; how framework logic is loaded from the project's own `kixx/` (discovery, the version gate, the tooling loader); a map of the `lib/` subsystems (admin, publishing, bundler, cloudflare, devserver, project); the settings inputs; the check-before-write rule for remote pipelines; and how the devkit stays compatible with the Kixx Library: the parsers and the content contract it takes from the project as arguments, and the conformance tests that prove them against core.
 
 ### Commands
 
 commands/README.md
 
-How the CLI finds and runs commands: the `commands/` layout, command index modules, sub-command classes and their static `description`, `options`, `requiredConfig`, and `requiredSecrets`, constructor arguments, `run()` return codes, output and `UsageError`, and the checklist for adding a command.
+The command contract: one-word and two-word names, the flat registry and `groups`, how a command line is read, finding the project (`kixx/plugin.json`, the version gate, settings, and the project's tooling), the static `description`, `options`, `positionals`, `requiredConfig`, `requiredSecrets`, `requiresProject`, `requiresTooling`, and `available`, constructor arguments, what `run()` returns, the `--json` envelope schema, help as data, the exit-code table and error mapping, placeholders, and the checklist for adding a command.
 
 ### Code Style Guide
 
@@ -28,22 +28,22 @@ JSDoc conventions: supported tags, documenting the public contract, no JSDoc on 
 
 docs/error-handling.md
 
-Operator errors (`UsageError`, printed without a stack) versus defects (printed in full); assertions and turning them into config errors at the boundary; the Admin, Publishing, Cloudflare, and bundle error classes and their typed subclasses; Cloudflare auth guidance; retry rules for reads and writes; reporting partial success; and wrapping with `cause`.
+Operator errors (`UsageError`, printed without a stack, exit 2) versus defects (printed in full, exit 1); subclasses with their own exit code (`ProjectNotFoundError`, `UnsupportedProjectVersionError`, `CommandNotAvailableError`); errors from the project's own Kixx code; assertions and turning them into config errors at the boundary; the Admin, Publishing, Cloudflare, and bundle error classes and their typed subclasses; Cloudflare auth guidance; retry rules for reads and writes; reporting partial success; and wrapping with `cause`.
 
 ### Packaging and Runtimes
 
 docs/packaging-and-runtimes.md
 
-Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules, vendored code, keeping `package.json` and `deno.json` in sync, Node.js and Deno differences, Deno install permissions, and the injectable test seams (`output`, `fileSystem`, `fetch`, `now`).
+Publishing to npm and JSR from one tree: the stand-alone and no-dependency rules, loading framework logic from the project at run time, what project code the CLI runs, vendored code, keeping `package.json` and `deno.json` in sync, Node.js and Deno differences, Deno install permissions, and the injectable test seams (`output`, `fileSystem`, `fetch`, `now`).
 
 ### Unit Testing Guide
 
 test/README.md
 
-Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests (mostly parked in `test-v6/devkit/conformance/` and not run, R16), hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
+Running the suite on Node.js and Deno, file conventions, `kixx-test` and `kixx-assert` imports and structure, setup patterns, conformance tests against core, hook semantics, timeouts, skipping, assertions, `MockTracker`, the `test/helpers/` stand-ins and fixtures, error and rejection tests, and writing good tests.
 
 ### Devkit Usage Docs
 
-../usage-docs/kixx-devkit/
+../usage-docs/kixx-dev/
 
-Public docs for `kixx` users: `configuration.md` (`.kixx` settings, `cloudflare-config.jsonc`, `.env.<env>`, `example.env.secrets`), `admin.md`, `app.md`, `cloudflare.md`, `dev.md`, and `local.md`. Update the matching page when a command's behavior or options change.
+Public docs for `kixx-dev` users: `commands.md` (every command and whether it is available, `generate`, `--help`, `--json` and its envelope, and the exit-code table), `configuration.md` (how a project is found, supported project versions, the `.kixx` settings layers, and the project files the CLI reads), `dev.md`, and `local.md`. Update the matching page when a command's behavior or options change, and `commands.md` when a command is added, becomes available, or the envelope or exit codes gain something. The section that builds a command writes its page.

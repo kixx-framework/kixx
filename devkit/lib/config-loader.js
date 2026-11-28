@@ -1,8 +1,7 @@
 import fsp from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import process from 'node:process';
 import {
+    assertNonEmptyString,
     isObjectNotNull,
     isPlainObject,
     isUndefined,
@@ -26,7 +25,6 @@ const SECRETS_FILE_NAME = 'secrets.json';
 
 /**
  * @typedef {Object} Configuration
- * @property {string} projectDirectory - Discovered project root, or the starting directory when no project was found.
  * @property {Object} config - Frozen, merged general configuration settings.
  * @property {Object} secrets - Frozen, merged secrets.
  * @property {string[]} configFilepaths - Config files searched, home layer first.
@@ -37,23 +35,21 @@ const SECRETS_FILE_NAME = 'secrets.json';
  * Loads and merges the home and project configuration layers.
  *
  * A missing `.kixx` directory or a missing file yields an empty layer; only a
- * file which exists but cannot be used is treated as an error.
- * @param {Object} [args] - Loader options.
- * @param {string} [args.startDirectory=process.cwd()] - Directory to begin the upward search for a project.
- * @param {string} [args.homeDirectory=os.homedir()] - Directory holding the home layer, and the upper bound of the search.
+ * file which exists but cannot be used is treated as an error. The caller
+ * finds the project (`lib/project/find-project.js`); this module never
+ * searches for one.
+ * @param {Object} args - Loader options.
+ * @param {string} args.projectDirectory - The project root, which holds the project layer.
+ * @param {string} args.homeDirectory - Directory holding the home layer.
  * @returns {Promise<Configuration>} Merged configuration with the searched filepaths.
  * @throws {UsageError} When a file exists but is unreadable, is not valid JSON, or is not a JSON object.
  */
 export async function loadConfiguration(args) {
-    const {
-        startDirectory = process.cwd(),
-        homeDirectory = os.homedir(),
-    } = args ?? {};
+    const { projectDirectory, homeDirectory } = args ?? {};
 
-    const projectDirectory = await findProjectDirectory(startDirectory, homeDirectory);
+    assertNonEmptyString(projectDirectory, 'loadConfiguration: args.projectDirectory');
+    assertNonEmptyString(homeDirectory, 'loadConfiguration: args.homeDirectory');
 
-    // Both layers are searched even when the project layer is absent so the
-    // filepath lists stay useful for reporting where a value should be added.
     const configFilepaths = buildFilepaths(CONFIG_FILE_NAME, homeDirectory, projectDirectory);
     const secretsFilepaths = buildFilepaths(SECRETS_FILE_NAME, homeDirectory, projectDirectory);
 
@@ -61,7 +57,6 @@ export async function loadConfiguration(args) {
     const secrets = await mergeFileLayers(secretsFilepaths);
 
     return {
-        projectDirectory: projectDirectory ?? path.resolve(startDirectory),
         config: deepFreeze(config),
         secrets: deepFreeze(secrets),
         configFilepaths,
@@ -86,39 +81,18 @@ export function findMissingKeys(source, keyPaths) {
     });
 }
 
-// Walks up from the starting directory looking for the directory which owns a
-// `.kixx` directory. The search stops before reaching the home directory
-// because `~/.kixx` is already loaded as the home layer; treating it as a
-// project layer as well would merge that layer over itself.
-async function findProjectDirectory(startDirectory, homeDirectory) {
-    let currentDirectory = path.resolve(startDirectory);
-    const { root } = path.parse(currentDirectory);
-
-    while (currentDirectory !== homeDirectory) {
-        const candidate = path.join(currentDirectory, CONFIG_DIRECTORY_NAME);
-
-        if (await isDirectory(candidate)) {
-            return currentDirectory;
-        }
-
-        if (currentDirectory === root) {
-            return null;
-        }
-
-        currentDirectory = path.dirname(currentDirectory);
-    }
-
-    return null;
-}
-
+// Home first, so the project layer overrides it. A project at the home
+// directory has one `.kixx`, which is loaded once: merging it over itself
+// would change nothing, and listing it twice would misreport where a missing
+// value belongs.
 function buildFilepaths(filename, homeDirectory, projectDirectory) {
-    const filepaths = [ path.join(homeDirectory, CONFIG_DIRECTORY_NAME, filename) ];
+    const directories = [ path.resolve(homeDirectory) ];
 
-    if (projectDirectory) {
-        filepaths.push(path.join(projectDirectory, CONFIG_DIRECTORY_NAME, filename));
+    if (path.resolve(projectDirectory) !== directories[0]) {
+        directories.push(path.resolve(projectDirectory));
     }
 
-    return filepaths;
+    return directories.map((directory) => path.join(directory, CONFIG_DIRECTORY_NAME, filename));
 }
 
 async function mergeFileLayers(filepaths) {
@@ -212,13 +186,4 @@ function getValueAtPath(source, keyPath) {
     }
 
     return current;
-}
-
-async function isDirectory(filepath) {
-    try {
-        const stats = await fsp.stat(filepath);
-        return stats.isDirectory();
-    } catch {
-        return false;
-    }
 }

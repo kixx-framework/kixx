@@ -1,0 +1,481 @@
+/**
+ * The command runner: one path from a command line to an exit code, for every
+ * command. It owns dispatch, help, argument parsing, finding the project and
+ * checking its version, settings, the `--json` envelope, and the mapping from
+ * a thrown error to an exit code. See
+ * `commands/README.md` for the contract.
+ * @module run-cli
+ */
+
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import { inspect, parseArgs } from 'node:util';
+import CommandRegistry from './command-registry.js';
+import UsageError from './usage-error.js';
+import { acceptsDirectory, requiresProject, splitPositionals } from './command-positionals.js';
+import { findMissingKeys, loadConfiguration } from './config-loader.js';
+import { EXIT_CODES, EXIT_CODE_BY_ERROR_CODE, describeError } from './exit-codes.js';
+import { requireProject } from './project/find-project.js';
+import { checkProjectVersion, readProjectVersion } from './project/project-version.js';
+import { describeCommand, renderCommandHelp, renderCommandList } from './render-help.js';
+import { wrapText } from './text-wrap.js';
+import { isNonEmptyString, isPlainObject, isUndefined } from './vendor/kixx-assert/mod.js';
+import manifest from '../deno.json' with { type: 'json' };
+
+
+const PROGRAM_NAME = 'kixx-dev';
+
+// The flags that work with or without a command, anywhere on the command
+// line. No command may declare one (a registry test enforces it).
+const GLOBAL_FLAGS = Object.freeze({
+    '--help': 'help',
+    '-h': 'help',
+    '--version': 'version',
+    '-v': 'version',
+    '--json': 'json',
+});
+
+
+// A command line that names no runnable command. Text mode prints the list of
+// what exists under the message.
+class UnknownCommandError extends UsageError {
+    static code = 'UsageError';
+
+    constructor(message, helpText) {
+        super(message);
+        this.helpText = helpText;
+    }
+}
+
+
+/**
+ * Runs one command line and resolves its exit code. It never rejects for a
+ * failure of the command: every error becomes a row of the exit-code table.
+ *
+ * With `--json`, stdout receives exactly one line, the envelope, and the
+ * command's human text goes to stderr. Without it, the command's text goes to
+ * stdout and errors go to stderr.
+ * @param {Object} args
+ * @param {string[]} args.argv - Arguments after the program name
+ * @param {string} args.cwd - Working directory; where the search for a project starts, and what a relative directory argument resolves against
+ * @param {string} args.homeDirectory - Directory holding the home settings layer
+ * @param {{write: function(string): *}} args.stdout
+ * @param {{write: function(string): *}} args.stderr
+ * @param {Object<string, Function>} args.commands - Command name to command class
+ * @param {Object<string, string>} [args.groups] - Group name to description
+ * @param {function(string): Promise<Object>} [args.loadProjectTooling] - Loads a project's own
+ *   tooling from its directory (`lib/project/load-project-tooling.js`). Called only for a command
+ *   that declares `requiresTooling`.
+ * @param {string} [args.version] - Defaults to the version in `deno.json`
+ * @returns {Promise<number>} The process exit code
+ */
+export default async function runCli(args) {
+    const {
+        argv,
+        cwd,
+        homeDirectory,
+        stdout,
+        stderr,
+        commands,
+        groups,
+        loadProjectTooling,
+        version = manifest.version,
+    } = args ?? {};
+
+    const registry = new CommandRegistry(commands, groups);
+    const { flags, rest } = extractGlobalFlags(argv, findStringOptionTokens(registry, argv));
+
+    // Shared with the catch block, so an error names the command it came from.
+    const state = { commandName: null };
+
+    try {
+        const data = await dispatch({
+            flags,
+            rest,
+            state,
+            cwd,
+            homeDirectory,
+            stdout,
+            stderr,
+            loadProjectTooling,
+            registry,
+            version,
+        });
+
+        if (flags.json) {
+            writeEnvelope(stdout, { ok: true, command: state.commandName, data });
+        }
+
+        return 0;
+    } catch (error) {
+        const report = describeError(error);
+        const isDefect = report.exitCode === EXIT_CODE_BY_ERROR_CODE.UnexpectedError;
+
+        if (flags.json) {
+            writeEnvelope(stdout, { ok: false, command: state.commandName, error: report });
+        } else if (!isDefect) {
+            stderr.write(`${ wrapText(report.message) }\n`);
+
+            if (error instanceof UnknownCommandError) {
+                stderr.write(`\n${ error.helpText }`);
+            }
+        }
+
+        // A defect prints in full, cause chain included, in both modes: the
+        // stack is what the developer needs.
+        if (isDefect) {
+            stderr.write(`Failed to run command:\n${ inspect(error) }\n`);
+        }
+
+        return report.exitCode;
+    }
+}
+
+// Resolves the `data` of a successful run, and writes help and version text
+// when the result is not going into an envelope.
+async function dispatch(context) {
+    const { flags, rest, state, registry, stdout, version } = context;
+
+    // Checked before command resolution, so the flag wins wherever it is.
+    if (flags.version) {
+        if (!flags.json) {
+            stdout.write(`${ version }\n`);
+        }
+
+        return { version };
+    }
+
+    const words = takeLeadingWords(rest);
+    const resolved = registry.resolve(words);
+
+    if (!resolved) {
+        return resolveWithoutCommand({ flags, words, registry, stdout, version });
+    }
+
+    const { name, Command, wordCount } = resolved;
+
+    state.commandName = name;
+
+    if (flags.help) {
+        const help = describeCommand(name, Command);
+
+        if (!flags.json) {
+            stdout.write(renderCommandHelp(help));
+        }
+
+        return help;
+    }
+
+    return await runCommand({
+        ...context,
+        name,
+        Command,
+        commandArgv: rest.slice(wordCount),
+    });
+}
+
+// Top-level help, a group's help, or the usage error for a command line that
+// names nothing registered.
+function resolveWithoutCommand(args) {
+    const { flags, words, registry, stdout, version } = args;
+    const [ firstWord ] = words;
+    const isGroup = !isUndefined(firstWord) && registry.hasGroup(firstWord);
+
+    const topLevelCommands = registry.listCommands();
+    const groupCommands = isGroup ? registry.listCommands(firstWord) : [];
+
+    const helpText = isGroup
+        ? renderCommandList({ group: firstWord, description: registry.describeGroup(firstWord), commands: groupCommands })
+        : renderCommandList({ commands: topLevelCommands });
+
+    if (flags.help && words.length === 0) {
+        if (!flags.json) {
+            stdout.write(helpText);
+        }
+
+        return { version, commands: topLevelCommands, exitCodes: EXIT_CODES };
+    }
+
+    if (flags.help && isGroup && words.length === 1) {
+        if (!flags.json) {
+            stdout.write(helpText);
+        }
+
+        return { group: firstWord, description: registry.describeGroup(firstWord), commands: groupCommands };
+    }
+
+    if (words.length === 0) {
+        throw new UnknownCommandError(`A command name is required. Run "${ PROGRAM_NAME } --help" for the list.`, helpText);
+    }
+
+    if (isGroup && words.length === 1) {
+        throw new UnknownCommandError(
+            `"${ firstWord }" needs a command name after it. Run "${ PROGRAM_NAME } ${ firstWord } --help" for the list.`,
+            helpText,
+        );
+    }
+
+    if (isGroup) {
+        throw new UnknownCommandError(
+            `The command "${ firstWord } ${ words[1] }" does not exist. Run "${ PROGRAM_NAME } ${ firstWord } --help" for the list.`,
+            helpText,
+        );
+    }
+
+    throw new UnknownCommandError(
+        `The command "${ firstWord }" does not exist. Run "${ PROGRAM_NAME } --help" for the list.`,
+        helpText,
+    );
+}
+
+async function runCommand(args) {
+    const {
+        flags,
+        name,
+        Command,
+        commandArgv,
+        stdout,
+        stderr,
+        cwd,
+    } = args;
+
+    // Under --json, stdout holds only the envelope, so everything a command
+    // writes for a person goes to stderr. A command resolves a relative path
+    // from the command line against `cwd`, as the runner does.
+    const streams = {
+        cwd,
+        output: flags.json ? stderr : stdout,
+        stdout: flags.json ? stderr : stdout,
+        stderr,
+    };
+
+    // A placeholder's real options don't exist yet, so its arguments are not
+    // parsed, and it needs no project or settings to say it is not available.
+    if (Command.available === false) {
+        const placeholder = new Command({ commandName: name, ...streams });
+        return toData(name, await placeholder.run({}, {}));
+    }
+
+    let parsed;
+
+    try {
+        parsed = parseArgs({
+            args: commandArgv,
+            allowPositionals: true,
+            allowNegative: true,
+            options: Command.options ?? {},
+        });
+    } catch (cause) {
+        // Unknown or malformed flags are operator mistakes, not crashes.
+        throw new UsageError(`${ cause.message }\nRun "${ PROGRAM_NAME } ${ name } --help" for usage.`, { cause });
+    }
+
+    const { values: positionals, directory } = splitPositionals(
+        Command.positionals,
+        parsed.positionals,
+        { commandLabel: name, acceptsDirectory: acceptsDirectory(Command) },
+    );
+
+    // A command that runs anywhere gets no project, no settings, and nothing
+    // read from disk on its behalf.
+    if (!requiresProject(Command)) {
+        const command = new Command({ ...streams });
+        return toData(name, await command.run(parsed.values, positionals));
+    }
+
+    const project = await loadProject({ ...args, directory });
+    const command = new Command({ ...project, ...streams });
+
+    return toData(name, await command.run(parsed.values, positionals));
+}
+
+// Everything a `requiresProject` command is given beside its streams. The
+// order matters: the version gate runs before any settings are read, and
+// before any project code is loaded.
+async function loadProject(args) {
+    const {
+        name,
+        Command,
+        directory,
+        cwd,
+        homeDirectory,
+        stderr,
+        version,
+        loadProjectTooling,
+    } = args;
+
+    const startDirectory = await resolveStartDirectory(cwd, directory);
+    const projectDirectory = await requireProject(startDirectory);
+    const projectVersion = await readProjectVersion(projectDirectory);
+    const { isNewerThanCli } = checkProjectVersion({ projectVersion, cliVersion: version });
+
+    if (isNewerThanCli) {
+        // One line, to stderr in both modes, and the command still runs: the
+        // project's own logic is what makes a newer project work.
+        stderr.write(
+            `The project uses Kixx ${ projectVersion }, which is newer than ${ PROGRAM_NAME } ${ version }. `
+            + `Upgrade ${ PROGRAM_NAME } if something fails.\n`,
+        );
+    }
+
+    const configuration = await loadConfiguration({ projectDirectory, homeDirectory });
+
+    assertRequiredSettings({
+        commandLabel: name,
+        settingsLabel: 'configuration settings',
+        source: configuration.config,
+        keyPaths: Command.requiredConfig,
+        filepaths: configuration.configFilepaths,
+    });
+
+    assertRequiredSettings({
+        commandLabel: name,
+        settingsLabel: 'secrets',
+        source: configuration.secrets,
+        keyPaths: Command.requiredSecrets,
+        filepaths: configuration.secretsFilepaths,
+    });
+
+    const project = {
+        projectDirectory,
+        config: configuration.config,
+        secrets: configuration.secrets,
+    };
+
+    if (Command.requiresTooling === true) {
+        project.tooling = await loadProjectTooling(projectDirectory);
+    }
+
+    return project;
+}
+
+// Turns what run() resolved into the envelope's `data`.
+function toData(name, result) {
+    if (isUndefined(result)) {
+        return {};
+    }
+
+    if (!isPlainObject(result)) {
+        throw new TypeError(`The "${ name }" command resolved ${ inspect(result) }; a command resolves a plain object or undefined`);
+    }
+
+    return result;
+}
+
+// Removes the global flags from the command line, wherever they are, and
+// reports which were set. Tokens after "--" are positionals and stay, and so
+// does the value of a string option, as in `--target --json`.
+function extractGlobalFlags(argv, stringOptionTokens = new Set()) {
+    const flags = { help: false, version: false, json: false };
+    const rest = [];
+
+    for (let i = 0; i < argv.length; i += 1) {
+        const token = argv[i];
+
+        if (token === '--') {
+            rest.push(...argv.slice(i));
+            break;
+        }
+
+        if (stringOptionTokens.has(token) && i + 1 < argv.length) {
+            rest.push(token, argv[i + 1]);
+            i += 1;
+        } else if (Object.hasOwn(GLOBAL_FLAGS, token)) {
+            flags[GLOBAL_FLAGS[token]] = true;
+        } else {
+            rest.push(token);
+        }
+    }
+
+    return { flags, rest };
+}
+
+// The tokens that take the next token as their value (`--target` and `-t`)
+// in the command the line names, so that value is never read as a global
+// flag. Resolved on a first pass that removes every global flag.
+function findStringOptionTokens(registry, argv) {
+    const resolved = registry.resolve(takeLeadingWords(extractGlobalFlags(argv).rest));
+    const tokens = new Set();
+
+    if (!resolved || resolved.Command.available === false) {
+        return tokens;
+    }
+
+    for (const [ name, option ] of Object.entries(resolved.Command.options ?? {})) {
+        if (option?.type === 'string') {
+            tokens.add(`--${ name }`);
+
+            if (isNonEmptyString(option.short)) {
+                tokens.add(`-${ option.short }`);
+            }
+        }
+    }
+
+    return tokens;
+}
+
+// The command words are the leading tokens before any flag.
+function takeLeadingWords(argv) {
+    const end = argv.findIndex((token) => token.startsWith('-'));
+    return end === -1 ? [ ...argv ] : argv.slice(0, end);
+}
+
+async function resolveStartDirectory(cwd, directory) {
+    if (isUndefined(directory)) {
+        return cwd;
+    }
+
+    const startDirectory = path.resolve(cwd, directory);
+
+    let stats;
+
+    try {
+        stats = await fsp.stat(startDirectory);
+    } catch {
+        stats = null;
+    }
+
+    if (!stats?.isDirectory()) {
+        throw new UsageError(`The directory ${ startDirectory } does not exist or is not a directory.`);
+    }
+
+    return startDirectory;
+}
+
+// Fails before the command is constructed so a command never runs partially
+// configured, and so the message can name the files the value belongs in
+// rather than surfacing as an assertion failure deep inside an API client.
+function assertRequiredSettings(args) {
+    const {
+        commandLabel,
+        settingsLabel,
+        source,
+        keyPaths,
+        filepaths,
+    } = args;
+
+    const missing = findMissingKeys(source, keyPaths);
+
+    if (missing.length === 0) {
+        return;
+    }
+
+    const lines = [ `Missing required ${ settingsLabel } for "${ commandLabel }":` ];
+
+    for (const keyPath of missing) {
+        lines.push(`  ${ keyPath }`);
+    }
+
+    lines.push('');
+    lines.push('Set them in one of these files:');
+
+    for (const filepath of filepaths) {
+        lines.push(`  ${ filepath }`);
+    }
+
+    throw new UsageError(lines.join('\n'));
+}
+
+function writeEnvelope(stdout, envelope) {
+    stdout.write(`${ JSON.stringify(envelope) }\n`);
+}

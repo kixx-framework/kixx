@@ -8,6 +8,8 @@ export default class LocalDestroyCommand {
 
     static description = 'Delete a stopped local instance and all of its data';
 
+    static requiresProject = true;
+
     static positionals = [ NAME_POSITIONAL ];
 
     static options = {
@@ -15,17 +17,20 @@ export default class LocalDestroyCommand {
     };
 
     #projectDirectory;
+    #cwd;
     #output;
     #canConnect;
 
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
             output = process.stdout,
             canConnect = defaultCanConnect,
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
         this.#output = output;
         this.#canConnect = canConnect;
     }
@@ -36,6 +41,7 @@ export default class LocalDestroyCommand {
         await destroyInstance({
             instancesDirectory: resolveInstancesDirectory({
                 sourceDirectory: this.#projectDirectory,
+                cwd: this.#cwd,
                 target: options?.target,
             }),
             name,
@@ -44,6 +50,6 @@ export default class LocalDestroyCommand {
 
         createLocalLog(this.#output)(`Destroyed local instance "${ name }"`);
 
-        return 0;
+        return { name };
     }
 }

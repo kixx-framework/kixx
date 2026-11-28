@@ -18,6 +18,9 @@ export default class LocalCreateCommand {
         and generated secrets in <target>/instances/<name>/
     `;
 
+    // The project's own parser reads its example.env.secrets.
+    static requiresTooling = true;
+
     static positionals = [ NAME_POSITIONAL ];
 
     static options = {
@@ -30,6 +33,8 @@ export default class LocalCreateCommand {
     };
 
     #projectDirectory;
+    #cwd;
+    #tooling;
     #output;
     #now;
     #getFreePort;
@@ -38,6 +43,8 @@ export default class LocalCreateCommand {
     constructor(args) {
         const {
             projectDirectory,
+            cwd = process.cwd(),
+            tooling,
             output = process.stdout,
             now,
             getFreePort = defaultGetFreePort,
@@ -45,6 +52,8 @@ export default class LocalCreateCommand {
         } = args ?? {};
 
         this.#projectDirectory = projectDirectory;
+        this.#cwd = cwd;
+        this.#tooling = tooling;
         this.#output = output;
         this.#now = now;
         this.#getFreePort = getFreePort;
@@ -59,10 +68,12 @@ export default class LocalCreateCommand {
             sourceDirectory: this.#projectDirectory,
             instancesDirectory: resolveInstancesDirectory({
                 sourceDirectory: this.#projectDirectory,
+                cwd: this.#cwd,
                 target: options?.target,
             }),
             name,
             port,
+            parseSecretsManifest: this.#tooling.tooling.parseSecretsManifest,
             now: this.#now,
             getFreePort: this.#getFreePort,
         });
@@ -81,12 +92,20 @@ export default class LocalCreateCommand {
         }
 
         log(`Next: ${ formatLocalCommand({
-            command: `seed ${ name }`,
+            command: `start ${ name }`,
+            cwd: this.#cwd,
             projectDirectory: this.#projectDirectory,
             target: options?.target,
         }) }`);
 
-        return 0;
+        // The instance also holds generated secrets and the names of its
+        // dotenv variables. Neither belongs in a command's data.
+        return {
+            name,
+            port: instance.port,
+            buildId: instance.buildId,
+            directory: instance.directory,
+        };
     }
 }
 

@@ -31,7 +31,7 @@ This mono-repo holds every part of the Kixx framework. The important directories
 
 ```
 kixx/
-├── .github/workflows/ci.yml     # CI: lint, unit tests, the skeleton project, and local integration tests
+├── .github/workflows/ci.yml     # CI: lint, unit tests, the devkit, the skeleton project, and local integration tests
 ├── kixx/                        # Core, vendored into projects as kixx/
 │   ├── config/, context/, http-router/, hyperview/, logger/, ...   # Framework modules
 │   ├── content-compiler/        # Compiles content into objects and a Release manifest, and checks it
@@ -57,13 +57,13 @@ kixx/
 │   ├── build/                   # The built test app (git-ignored)
 │   └── test/                    # Integration tests
 ├── docs/                        # Maintainer guides; start with doc-index.md
-├── devkit/                      # The `kixx` CLI, published as kixx-devkit; stand-alone
-│   ├── kixx.js                  # CLI entry point
-│   ├── commands/                # Thin command wrappers: admin, app, cloudflare, dev, local
-│   ├── lib/                     # Command logic; vendored code in lib/vendor/
+├── devkit/                      # The `kixx-dev` CLI, published as kixx-dev; stand-alone
+│   ├── kixx-dev.js              # CLI entry point
+│   ├── commands/                # The command registry and thin command wrappers
+│   ├── lib/                     # The command runner and command logic; vendored code in lib/vendor/
 │   ├── templates/project/       # The project skeleton a new project is copied from
 │   ├── docs/                    # Developer guides; start with doc-index.md
-│   ├── test/                    # Unit tests (most still parked in test-v6/devkit/)
+│   ├── test/                    # Unit tests
 │   ├── run-tests.js             # Test runner (`node devkit/run-tests.js [path]`)
 │   └── run-linter.js            # Linter (`node devkit/run-linter.js <path>`)
 ├── reference-app/               # What remains of the v6 starter app: source material, not runnable
@@ -85,7 +85,7 @@ kixx/
 
 `reference-app/` is what remains of the v6 starter app. It is not maintained or runnable; it shrinks as code moves out of it, and is deleted at the end of the extraction. `test-v6/` holds the v6 tests (the v6 integration suites included) until each is brought back beside the code it covers.
 
-**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. Its `skeleton` job builds a project with no plugins (`node tools/build-project.js`), installs that project's own dev dependencies, and runs its tests and lint on Node.js and its tests on Deno. Its `integration-local` job runs the integration suite in `test-app/` against a test app started on the runner with production settings (`test-app/run-local.js`), once on Node.js and once on Deno. The deployed integration targets aren't in CI: the operator runs those. The devkit suite isn't in CI yet; run it by hand with `node devkit/run-tests.js`.
+**Continuous Integration.** GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request. It runs `node run-linter.js` on Node.js 24, and the unit suite with `node run-tests.js` on Node.js 24 and `deno run -A run-tests.js` on Deno 2.8. Its `skeleton` job builds a project with no plugins (`node tools/build-project.js`), installs that project's own dev dependencies, and runs its tests and lint on Node.js and its tests on Deno. Its `integration-local` job runs the integration suite in `test-app/` against a test app started on the runner with production settings (`test-app/run-local.js`), once on Node.js and once on Deno. The deployed integration targets aren't in CI: the operator runs those. Its `devkit-lint`, `devkit-test-node`, and `devkit-test-deno` jobs lint the devkit (`node devkit/run-linter.js devkit`) and run its unit suite on Node.js 24 and Deno 2.8 (`node devkit/run-tests.js`, `deno run -A devkit/run-tests.js`); they install only the root's dev dependencies.
 
 Kixx Core
 ---------
@@ -100,15 +100,15 @@ A plugin is a directory in `plugins/` with a manifest, `plugin.json`. Core has o
 Kixx Devkit
 -----------
 
-The Kixx Devkit lives in `devkit/`. It provides the `kixx` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
+The Kixx Devkit lives in `devkit/`. It provides the `kixx-dev` command line tool, which you install from npm or JSR and run against your project. You don't add it to your app's code.
 
-With it you can:
+Every command supports `--help` and `--json`, and exits with a code from one documented table (`usage-docs/kixx-dev/commands.md`). It finds your project by its `kixx/plugin.json`, and loads the framework's own logic from your project's `kixx/`, so one `kixx-dev` works across project versions. In this version you can:
 
-- `kixx dev` - Run your app locally. It restarts when you change the code.
-- `kixx local` - Run throwaway local instances with writable data, to test publishing and admin signup.
-- `kixx admin` - Create the first admin account and run data migrations.
-- `kixx app` - Publish your site's content to a running app.
-- `kixx cloudflare` - Create, upload, and deploy your app as a Cloudflare Worker.
+- `kixx-dev generate` - Rewrite your project's generated files after you change a manifest.
+- `kixx-dev dev` - Run your app locally. It restarts when you change the code.
+- `kixx-dev local` - Run throwaway local instances with writable data.
+
+The rest of the command tree (`new`, `check`, `publish`, `deploy`, and the others `kixx-dev --help` lists) is registered but not built yet: each command has `--help` and exits `4` when run.
 
 `devkit/templates/project/` is the project skeleton: every hand-written file of a new project with no plugins. It ships inside the devkit, and holds no core and no generated file.
 

@@ -1,7 +1,5 @@
 # Unit Testing Guide
 
-> **Status:** Some devkit tests are back in `devkit/test/`; the rest are parked in `test-v6/devkit/` until their sections bring them back. `node devkit/run-tests.js` runs what is here. `devkit/test/helpers/memory-file-system.js` is back; the other helpers and fixtures named below are still parked in `test-v6/devkit/helpers/` and `test-v6/devkit/fixtures/`.
-
 This project uses two ES module libraries:
 
 - `kixx-test` provides the test runner API: `describe`, `it`, `before`, `after`, `xit`, `xdescribe`, and `MockTracker`. It is installed in `node_modules/` and imported by bare module name.
@@ -19,12 +17,12 @@ deno run -A devkit/run-tests.js                           # full suite on Deno
 node devkit/run-linter.js devkit                          # lint
 ```
 
-Pathnames resolve from your working directory and must be inside `devkit/test/`. The runner then changes directory to `devkit/` before importing tests. Install the dev dependencies first with `cd devkit && npm install`.
+Pathnames resolve from your working directory and must be inside `devkit/test/`. The runner then changes directory to `devkit/` before importing tests. Install the dev dependencies first with `npm install` at the repository root; the devkit has no `node_modules/` of its own.
 
 ## File Conventions
 
 - Name test files `*.test.js`, for example `devkit/test/lib/config-loader.test.js`. The runner collects nothing else.
-- Mirror the source tree: `devkit/lib/config-loader.js` is tested by `devkit/test/lib/config-loader.test.js`, and `devkit/commands/admin/gen-secure-token.js` by `devkit/test/commands/admin/gen-secure-token.test.js`.
+- Mirror the source tree: `devkit/lib/config-loader.js` is tested by `devkit/test/lib/config-loader.test.js`, and `devkit/commands/local/create.js` by `devkit/test/commands/local/create.test.js`. Test the command contract (dispatch, `--json`, exit codes, help) in process by calling `runCli()` with fake streams and fake commands, as `devkit/test/lib/run-cli.test.js` does; only `devkit/test/kixx-dev.test.js` spawns the entry point.
 - Shared helpers go in `devkit/test/helpers/` and fixture files in `devkit/test/fixtures/` (not linted).
 - Use one top-level `describe` per test file, named after the module, class, or behavior under test.
 
@@ -98,9 +96,12 @@ Use `before` when a group intentionally exercises one setup/action/result across
 
 ## Conformance Tests Against Core
 
-Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/content-contract.test.js` passes a devkit-composed Release manifest to core's validator).
+Nothing under `devkit/` may import from outside `devkit/`, because the package is published stand-alone. Tests in `devkit/test/conformance/` are the one exception: they may import core (`kixx/`) modules, read-only, to prove devkit agrees with the application on wire formats and file dialects (for example `conformance/publish-pipeline.test.js` passes the Release manifest the publishing pipeline sends to core's validator).
+
+`conformance/project-tooling.test.js` runs the devkit against core as a project has it: it builds a real project in a temporary directory (the skeleton, with this repository's core as its `kixx/`), runs `kixx-dev generate` in process with the real tooling loader, and compares what was written with what the project's own generator renders. `conformance/built-project.js` builds that project. It is not a test, and it lives there because it reads core; `test/kixx-dev.test.js` imports it to run `generate` in a child process.
 
 - Never write into `kixx/`. Use an overlay or in-memory `fileSystem` when a test needs a generated file.
+- Never run `generate` with the working directory inside this repository: its root holds `kixx/plugin.json`, so the CLI would find the repository itself. Pass a temporary project directory.
 - Compare devkit's result with core's result rather than restating core's rules in the test.
 - `test/` is excluded from both published packages, so these imports never ship.
 
@@ -271,13 +272,23 @@ files, so a helper module is never collected as a suite.
 
 - `capture-output.js`: an `output` stream that records writes.
 - `memory-file-system.js`: an in-memory text file system.
-- `fake-cloudflare-client.js`: a recording Cloudflare client for
-  `create-worker-version`; any endpoint outside its allowed set throws, and
+- `temporary-project.js`: `withTemporaryDirectory(fn)` makes and removes a
+  temporary directory, and `writeProjectMarker(directory, { version })` writes
+  the `kixx/plugin.json` that makes a directory a project to the CLI. Use them
+  for a `requiresProject` command; pass a fake loader when it needs tooling.
+- `fake-cloudflare-client.js`: a recording Cloudflare client for the
+  `lib/cloudflare/` tests; any endpoint outside its allowed set throws, and
   `forbiddenCalls()` reports it.
 
-Fixtures: `lib-cloudflare-config.jsonc` (a copy of the v6 `lib/` config) and
-`worker-project/` (a minimal project; copy it to a temp directory before
-writing into it).
+- `fake-parsers.js`: stand-ins for the `parseJsonc()` and
+  `parseSecretsManifest()` a command takes from the project's tooling. They
+  read only what these tests write. The conformance tests use core's.
+
+Fixtures: `lib-cloudflare-config.jsonc` (a copy of the v6 `lib/` config, which
+still holds blocks the devkit no longer reads) and `worker-project/` (the three
+text files of a minimal project: `cloudflare-config.jsonc`, `.env.production`,
+and `example.env.secrets`). Tests read them as text and never write there.
+Delete a fixture when its last test goes.
 
 Useful mock APIs:
 
