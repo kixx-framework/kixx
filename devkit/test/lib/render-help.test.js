@@ -1,6 +1,7 @@
 import { describe } from 'kixx-test';
 import { assert, assertEqual, assertMatches } from '../../lib/vendor/kixx-assert/mod.js';
 import {
+    NOT_AVAILABLE_HEADING,
     NOT_AVAILABLE_NOTICE,
     describeCommand,
     renderCommandHelp,
@@ -260,7 +261,9 @@ describe('render-help', ({ describe }) => {
                 'Commands:',
                 '  build          Build the thing',
                 '  tools sharpen  Sharpen a tool',
-                '  deploy         Deploy the app (Not available in this version of kixx-dev.)',
+                '',
+                'Not available in this version:',
+                '  deploy         Deploy the app',
                 '',
                 'Options:',
                 '  -h, --help     Show this help',
@@ -280,6 +283,35 @@ describe('render-help', ({ describe }) => {
             });
 
             assertMatches(/^Usage: kixx-dev tools <command> \[options\] \[\.\.\.args\]\n\n {2}Tools for things\n\nCommands:\n {2}tools sharpen {2}Sharpen a tool\n/, text);
+        });
+
+        it('lists placeholders under their own heading, with no marker on each', () => {
+            const text = renderCommandList({ commands });
+
+            assertEqual('Not available in this version:', NOT_AVAILABLE_HEADING);
+            assert(!text.includes(NOT_AVAILABLE_NOTICE), 'repeats the notice');
+            assert(text.indexOf('Commands:') < text.indexOf(NOT_AVAILABLE_HEADING), 'available commands come first');
+        });
+
+        it('splits a group the same way', () => {
+            const text = renderCommandList({
+                group: 'tools',
+                commands: [
+                    { name: 'tools polish', description: 'Polish a tool', available: false },
+                    { name: 'tools sharpen', description: 'Sharpen a tool', available: true },
+                ],
+            });
+
+            assertMatches('\nCommands:\n  tools sharpen  Sharpen a tool\n\nNot available in this version:\n  tools polish   Polish a tool\n\nOptions:\n', text);
+        });
+
+        it('leaves out a heading with nothing under it', () => {
+            const none = renderCommandList({ commands: [ commands[2] ] });
+            const all = renderCommandList({ commands: [ commands[0] ] });
+
+            assert(!none.includes('Commands:'), 'an empty "Commands:" heading');
+            assertMatches('\nNot available in this version:\n  deploy  Deploy the app\n', none);
+            assert(!all.includes(NOT_AVAILABLE_HEADING), 'an empty placeholder heading');
         });
 
         it('wraps a long description under its own column', () => {

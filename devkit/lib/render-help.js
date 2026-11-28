@@ -12,10 +12,16 @@ import { CONSOLE_LINE_WIDTH, collapseWhitespace, wrapWords } from './text-wrap.j
 const PROGRAM_NAME = 'kixx-dev';
 
 /**
- * Printed by a placeholder's help, and beside its name in a command list.
+ * Printed by a placeholder's own help.
  * @type {string}
  */
 export const NOT_AVAILABLE_NOTICE = `Not available in this version of ${ PROGRAM_NAME }.`;
+
+/**
+ * The heading over the placeholders in a command list.
+ * @type {string}
+ */
+export const NOT_AVAILABLE_HEADING = 'Not available in this version:';
 
 // The flags the runner handles for every command, in the shape commands use
 // to declare their own.
@@ -142,7 +148,9 @@ export function renderCommandHelp(help) {
 }
 
 /**
- * Renders the help for the whole CLI, or for one group of commands.
+ * Renders the help for the whole CLI, or for one group of commands. The
+ * commands that work are listed under "Commands:" and the placeholders under
+ * a second heading; a heading with nothing under it is left out.
  * @param {Object} args
  * @param {Array<{name: string, description: string, available: boolean}>} args.commands - Commands to list
  * @param {string} [args.group] - Group name; omit for the top level
@@ -162,16 +170,21 @@ export function renderCommandList(args) {
         sections.push(wrapDescription(description, '  '));
     }
 
-    sections.push([
-        'Commands:',
-        ...alignEntries(commands.map((command) => {
-            const text = command.available
-                ? command.description
-                : `${ command.description } (${ NOT_AVAILABLE_NOTICE })`;
+    // The commands that work come first, so a long list of placeholders
+    // cannot bury them. Both lists share one description column.
+    const labelWidth = Math.max(0, ...commands.map(({ name }) => name.length));
+    const toEntries = (list) => alignEntries(list.map(({ name, description: text }) => [ name, text ]), labelWidth);
 
-            return [ command.name, text ];
-        })),
-    ]);
+    const available = commands.filter((command) => command.available);
+    const notAvailable = commands.filter((command) => !command.available);
+
+    if (available.length > 0) {
+        sections.push([ 'Commands:', ...toEntries(available) ]);
+    }
+
+    if (notAvailable.length > 0) {
+        sections.push([ NOT_AVAILABLE_HEADING, ...toEntries(notAvailable) ]);
+    }
 
     sections.push([
         'Options:',
@@ -237,9 +250,10 @@ function wrapDescription(description, initialPrefix) {
     return lines;
 }
 
-// Pads every label to the longest one so descriptions share a column.
-function alignEntries(entries) {
-    const labelWidth = Math.max(0, ...entries.map(([ label ]) => label.length));
+// Pads every label to the longest one so descriptions share a column. Pass
+// a width to share the column with another list.
+function alignEntries(entries, width) {
+    const labelWidth = width ?? Math.max(0, ...entries.map(([ label ]) => label.length));
 
     return entries.flatMap(([ label, description ]) => {
         return wrapDescription(description ?? '', `  ${ label.padEnd(labelWidth) }  `);

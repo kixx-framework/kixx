@@ -903,7 +903,7 @@ describe('runCli()', ({ describe }) => {
             assertMatches(/^Usage: kixx-dev <command> \[options\] \[\.\.\.args\]\n/, stdout);
             assertMatches(/^ {2}build {10}Build the thing$/m, stdout);
             assertMatches(/^ {2}tools sharpen {2}Sharpen a tool$/m, stdout);
-            assertMatches(/^ {2}tools polish {3}Polish a tool \(Not available in this version of kixx-dev\.\)$/m, stdout);
+            assertMatches(/\n\nNot available in this version:\n {2}tools polish {3}Polish a tool\n\nOptions:\n/, stdout);
         });
 
         it('returns the top level as data', async () => {

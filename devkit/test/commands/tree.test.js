@@ -109,7 +109,7 @@ describe('the command tree', ({ it }) => {
         }
     });
 
-    it('lists every command in top-level help, with the placeholders marked', async () => {
+    it('lists every command in top-level help, with the placeholders under their own heading', async () => {
         const text = await run([ '--help' ], os.tmpdir());
         const json = await run([ '--help', '--json' ], os.tmpdir());
 
@@ -127,21 +127,30 @@ describe('the command tree', ({ it }) => {
             assert(entry.description.length > 0, `"${ name }" has a description`);
         }
 
-        // Each command's block runs from its name to the next line that
-        // starts a name, so a wrapped description stays with its command.
-        const blocks = text.stdout.split(/\n(?= {2}[a-z])/);
+        // The commands that work are under "Commands:" and the placeholders
+        // under their own heading, with no marker repeated on each line.
+        const [ head, notAvailable ] = text.stdout.split('\nNot available in this version:\n');
+        const availableList = head.split('\nCommands:\n')[1];
+        const placeholderList = notAvailable.split('\n\n')[0];
+
+        assert(!text.stdout.includes('Not available in this version of kixx-dev.'), 'repeats the notice');
 
         for (const [ name, available ] of TREE) {
-            const block = blocks.find((candidate) => candidate.startsWith(`  ${ name }  `));
+            const line = new RegExp(`^  ${ name }  `, 'm');
 
-            assert(block, `"${ name }" is listed`);
-
-            assertEqual(
-                !available,
-                block.replace(/\s+/g, ' ').includes('Not available in this version of kixx-dev.'),
-                `"${ name }" marked as not available`,
-            );
+            assertEqual(available, line.test(availableList), `"${ name }" under "Commands:"`);
+            assertEqual(!available, line.test(placeholderList), `"${ name }" under "Not available in this version:"`);
         }
+    });
+
+    it('splits a group\'s help the same way, and leaves out an empty heading', async () => {
+        const local = await run([ 'local', '--help' ], os.tmpdir());
+        const release = await run([ 'release', '--help' ], os.tmpdir());
+
+        assertMatches(/\nCommands:\n(?: .*\n)* {2}local create {2}/, local.stdout);
+        assertMatches(/\nNot available in this version:\n(?: .*\n)* {2}local seed {2}/, local.stdout);
+        assertMatches(/\nNot available in this version:\n(?: .*\n)* {2}release list {2}/, release.stdout);
+        assert(!release.stdout.includes('Commands:'), 'an empty "Commands:" heading');
     });
 
     it('lists a group\'s commands in the group\'s help', async () => {

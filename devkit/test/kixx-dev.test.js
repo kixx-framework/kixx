@@ -42,7 +42,7 @@ describe('kixx-dev.js entry point', ({ it }) => {
         assertMatches(/^Usage: kixx-dev <command>/, stdout);
         assertMatches(/^ {2}generate {2}/m, stdout);
         assertMatches(/^ {2}dev {2}/m, stdout);
-        assertMatches(/^ {2}deploy {2}.*\(Not available/m, stdout);
+        assertMatches(/^Not available in this version:\n(?: .*\n)* {2}deploy {2}/m, stdout);
         assertMatches(/^ {2}local create {2}/m, stdout);
         assertMatches(/^ {6}--json {2}/m, stdout);
     }, { timeout: TIMEOUT });

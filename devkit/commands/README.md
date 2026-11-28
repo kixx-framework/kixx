@@ -327,8 +327,8 @@ export default Object.freeze({
 });
 ```
 
-- Help lists it marked "Not available in this version of kixx-dev."
-- `kixx-dev deploy --help` exits 0 and says the same. Its `--help --json` has `"available": false`.
+- Help lists it under a second heading, "Not available in this version:", after the commands that work. A group's help splits the same way, and a heading with nothing under it is left out.
+- `kixx-dev deploy --help` exits 0 and says "Not available in this version of kixx-dev." Its `--help --json` has `"available": false`.
 - Running it exits 4 with `error.code` `CommandNotAvailable`, whatever arguments it is given. The runner does not parse a placeholder's arguments, because its real options don't exist yet, and loads no settings for it.
 
 The runner constructs a placeholder with `commandName` so its message can name the command. To build the command, replace the factory call with an import of the real module, and change its line in `test/commands/tree.test.js`.

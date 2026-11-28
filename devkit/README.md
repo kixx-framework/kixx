@@ -85,7 +85,7 @@ Commands
 - `kixx-dev local destroy` — delete a stopped instance.
 
 `kixx-dev --help` also lists the commands that are not available in this
-version, each marked so: `new`, `add`, `remove`, `upgrade`, `agents sync`,
+version, under their own heading: `new`, `add`, `remove`, `upgrade`, `agents sync`,
 `check`, `routes`, `render`, `publish`, `deploy`, `release list` and `assign`,
 `media upload`, `env create` and `list`, `cloudflare provision`, `secrets set`
 and `rotate`, `deploy-key generate` and `rotate`, `admin invite`, `reset`,
